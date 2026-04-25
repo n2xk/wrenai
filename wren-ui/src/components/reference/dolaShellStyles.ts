@@ -10,6 +10,7 @@ export const Shell = styled(Layout)`
 
 export const Sidebar = styled(Sider)`
   && {
+    --dola-shell-sidebar-inline-pad: 2px;
     position: sticky;
     top: 0;
     align-self: flex-start;
@@ -166,7 +167,28 @@ export const Main = styled(Content)<{
   $flush?: boolean;
   $flushBottom?: boolean;
   $stretchContent?: boolean;
+  $paddingTop?: string;
 }>`
+  ${(props) => {
+    const resolvePadding = (mobile = false) => {
+      if (props.$flush) {
+        return '0';
+      }
+
+      const top = props.$paddingTop || (mobile ? '16px' : '24px');
+      const bottom = props.$flushBottom ? '0' : mobile ? '16px' : '24px';
+
+      return mobile ? `${top} 16px ${bottom}` : `${top} 24px ${bottom} 4px`;
+    };
+
+    return `
+      padding: ${resolvePadding()};
+
+      @media (max-width: 1120px) {
+        padding: ${resolvePadding(true)};
+      }
+    `;
+  }}
   min-width: 0;
   height: 100vh;
   display: flex;
@@ -175,19 +197,11 @@ export const Main = styled(Content)<{
   scrollbar-gutter: ${(props) =>
     props.$stretchContent ? 'auto' : 'stable both-edges'};
   background: #ffffff;
-  padding: ${(props) =>
-    props.$flush
-      ? '0'
-      : props.$flushBottom
-        ? '24px 24px 0 4px'
-        : '24px 24px 24px 4px'};
 
   @media (max-width: 1120px) {
     height: auto;
     overflow: auto;
     scrollbar-gutter: auto;
-    padding: ${(props) =>
-      props.$flush ? '0' : props.$flushBottom ? '16px 16px 0' : '16px'};
   }
 `;
 

@@ -124,7 +124,7 @@ describe('homeIntentRouting', () => {
       },
       resolvedIntent: {
         kind: 'RECOMMEND_QUESTIONS',
-        target: 'THREAD_SIDECAR',
+        target: 'THREAD_RESPONSE',
         sourceResponseId: 11,
       },
     });

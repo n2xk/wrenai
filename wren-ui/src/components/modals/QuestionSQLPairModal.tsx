@@ -120,7 +120,7 @@ const Toolbar = (props: {
     <div className="d-flex justify-space-between align-center px-1">
       <span className="d-flex align-center gx-2">
         <Logo size={16} />
-        Wren SQL
+        Nova SQL
       </span>
       <Button className="px-0" type="link" size="small" onClick={onClick}>
         <SelectOutlined />从 {name} SQL 导入
@@ -321,7 +321,7 @@ export default function QuestionSQLPairModal(props: Props) {
             <FooterHint>
               <InfoCircleOutlined className="mt-1" />
               <Typography.Text type="secondary" className="text-left">
-                这里使用的是 <b>Wren SQL</b>，它基于 ANSI
+                这里使用的<b>SQL</b>是基于 ANSI
                 SQL，并针对当前语义引擎做了优化。{` `}
                 <Typography.Link
                   type="secondary"

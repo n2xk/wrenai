@@ -11,6 +11,13 @@ import {
 const hasConversationAidCandidates = (response?: ThreadResponse | null) =>
   Boolean(response?.resolvedIntent?.conversationAidPlan?.responseAids?.length);
 
+const isEligibleConversationAidOwner = (response?: ThreadResponse | null) =>
+  Boolean(
+    response &&
+    hasConversationAidCandidates(response) &&
+    hasSettledConversationAids(response),
+  );
+
 export const hasSettledConversationAids = (
   response?: ThreadResponse | null,
 ) => {
@@ -52,18 +59,41 @@ export const hasSettledConversationAids = (
 
 export const resolveConversationAidOwnerResponseId = ({
   responses,
+  selectedResponseId,
 }: {
   responses: ThreadResponse[];
   selectedResponseId?: number | null;
 }) => {
   const latestEligibleResponse =
-    [...(responses || [])]
-      .reverse()
-      .find(
-        (response) =>
-          hasConversationAidCandidates(response) &&
-          hasSettledConversationAids(response),
-      ) || null;
+    [...(responses || [])].reverse().find((response) => {
+      return isEligibleConversationAidOwner(response);
+    }) || null;
+  const selectedResponse =
+    typeof selectedResponseId === 'number'
+      ? responses.find((response) => response.id === selectedResponseId) || null
+      : null;
+
+  if (
+    selectedResponse?.responseKind ===
+    ThreadResponseKind.RECOMMENDATION_FOLLOWUP
+  ) {
+    const selectedSourceResponseId =
+      selectedResponse.recommendationDetail?.sourceResponseId ??
+      selectedResponse.sourceResponseId ??
+      null;
+    if (typeof selectedSourceResponseId === 'number') {
+      const selectedSourceResponse =
+        responses.find(
+          (response) => response.id === selectedSourceResponseId,
+        ) || null;
+      if (
+        selectedSourceResponse &&
+        selectedSourceResponse.id === latestEligibleResponse?.id
+      ) {
+        return selectedSourceResponse.id;
+      }
+    }
+  }
 
   return latestEligibleResponse?.id ?? null;
 };

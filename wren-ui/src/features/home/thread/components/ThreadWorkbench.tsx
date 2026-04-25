@@ -1,5 +1,5 @@
 import { Segmented, Typography } from 'antd';
-import { useCallback, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import styled from 'styled-components';
 import type { ThreadResponse } from '@/types/home';
 import type { WorkbenchArtifactKind } from '@/features/home/thread/threadWorkbenchState';
@@ -33,7 +33,7 @@ const WorkbenchHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 20px 4px;
+  padding: 0 20px 8px;
   background: #fff;
 `;
 
@@ -56,24 +56,60 @@ const WorkbenchQuestion = styled(Typography.Text)`
 `;
 
 const WorkbenchSegmentedRow = styled.div`
+  display: flex;
+  justify-content: flex-start;
   padding: 0 20px 12px;
   background: #fff;
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
 
   .ant-segmented {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
     background: rgba(15, 23, 42, 0.04);
-    padding: 3px;
-    border-radius: 10px;
+    padding: 4px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  }
+
+  .ant-segmented-group {
+    display: flex;
+    width: auto;
   }
 
   .ant-segmented-item {
+    flex: 0 1 auto;
+    min-width: 104px;
     min-height: 32px;
     padding-inline: 14px;
     font-weight: 600;
+    text-align: center;
+    transition:
+      color 0.18s ease,
+      background 0.18s ease;
+  }
+
+  .ant-segmented-item-label {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .ant-segmented-item-selected {
     color: #6f47ff;
+  }
+
+  .ant-segmented-thumb {
+    border-radius: 9px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+
+  @media (max-width: 1280px) {
+    .ant-segmented-item {
+      min-width: 92px;
+      padding-inline: 10px;
+    }
   }
 `;
 
@@ -139,37 +175,10 @@ export default function ThreadWorkbench(props: {
     responses,
     selectedResponse,
   });
-  const previewArtifactOwnerResponse = resolveWorkbenchArtifactOwnerResponse({
-    artifact: 'preview',
-    responses,
-    selectedResponse,
-  });
   const activeSqlController = useWorkbenchSqlController(
     activeArtifactOwnerResponse || selectedResponse,
   );
   const tabLabelMap: Record<WorkbenchArtifactKind, string> = messages.tabs;
-  const handleOpenSpreadsheet = useCallback(() => {
-    if (!artifactItems.includes('preview')) {
-      return;
-    }
-
-    onArtifactChange('preview');
-  }, [artifactItems, onArtifactChange]);
-  const handlePinDashboard = useCallback(() => {
-    const pinButton =
-      Array.from(
-        workbenchRef.current?.querySelectorAll<HTMLButtonElement>('button') ||
-          [],
-      ).find((button) => {
-        const label =
-          button.getAttribute('aria-label') || button.textContent?.trim();
-        return (
-          label === messages.headerActions.pinDashboard ||
-          label === 'Pin to dashboard'
-        );
-      }) || null;
-    pinButton?.click();
-  }, [messages.headerActions.pinDashboard]);
 
   if (!activeKey) {
     return null;
@@ -216,13 +225,7 @@ export default function ThreadWorkbench(props: {
         </WorkbenchHeaderMeta>
         <ThreadWorkbenchHeaderActions
           activeArtifact={activeKey}
-          hasPreviewOwner={Boolean(previewArtifactOwnerResponse)}
           onClose={onClose}
-          onOpenSpreadsheet={handleOpenSpreadsheet}
-          onPinDashboard={
-            activeKey === 'chart' ? handlePinDashboard : undefined
-          }
-          sqlController={activeSqlController}
         />
       </WorkbenchHeader>
       <WorkbenchSegmentedRow>

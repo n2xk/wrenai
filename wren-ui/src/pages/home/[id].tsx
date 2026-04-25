@@ -5,6 +5,7 @@ export {
   findLatestUnfinishedAskingResponse,
   hasActivePromptAskingTask,
   hydrateCreatedThreadResponse,
+  resetThreadPageViewportScroll,
   resolveThreadRecoveryPlan,
   resolveCreatedThreadResponsePollingTaskId,
   shouldSuspendThreadRecoveryDuringPromptFlow,

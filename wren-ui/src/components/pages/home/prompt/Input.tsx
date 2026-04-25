@@ -1,4 +1,5 @@
 import {
+  useCallback,
   ChangeEvent,
   forwardRef,
   KeyboardEvent,
@@ -140,24 +141,42 @@ export default forwardRef<PromptInputHandle, Props>(
     const [inputValue, setInputValue] = useState('');
     const [innerLoading, setInnerLoading] = useState(false);
 
+    const focusPromptInput = useCallback(() => {
+      const input = $promptInput.current as
+        | (GetRef<typeof Input.TextArea> & {
+            focus?: (options?: { preventScroll?: boolean }) => void;
+          })
+        | null;
+
+      if (!input?.focus) {
+        return;
+      }
+
+      try {
+        input.focus({ preventScroll: true });
+      } catch {
+        input.focus();
+      }
+    }, []);
+
     useEffect(() => {
       setInputValue(question || '');
     }, [question]);
 
     useEffect(() => {
       if (!isProcessing) {
-        $promptInput.current?.focus();
+        focusPromptInput();
       }
-    }, [isProcessing]);
+    }, [focusPromptInput, isProcessing]);
 
     useImperativeHandle(
       ref,
       () => ({
         focus: () => {
-          $promptInput.current?.focus();
+          focusPromptInput();
         },
       }),
-      [],
+      [focusPromptInput],
     );
 
     const syncInputValue = (event: ChangeEvent<HTMLTextAreaElement>) => {

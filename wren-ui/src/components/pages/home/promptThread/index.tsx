@@ -116,6 +116,13 @@ const resolvePromptThreadScrollContainer = (
     return null;
   }
 
+  const explicitScrollContainer = element.closest(
+    '[data-thread-scroll-container="true"]',
+  );
+  if (explicitScrollContainer instanceof HTMLElement) {
+    return explicitScrollContainer;
+  }
+
   let current = element.parentElement;
   while (current) {
     const style = window.getComputedStyle(current);
@@ -130,9 +137,7 @@ const resolvePromptThreadScrollContainer = (
     current = current.parentElement;
   }
 
-  return document.scrollingElement instanceof HTMLElement
-    ? document.scrollingElement
-    : null;
+  return null;
 };
 
 export default function PromptThread() {
@@ -211,10 +216,9 @@ export default function PromptThread() {
     ) || []) as HTMLElement[];
     const lastAnswerResult = allElements[allElements.length - 1];
 
-    const dividerSpace = 48;
     if (contentLayout && lastAnswerResult) {
       contentLayout.scrollTo({
-        top: lastAnswerResult.offsetTop - dividerSpace,
+        top: lastAnswerResult.offsetTop,
         behavior,
       });
     }
@@ -249,7 +253,7 @@ export default function PromptThread() {
   }, [responses.length]);
 
   return (
-    <StyledPromptThread className="mt-2" ref={divRef}>
+    <StyledPromptThread ref={divRef}>
       {hiddenResponseCount > 0 ? (
         <ThreadLoadMoreButton type="button" onClick={handleLoadMoreResponses}>
           加载更早对话（{hiddenResponseCount} 条）

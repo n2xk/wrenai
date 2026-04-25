@@ -28,6 +28,7 @@ jest.mock('./DolaAppShell', () => ({
     historyItems,
     navItems,
     flushBottomPadding,
+    mainPaddingTop,
     stretchContent,
   }: any) => {
     const React = jest.requireActual('react');
@@ -37,6 +38,7 @@ jest.mock('./DolaAppShell', () => ({
         'data-nav-count': navItems?.length || 0,
         'data-history-count': historyItems?.length || 0,
         'data-flush-bottom': String(Boolean(flushBottomPadding)),
+        'data-main-padding-top': mainPaddingTop || '',
         'data-stretch-content': String(Boolean(stretchContent)),
       },
       children,
@@ -90,6 +92,7 @@ describe('DirectShellPageFrame', () => {
       <DirectShellPageFrame
         activeNav="knowledge"
         flushBottomPadding
+        mainPaddingTop="8px"
         stretchContent
       >
         <div>workbench</div>
@@ -97,6 +100,7 @@ describe('DirectShellPageFrame', () => {
     );
 
     expect(html).toContain('data-flush-bottom="true"');
+    expect(html).toContain('data-main-padding-top="8px"');
     expect(html).toContain('data-stretch-content="true"');
   });
 });

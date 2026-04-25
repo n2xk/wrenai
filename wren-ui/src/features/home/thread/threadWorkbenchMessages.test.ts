@@ -32,5 +32,11 @@ describe('threadWorkbenchMessages', () => {
     expect(
       getThreadWorkbenchMessages('en-US').recommendation.categories.chartRefine,
     ).toBe('Refine chart');
+    expect(getThreadWorkbenchMessages('zh-CN').headerActions.spreadsheet).toBe(
+      'Spreadsheet',
+    );
+    expect(getThreadWorkbenchMessages('en-US').headerActions.pinDashboard).toBe(
+      'Pin to dashboard',
+    );
   });
 });

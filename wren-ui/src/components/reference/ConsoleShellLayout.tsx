@@ -27,6 +27,7 @@ interface Props {
   hideHeader?: boolean;
   contentBorderless?: boolean;
   flushMainPadding?: boolean;
+  mainPaddingTop?: string;
   stretchContent?: boolean;
   loading?: boolean;
   children?: ReactNode;
@@ -117,6 +118,7 @@ export default function ConsoleShellLayout({
   hideHeader,
   contentBorderless,
   flushMainPadding,
+  mainPaddingTop,
   stretchContent,
   loading,
   children,
@@ -360,6 +362,7 @@ export default function ConsoleShellLayout({
       hideSidebarFooterPanel={hideSidebarFooterPanel}
       hideSidebarCollapseToggle={hideSidebarCollapseToggle}
       flushMainPadding={flushMainPadding}
+      mainPaddingTop={mainPaddingTop}
       stretchContent={stretchContent}
     >
       {pageContent}

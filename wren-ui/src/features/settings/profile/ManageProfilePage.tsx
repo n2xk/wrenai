@@ -400,6 +400,7 @@ export default function ManageProfilePage() {
       hideHistorySection
       hideHeader
       contentBorderless
+      mainPaddingTop="8px"
       hideSidebarBranding
       hideSidebarFooterPanel
       hideSidebarCollapseToggle

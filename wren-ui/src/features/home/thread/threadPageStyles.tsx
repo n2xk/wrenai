@@ -5,12 +5,12 @@ const { Text } = Typography;
 
 export const ThreadScene = styled.div<{ $withWorkbench?: boolean }>`
   width: 100%;
-  max-width: ${(props) => (props.$withWorkbench ? 'none' : '940px')};
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  height: ${(props) => (props.$withWorkbench ? 'calc(100vh - 48px)' : 'auto')};
+  height: ${(props) => (props.$withWorkbench ? '100%' : 'auto')};
   min-height: ${(props) => (props.$withWorkbench ? '0' : 'calc(100vh - 72px)')};
   display: flex;
   flex-direction: column;
@@ -80,13 +80,9 @@ export const ConversationPane = styled.section<{ $withWorkbench?: boolean }>`
   background: transparent;
   height: 100%;
   position: relative;
-  padding: 0 ${(props) => (props.$withWorkbench ? '16px' : '24px')} 0 24px;
+  padding: 0;
   overflow: ${(props) => (props.$withWorkbench ? 'hidden' : 'visible')};
   box-sizing: border-box;
-
-  @media (max-width: 1280px) {
-    padding: 0 12px 0 16px;
-  }
 `;
 
 export const ConversationBody = styled.div<{ $withWorkbench?: boolean }>`
@@ -95,9 +91,9 @@ export const ConversationBody = styled.div<{ $withWorkbench?: boolean }>`
   min-height: 0;
   max-width: 100%;
   overflow-x: hidden;
-  overflow-y: ${(props) => (props.$withWorkbench ? 'auto' : 'visible')};
-  padding: 0 0 24px;
-  scrollbar-gutter: ${(props) => (props.$withWorkbench ? 'stable' : 'auto')};
+  overflow-y: auto;
+  padding: ${(props) => (props.$withWorkbench ? '0 0 16px' : '0 0 24px')};
+  scrollbar-gutter: stable;
 `;
 
 export const WorkbenchPane = styled.aside`
@@ -106,6 +102,19 @@ export const WorkbenchPane = styled.aside`
   height: 100%;
   overflow: hidden;
   padding-left: 0;
+`;
+
+export const ConversationRail = styled.div<{ $withWorkbench?: boolean }>`
+  width: 100%;
+  min-width: 0;
+  max-width: ${(props) => (props.$withWorkbench ? 'none' : '940px')};
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+
+  @media (max-width: 1280px) {
+    padding: 0 16px;
+  }
 `;
 
 export const ComposerSelectedScopeRow = styled.div`
@@ -130,11 +139,11 @@ export const ComposerSelectedKnowledgeChip = styled.div`
   font-weight: 500;
 `;
 
-export const ComposerDock = styled.div`
+export const ComposerDock = styled.div<{ $withWorkbench?: boolean }>`
   position: sticky;
   bottom: 0;
   z-index: 8;
-  padding: 12px 0 20px;
+  padding: ${(props) => (props.$withWorkbench ? '10px 0 12px' : '12px 0 20px')};
   margin-top: auto;
   background: linear-gradient(
     180deg,

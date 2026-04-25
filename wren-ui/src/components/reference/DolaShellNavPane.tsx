@@ -35,7 +35,10 @@ const BrandBlock = styled.div<{
   justify-content: ${(props) =>
     props.$hideBranding ? 'flex-end' : 'space-between'};
   gap: 8px;
-  padding: ${(props) => (props.$hideBranding ? '0 2px' : '4px 2px 0')};
+  padding: ${(props) =>
+    props.$hideBranding
+      ? '0 var(--dola-shell-sidebar-inline-pad)'
+      : '4px var(--dola-shell-sidebar-inline-pad) 0'};
   min-height: ${(props) => (props.$hideBranding ? '0' : '32px')};
   flex-shrink: 0;
 `;

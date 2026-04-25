@@ -48,6 +48,7 @@ interface Props {
   hideSidebarCollapseToggle?: boolean;
   flushMainPadding?: boolean;
   flushBottomPadding?: boolean;
+  mainPaddingTop?: string;
   stretchContent?: boolean;
   children: ReactNode;
 }
@@ -212,6 +213,7 @@ function DolaAppShellFrame({
   topbarExtra,
   flushMainPadding = false,
   flushBottomPadding = false,
+  mainPaddingTop,
   stretchContent = false,
   ...sidebarProps
 }: Props) {
@@ -221,6 +223,7 @@ function DolaAppShellFrame({
       <Main
         $flush={flushMainPadding}
         $flushBottom={flushBottomPadding}
+        $paddingTop={mainPaddingTop}
         $stretchContent={stretchContent}
       >
         <MainInner>

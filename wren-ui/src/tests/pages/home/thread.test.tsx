@@ -6,6 +6,7 @@ import ThreadPage, {
   findLatestUnfinishedAskingResponse,
   hasActivePromptAskingTask,
   hydrateCreatedThreadResponse,
+  resetThreadPageViewportScroll,
   resolveThreadRecoveryPlan,
   resolveCreatedThreadResponsePollingTaskId,
   shouldSuspendThreadRecoveryDuringPromptFlow,
@@ -451,6 +452,40 @@ describe('home/[id] thread shell', () => {
     renderPage();
 
     expect(mockCreateKnowledgeSqlPair).not.toHaveBeenCalled();
+  });
+
+  it('resets the outer viewport scroll when entering the thread page', () => {
+    const originalWindow = (global as any).window;
+    const originalDocument = (global as any).document;
+    const windowScrollSpy = jest.fn();
+    const scrollingElement = {
+      scrollTop: 48,
+      scrollLeft: 12,
+      scrollTo: jest.fn(),
+    };
+
+    (global as any).window = {
+      scrollTo: windowScrollSpy,
+    };
+    (global as any).document = {
+      scrollingElement,
+    };
+
+    resetThreadPageViewportScroll();
+
+    expect(windowScrollSpy).toHaveBeenCalledWith({
+      top: 0,
+      left: 0,
+      behavior: 'auto',
+    });
+    expect(scrollingElement.scrollTo).toHaveBeenCalledWith({
+      top: 0,
+      left: 0,
+      behavior: 'auto',
+    });
+
+    (global as any).window = originalWindow;
+    (global as any).document = originalDocument;
   });
 
   it('prefers the latest unfinished asking response when resuming polling', () => {

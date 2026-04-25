@@ -1,5 +1,4 @@
 import dynamic from 'next/dynamic';
-import Image from 'next/image';
 import { useEffect } from 'react';
 import styled from 'styled-components';
 import {
@@ -13,14 +12,11 @@ import {
 } from 'antd';
 import CheckOutlined from '@ant-design/icons/CheckOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
-import CodeFilled from '@ant-design/icons/CodeFilled';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
 import useNativeSQL from '@/hooks/useNativeSQL';
 import { CONNECTION_TYPE_OPTIONS } from '@/components/pages/setup/utils';
-import { Logo } from '@/components/Logo';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
-import { usePromptThreadActionsStore } from '@/components/pages/home/promptThread/store';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import type { WorkbenchSqlController } from '@/features/home/thread/useWorkbenchSqlController';
@@ -74,7 +70,6 @@ export default function ViewSQLTabContent(
     fallbackSelector: runtimeScopeNavigation.selector,
   });
 
-  const { onOpenAdjustSQLModal } = usePromptThreadActionsStore();
   const { fetchNativeSQL, nativeSQLResult } = useNativeSQL(
     responseRuntimeSelector,
   );
@@ -138,8 +133,7 @@ export default function ViewSQLTabContent(
     if (!nativeSQLResult.nativeSQLMode) {
       message.success(
         <>
-          你复制的是 Wren SQL。该方言用于 Wren
-          Engine，可能无法直接在你的数据库中运行。
+          你复制的SQL，可能无法直接在你的数据库中运行。
           {showNativeSQL && (
             <>
               {' '}
@@ -164,24 +158,12 @@ export default function ViewSQLTabContent(
           <div>
             {nativeSqlMode ? (
               <>
-                {connectionTypeOption?.logo ? (
-                  <Image
-                    className="mr-2"
-                    src={connectionTypeOption.logo}
-                    alt={connectionTypeOption.label}
-                    width="22"
-                    height="22"
-                  />
-                ) : null}
                 <Text className="gray-8 text-medium text-sm">
                   {connectionTypeOption?.label || '原始 SQL'}
                 </Text>
               </>
             ) : (
-              <span className="d-flex align-center gx-2">
-                <Logo size={18} />
-                <Text className="gray-8 text-medium text-sm">Wren SQL</Text>
-              </span>
+              <Text className="gray-8 text-medium text-sm">Nova SQL</Text>
             )}
           </div>
           <Space separator={<Divider orientation="vertical" className="m-0" />}>
@@ -203,20 +185,6 @@ export default function ViewSQLTabContent(
                 </Text>
               </div>
             )}
-            {!isWorkbenchMode ? (
-              <Button
-                type="link"
-                data-ph-capture="true"
-                data-ph-capture-attribute-name="view_sql_copy_sql"
-                icon={<CodeFilled />}
-                size="small"
-                onClick={() =>
-                  onOpenAdjustSQLModal({ sql: sqlText, responseId: id })
-                }
-              >
-                {messages.sql.adjust}
-              </Button>
-            ) : null}
           </Space>
         </StyledToolBar>
         <SQLCodeBlock

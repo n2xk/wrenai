@@ -32,6 +32,7 @@ export const buildSettingsConsoleShellProps = ({
   hideHeader,
   contentBorderless,
   hideHistorySection,
+  mainPaddingTop: '8px',
   sidebarBackAction: {
     label: '返回主菜单',
     onClick: () => onNavigate(Path.Home),

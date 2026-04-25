@@ -166,7 +166,7 @@ export default function AdjustSQLModal(props: Props) {
               type="secondary"
               className="text-sm gray-7 text-left"
             >
-              这里使用的是 <b>Wren SQL</b>，它基于 ANSI
+              这里使用的<b>SQL</b>是基于 ANSI
               SQL，并针对当前语义引擎做了优化。{` `}
               <Typography.Link
                 type="secondary"

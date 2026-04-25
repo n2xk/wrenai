@@ -13,6 +13,7 @@ describe('settingsShell', () => {
     expect(shellProps.hideHeader).toBe(true);
     expect(shellProps.contentBorderless).toBe(true);
     expect(shellProps.hideHistorySection).toBe(true);
+    expect(shellProps.mainPaddingTop).toBe('8px');
     expect(shellProps.hideSidebarBranding).toBe(true);
     expect(shellProps.hideSidebarFooterPanel).toBe(true);
     expect(shellProps.hideSidebarCollapseToggle).toBe(true);

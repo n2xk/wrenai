@@ -44,6 +44,10 @@ const AnswerMarkdownBody = styled.div`
   > :last-child {
     margin-bottom: 0;
   }
+
+  > :last-child > :last-child {
+    margin-bottom: 0;
+  }
 `;
 
 const getIsLoadingFinished = (status?: ThreadResponseAnswerStatus | null) =>
@@ -197,7 +201,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
       paragraph={{ rows: 4 }}
       title={false}
     >
-      <div className="text-md gray-10 pt-0 pb-2">
+      <div className="text-md gray-10 pt-0 pb-0">
         <AnswerMarkdownBody>
           <MarkdownBlock content={textAnswer} />
         </AnswerMarkdownBody>

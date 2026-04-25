@@ -428,7 +428,7 @@ export const resolveRecommendedQuestionsHomeIntent = ({
   source,
   sourceResponseId,
   sourceThreadId,
-  target = 'THREAD_SIDECAR',
+  target = 'THREAD_RESPONSE',
 }: {
   source?: ResolvedHomeIntent['source'];
   sourceResponseId?: number | null;
@@ -443,9 +443,7 @@ export const resolveRecommendedQuestionsHomeIntent = ({
   sourceResponseId: sourceResponseId ?? null,
   confidence: null,
   artifactPlan: { ...EMPTY_RESPONSE_ARTIFACT_PLAN },
-  conversationAidPlan: {
-    threadAids: ['suggested_questions'],
-  },
+  conversationAidPlan: null,
 });
 
 export type HydratedHomeIntentResponse<T extends HomeIntentResponseLike> = Omit<

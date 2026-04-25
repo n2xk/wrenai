@@ -56,14 +56,13 @@ const HistorySection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 4px 2px 0;
+  padding: 4px var(--dola-shell-sidebar-inline-pad) 0;
 `;
 
 const HistoryScroller = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 2px;
   display: flex;
   flex-direction: column;
   gap: 4px;

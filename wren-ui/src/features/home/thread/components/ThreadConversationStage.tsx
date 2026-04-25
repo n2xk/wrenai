@@ -9,6 +9,7 @@ import {
   ComposerDock,
   ComposerFrame,
   ComposerHintText,
+  ConversationRail,
   ComposerSelectedKnowledgeChip,
   ComposerSelectedScopeRow,
   ConversationBody,
@@ -51,48 +52,55 @@ export default function ThreadConversationStage({
   const hasWorkbench = Boolean(workbench);
   const conversationStage = (
     <ConversationPane $withWorkbench={hasWorkbench}>
-      <ConversationBody $withWorkbench={hasWorkbench}>
-        {shouldUseReferencePreview ? (
-          <ReferenceConversationPreview
-            question={primaryQuestion}
-            onSelectSuggestedQuestion={(value) => {
-              promptRef.current?.submit?.(value);
-            }}
-          />
-        ) : (
-          <PromptThread />
-        )}
-      </ConversationBody>
-
-      <ComposerDock>
-        <ComposerFrame>
-          {selectedKnowledgeBaseNames.length > 0 ? (
-            <ComposerSelectedScopeRow>
-              {selectedKnowledgeBaseNames.map((knowledgeBaseName) => (
-                <ComposerSelectedKnowledgeChip key={knowledgeBaseName}>
-                  <BookOutlined />
-                  <span>{knowledgeBaseName}</span>
-                </ComposerSelectedKnowledgeChip>
-              ))}
-            </ComposerSelectedScopeRow>
-          ) : null}
-          {hasExecutableRuntime ? (
-            <Prompt
-              ref={promptRef as never}
-              {...promptProps}
-              onCreateResponse={onCreateResponse}
-              variant="embedded"
-              buttonMode="icon"
-              showInlineResult={false}
+      <ConversationBody
+        $withWorkbench={hasWorkbench}
+        data-thread-scroll-container="true"
+      >
+        <ConversationRail $withWorkbench={hasWorkbench}>
+          {shouldUseReferencePreview ? (
+            <ReferenceConversationPreview
+              question={primaryQuestion}
+              onSelectSuggestedQuestion={(value) => {
+                promptRef.current?.submit?.(value);
+              }}
             />
           ) : (
-            <ComposerAssistRow>
-              <ComposerHintText>
-                {isHistoricalRuntimeReadonly ? readonlyHint : unavailableHint}
-              </ComposerHintText>
-            </ComposerAssistRow>
+            <PromptThread />
           )}
-        </ComposerFrame>
+        </ConversationRail>
+      </ConversationBody>
+
+      <ComposerDock $withWorkbench={hasWorkbench}>
+        <ConversationRail $withWorkbench={hasWorkbench}>
+          <ComposerFrame>
+            {selectedKnowledgeBaseNames.length > 0 ? (
+              <ComposerSelectedScopeRow>
+                {selectedKnowledgeBaseNames.map((knowledgeBaseName) => (
+                  <ComposerSelectedKnowledgeChip key={knowledgeBaseName}>
+                    <BookOutlined />
+                    <span>{knowledgeBaseName}</span>
+                  </ComposerSelectedKnowledgeChip>
+                ))}
+              </ComposerSelectedScopeRow>
+            ) : null}
+            {hasExecutableRuntime ? (
+              <Prompt
+                ref={promptRef as never}
+                {...promptProps}
+                onCreateResponse={onCreateResponse}
+                variant="embedded"
+                buttonMode="icon"
+                showInlineResult={false}
+              />
+            ) : (
+              <ComposerAssistRow>
+                <ComposerHintText>
+                  {isHistoricalRuntimeReadonly ? readonlyHint : unavailableHint}
+                </ComposerHintText>
+              </ComposerAssistRow>
+            )}
+          </ComposerFrame>
+        </ConversationRail>
       </ComposerDock>
     </ConversationPane>
   );

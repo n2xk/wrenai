@@ -1,7 +1,5 @@
-import Link from 'next/link';
 import Image from 'next/image';
 import { Row, Col } from 'antd';
-import { Logo } from '@/components/Logo';
 import { makeIterable } from '@/utils/iteration';
 
 const StepTemplate = (props: {
@@ -49,21 +47,10 @@ const EmptyDashboard = (props: {
         className="d-flex align-center justify-center flex-column -mt-8"
         style={{ height: '100%' }}
       >
-        <Logo size={48} color="var(--gray-8)" />
         <div className="text-lg text-medium text-center gray-8 mt-3">
           还没有加入任何图表
         </div>
-        <div className="gray-7">
-          可按下面步骤将图表固定到仪表板。{' '}
-          <Link
-            className="gray-8 underline"
-            href="https://docs.getwren.ai/oss/guide/home/dashboard"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            了解更多
-          </Link>
-        </div>
+        <div className="gray-7">可按下面步骤将图表固定到仪表板。</div>
         <Row className="mt-4" gutter={[16, 16]}>
           <StepIterator
             data={[

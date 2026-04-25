@@ -199,7 +199,7 @@ describe('homeIntentContract', () => {
     });
   });
 
-  it('builds canonical intent metadata for thread-level recommended questions', () => {
+  it('builds canonical intent metadata for recommendation follow-up responses', () => {
     expect(
       resolveRecommendedQuestionsHomeIntent({
         sourceThreadId: 3,
@@ -208,7 +208,7 @@ describe('homeIntentContract', () => {
     ).toEqual({
       kind: 'RECOMMEND_QUESTIONS',
       mode: 'FOLLOW_UP',
-      target: 'THREAD_SIDECAR',
+      target: 'THREAD_RESPONSE',
       source: 'derived',
       sourceThreadId: 3,
       sourceResponseId: 11,
@@ -219,9 +219,7 @@ describe('homeIntentContract', () => {
         primaryTeaser: null,
         primaryWorkbenchArtifact: null,
       },
-      conversationAidPlan: {
-        threadAids: ['suggested_questions'],
-      },
+      conversationAidPlan: null,
     });
   });
 });

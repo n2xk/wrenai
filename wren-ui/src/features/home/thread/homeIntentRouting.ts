@@ -189,9 +189,7 @@ const buildRecommendComposerIntent = ({
       sourceResponseId: resolvedSourceResponseId,
       confidence: null,
       artifactPlan: resolveDefaultArtifactPlanForIntent('RECOMMEND_QUESTIONS'),
-      conversationAidPlan: {
-        threadAids: ['suggested_questions'],
-      },
+      conversationAidPlan: null,
     },
     sourceResponseId: resolvedSourceResponseId,
   };

@@ -287,33 +287,14 @@ const AssistantIdentityName = styled.span`
 const AssistantIdentityMeta = styled.span`
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.04);
-  color: #667085;
-  font-size: 11px;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  background: rgba(15, 23, 42, 0.025);
+  color: #98a2b3;
+  font-size: 10.5px;
   font-weight: 500;
-`;
-
-const ChartFollowUpLeadLine = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  width: 100%;
-  padding: 0 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(111, 71, 255, 0.1);
-  background: linear-gradient(
-    90deg,
-    rgba(111, 71, 255, 0.08) 0%,
-    rgba(236, 72, 153, 0.04) 55%,
-    rgba(255, 255, 255, 0.92) 100%
-  );
-  color: #5b6475;
-  font-size: 12px;
-  line-height: 1.5;
 `;
 
 const RecommendedQuestionsSlot = styled.div`
@@ -678,15 +659,13 @@ export default function AnswerResult(props: Props) {
                 <PieChartOutlined />
                 <span>{messages.chart.teaserTitle}</span>
               </ArtifactTeaserTitle>
-              {chartStatus === ChartTaskStatus.FINISHED ? (
-                <Tag color="purple">{messages.chart.statuses.generated}</Tag>
-              ) : chartStatus === ChartTaskStatus.FAILED ? (
+              {chartStatus === ChartTaskStatus.FAILED ? (
                 <Tag color="error">{messages.chart.statuses.failed}</Tag>
-              ) : (
+              ) : chartStatus === ChartTaskStatus.GENERATING ? (
                 <Tag color="processing">
                   {messages.chart.statuses.generating}
                 </Tag>
-              )}
+              ) : null}
             </ArtifactTeaserHeader>
             <ArtifactTeaserMeta>
               {chartStatus === ChartTaskStatus.FAILED
@@ -741,9 +720,7 @@ export default function AnswerResult(props: Props) {
               <PieChartOutlined />
               <span>{messages.chart.teaserTitle}</span>
             </ArtifactTeaserTitle>
-            {hasChartArtifact ? (
-              <Tag color="purple">{messages.chart.statuses.generated}</Tag>
-            ) : chartStatus === ChartTaskStatus.FAILED ? (
+            {chartStatus === ChartTaskStatus.FAILED ? (
               <Tag color="error">{messages.chart.statuses.failed}</Tag>
             ) : chartStatus ? (
               <Tag color="processing">{messages.chart.statuses.generating}</Tag>
@@ -819,12 +796,6 @@ export default function AnswerResult(props: Props) {
     );
   };
 
-  const chartFollowUpLeadText =
-    chartStatus === ChartTaskStatus.FAILED
-      ? chartError?.message || messages.chart.descriptions.noChartFallback
-      : chartStatus === ChartTaskStatus.FINISHED
-        ? messages.chart.descriptions.followUpReady
-        : messages.chart.descriptions.followUpGenerating;
   const previewTeaser = renderPreviewTeaser();
   const chartTeaser = renderChartTeaser();
   const conversationAids = useMemo(() => {
@@ -857,11 +828,7 @@ export default function AnswerResult(props: Props) {
     conversationAids.length > 0;
 
   const recommendationQuestionProps = useMemo(() => {
-    if (
-      !isRecommendationFollowUp ||
-      !recommendationDetail ||
-      !props.isLastThreadResponse
-    ) {
+    if (!isRecommendationFollowUp || !recommendationDetail) {
       return null;
     }
 
@@ -885,7 +852,6 @@ export default function AnswerResult(props: Props) {
   }, [
     isRecommendationFollowUp,
     recommendationDetail,
-    props.isLastThreadResponse,
     threadResponse.sourceResponseId,
   ]);
 
@@ -1055,13 +1021,6 @@ export default function AnswerResult(props: Props) {
 
               {isAdjustment ? (
                 <AdjustmentInformation adjustment={adjustment} />
-              ) : null}
-
-              {isChartFollowUp ? (
-                <ChartFollowUpLeadLine>
-                  <PieChartOutlined />
-                  <span>{chartFollowUpLeadText}</span>
-                </ChartFollowUpLeadLine>
               ) : null}
 
               {!isRecommendationFollowUp ? (

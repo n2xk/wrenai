@@ -1,6 +1,7 @@
 import {
   resolvePersistentShellActiveHistoryId,
   resolvePersistentShellActiveNav,
+  resolvePersistentShellLayoutProps,
   shouldKeyRuntimeScopePage,
   shouldUsePersistentConsoleShell,
 } from './PersistentConsoleShell';
@@ -54,5 +55,22 @@ describe('PersistentConsoleShell helpers', () => {
         queryId: '12',
       }),
     ).toBeNull();
+  });
+
+  it('resolves route-specific layout props for embedded persistent shell pages', () => {
+    expect(resolvePersistentShellLayoutProps('/home/[id]')).toEqual({
+      flushMainPadding: true,
+      stretchContent: true,
+    });
+    expect(resolvePersistentShellLayoutProps('/knowledge')).toEqual({
+      flushBottomPadding: true,
+      mainPaddingTop: '8px',
+      stretchContent: true,
+    });
+    expect(resolvePersistentShellLayoutProps('/home/dashboard')).toEqual({
+      mainPaddingTop: '8px',
+      stretchContent: true,
+    });
+    expect(resolvePersistentShellLayoutProps('/home')).toEqual({});
   });
 });

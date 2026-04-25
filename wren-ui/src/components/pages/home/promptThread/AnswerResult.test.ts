@@ -124,7 +124,7 @@ describe('AnswerResult answer auto-generation guard', () => {
     ).toBe(11);
   });
 
-  it('keeps conversation aids on the latest settled response instead of a selected historical response', () => {
+  it('keeps conversation aids on the latest eligible response even when a historical response is selected', () => {
     expect(
       resolveConversationAidOwnerResponseId({
         selectedResponseId: 11,
@@ -153,6 +153,93 @@ describe('AnswerResult answer auto-generation guard', () => {
             },
             askingTask: {
               status: AskingTaskStatus.FINISHED,
+            },
+          },
+        ] as any,
+      }),
+    ).toBe(22);
+  });
+
+  it('maps a selected recommendation follow-up back to its source when that source is still the latest eligible response', () => {
+    expect(
+      resolveConversationAidOwnerResponseId({
+        selectedResponseId: 32,
+        responses: [
+          {
+            id: 11,
+            question: '源回答',
+            responseKind: 'ANSWER',
+            resolvedIntent: {
+              conversationAidPlan: {
+                responseAids: [{ kind: 'TRIGGER_RECOMMEND_QUESTIONS' }],
+              },
+            },
+            askingTask: {
+              status: AskingTaskStatus.FINISHED,
+            },
+          },
+          {
+            id: 32,
+            question: '推荐几个问题给我',
+            responseKind: 'RECOMMENDATION_FOLLOWUP',
+            sourceResponseId: 11,
+            recommendationDetail: {
+              status: 'FINISHED',
+              items: [],
+              sourceResponseId: 11,
+            },
+            resolvedIntent: {
+              conversationAidPlan: null,
+            },
+          },
+        ] as any,
+      }),
+    ).toBe(11);
+  });
+
+  it('does not move conversation aids back to an older source response when a newer response is already eligible', () => {
+    expect(
+      resolveConversationAidOwnerResponseId({
+        selectedResponseId: 32,
+        responses: [
+          {
+            id: 11,
+            question: '旧回答',
+            responseKind: 'ANSWER',
+            resolvedIntent: {
+              conversationAidPlan: {
+                responseAids: [{ kind: 'TRIGGER_RECOMMEND_QUESTIONS' }],
+              },
+            },
+            askingTask: {
+              status: AskingTaskStatus.FINISHED,
+            },
+          },
+          {
+            id: 22,
+            question: '当前回答',
+            responseKind: 'ANSWER',
+            resolvedIntent: {
+              conversationAidPlan: {
+                responseAids: [{ kind: 'TRIGGER_RECOMMEND_QUESTIONS' }],
+              },
+            },
+            askingTask: {
+              status: AskingTaskStatus.FINISHED,
+            },
+          },
+          {
+            id: 32,
+            question: '推荐几个问题给我',
+            responseKind: 'RECOMMENDATION_FOLLOWUP',
+            sourceResponseId: 11,
+            recommendationDetail: {
+              status: 'FINISHED',
+              items: [],
+              sourceResponseId: 11,
+            },
+            resolvedIntent: {
+              conversationAidPlan: null,
             },
           },
         ] as any,

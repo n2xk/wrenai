@@ -44,14 +44,14 @@ const FooterControlCluster = styled.div<{ $collapsed?: boolean }>`
 `;
 
 const SidebarWorkspaceSwitcher = styled.div`
-  padding: 0 2px;
+  padding: 0;
 `;
 
 const Footer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 0 2px 12px;
+  padding: 0 var(--dola-shell-sidebar-inline-pad) 12px;
 `;
 
 const AccountRow = styled.div`

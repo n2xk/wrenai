@@ -79,6 +79,35 @@ const reportThreadError = (_error: unknown, fallbackMessage: string) => {
   message.error(fallbackMessage);
 };
 
+export const resetThreadPageViewportScroll = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  } catch {
+    window.scrollTo(0, 0);
+  }
+
+  const scrollingElement = document.scrollingElement;
+  if (!scrollingElement) {
+    return;
+  }
+
+  if (typeof scrollingElement.scrollTo === 'function') {
+    try {
+      scrollingElement.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      return;
+    } catch {
+      // fall through to direct property assignment for older/incomplete impls
+    }
+  }
+
+  scrollingElement.scrollTop = 0;
+  scrollingElement.scrollLeft = 0;
+};
+
 export default function HomeThread() {
   const $prompt = useRef<ComponentRef<typeof Prompt>>(null);
   const router = useRouter();
@@ -243,6 +272,22 @@ export default function HomeThread() {
     thread,
     threadId,
   });
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    resetThreadPageViewportScroll();
+    const animationFrame = window.requestAnimationFrame(() => {
+      resetThreadPageViewportScroll();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [router.asPath, router.isReady]);
+
   const resolveResponseRuntimeScopeSelectorById = useCallback(
     (responseId: number) => {
       const matchedResponse =

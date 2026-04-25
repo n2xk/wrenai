@@ -57,6 +57,29 @@ export const resolvePersistentShellActiveHistoryId = ({
   return queryId || null;
 };
 
+export const resolvePersistentShellLayoutProps = (pathname?: string | null) => {
+  switch (pathname) {
+    case Path.Thread:
+      return {
+        flushMainPadding: true,
+        stretchContent: true,
+      };
+    case Path.Knowledge:
+      return {
+        flushBottomPadding: true,
+        mainPaddingTop: '8px',
+        stretchContent: true,
+      };
+    case Path.HomeDashboard:
+      return {
+        mainPaddingTop: '8px',
+        stretchContent: true,
+      };
+    default:
+      return {};
+  }
+};
+
 interface Props {
   children: ReactNode;
 }
@@ -82,6 +105,10 @@ export default function PersistentConsoleShell({ children }: Props) {
         queryId: router.query.id as string | string[] | undefined,
       }),
     [router.pathname, router.query.id],
+  );
+  const layoutProps = useMemo(
+    () => resolvePersistentShellLayoutProps(router.pathname),
+    [router.pathname],
   );
   const navItems = useMemo(
     () =>
@@ -119,6 +146,7 @@ export default function PersistentConsoleShell({ children }: Props) {
       historyItems={historyItems}
       historyLoading={homeSidebar.loading && historyItems.length === 0}
       onHistoryIntent={homeSidebar.ensureLoaded}
+      {...layoutProps}
     >
       <PersistentShellProvider value={contextValue}>
         {children}

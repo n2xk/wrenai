@@ -337,6 +337,7 @@ export default function Dashboard() {
       <DirectShellPageFrame
         activeNav="dashboard"
         flushBottomPadding
+        mainPaddingTop="8px"
         stretchContent
       >
         <LoadingWrapper loading>
@@ -350,6 +351,7 @@ export default function Dashboard() {
     <DirectShellPageFrame
       activeNav="dashboard"
       flushBottomPadding
+      mainPaddingTop="8px"
       stretchContent
     >
       <LoadingWrapper loading={loading}>
