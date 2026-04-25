@@ -231,4 +231,30 @@ describe('useKnowledgeAssetWorkbench', () => {
       { scroll: false },
     );
   });
+
+  it('supports semantics modeling assistant handoff when navigating to modeling', async () => {
+    const buildRuntimeScopeUrl = (
+      path: string,
+      query?: Record<string, string | number | boolean | null | undefined>,
+    ) => {
+      const search = new URLSearchParams(
+        Object.entries(query || {})
+          .filter(
+            (entry): entry is [string, string | number | boolean] =>
+              entry[1] !== null && entry[1] !== undefined,
+          )
+          .map(([key, value]) => [key, String(value)]),
+      );
+      return `${path}?${search.toString()}`;
+    };
+    const hookValue = renderHookHarness({ buildRuntimeScopeUrl });
+
+    await hookValue.navigateModelingWithPersistedRuntimeScope?.('semantics');
+
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      '/knowledge?section=modeling&openAssistant=semantics',
+      undefined,
+      { scroll: false },
+    );
+  });
 });

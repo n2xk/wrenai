@@ -107,13 +107,13 @@ export default function RelationModal(props: Props) {
     <Modal
       title={
         isRecommendMode
-          ? `${isEmpty(defaultValue) ? 'Add' : 'Update'} relationship`
+          ? `${isEmpty(defaultValue) ? '新增' : '编辑'}关联关系`
           : `${isEmpty(defaultValue) ? '新增' : '编辑'}关系`
       }
       width={750}
       open={visible}
-      okText={isRecommendMode ? 'Submit' : '保存'}
-      cancelText={isRecommendMode ? 'Cancel' : '取消'}
+      okText={isRecommendMode ? '确认' : '保存'}
+      cancelText="取消"
       onOk={submit}
       onCancel={onClose}
       confirmLoading={loading}
@@ -124,7 +124,7 @@ export default function RelationModal(props: Props) {
     >
       <Form form={form} preserve={false} layout="vertical">
         <Form.Item
-          label={isRecommendMode ? 'From' : '来源字段'}
+          label="来源字段"
           name={FormFieldKey.FROM_FIELD}
           required
           rules={[
@@ -147,7 +147,7 @@ export default function RelationModal(props: Props) {
           />
         </Form.Item>
         <Form.Item
-          label={isRecommendMode ? 'To' : '目标字段'}
+          label="目标字段"
           name={FormFieldKey.TO_FIELD}
           required
           rules={[
@@ -169,7 +169,7 @@ export default function RelationModal(props: Props) {
           />
         </Form.Item>
         <Form.Item
-          label={isRecommendMode ? 'Type' : '关系类型'}
+          label="关系类型"
           name={FormFieldKey.TYPE}
           required
           rules={[
@@ -182,13 +182,11 @@ export default function RelationModal(props: Props) {
           <Select
             data-testid="relationship-form__type-select"
             options={relationTypeOptions}
-            placeholder={
-              isRecommendMode ? 'Select relationship type' : '请选择关系类型'
-            }
+            placeholder="请选择关系类型"
           />
         </Form.Item>
         {showDescriptionField ? (
-          <Form.Item label="Description" name="description">
+          <Form.Item label="描述" name="description">
             <Input.TextArea rows={4} />
           </Form.Item>
         ) : null}

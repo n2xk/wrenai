@@ -381,7 +381,8 @@ export default function DefineRelations(props: Props) {
 
       <FooterRow>
         <Text type="secondary" style={{ fontSize: 13 }}>
-          关系确认后会直接进入建模工作台。你也可以先跳过，后续再在建模页继续补充。
+          关系确认后会继续进入建模页的 AI
+          语义补充流程。你也可以先跳过，后续再在建模页继续补充。
         </Text>
         <Space size={12}>
           <LightButton onClick={onBack}>返回</LightButton>

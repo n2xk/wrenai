@@ -7,9 +7,7 @@ import {
   buildKnowledgeWorkbenchHeaderProps,
 } from '@/features/knowledgePage/sections/buildKnowledgeMainStageSectionProps';
 import { MainStage } from '@/features/knowledgePage/index.styles';
-import KnowledgeWorkbenchHeader, {
-  resolveKnowledgeWorkbenchModeLabel,
-} from '@/features/knowledgePage/sections/KnowledgeWorkbenchHeader';
+import KnowledgeWorkbenchHeader from '@/features/knowledgePage/sections/KnowledgeWorkbenchHeader';
 import KnowledgeInstructionsStage from '@/features/knowledgePage/sections/KnowledgeInstructionsStage';
 import KnowledgeModelingSection from '@/features/knowledgePage/sections/KnowledgeModelingSection';
 import KnowledgeOverviewStage from '@/features/knowledgePage/sections/KnowledgeOverviewStage';
@@ -67,10 +65,6 @@ function KnowledgeMainStage({
   modelingSummary,
   onOpenModeling,
 }: KnowledgeMainStageProps) {
-  const workbenchModeLabel = resolveKnowledgeWorkbenchModeLabel({
-    isReadonlyKnowledgeBase,
-    isSnapshotReadonlyKnowledgeBase,
-  });
   const editors = useKnowledgeWorkbenchEditors(
     buildKnowledgeMainStageEditorsInput({
       activeWorkbenchSection,
@@ -150,7 +144,6 @@ function KnowledgeMainStage({
           {...buildKnowledgeModelingSectionProps({
             modelingSummary,
             modelingWorkspaceKey,
-            workbenchModeLabel,
           })}
         />
       ) : null}

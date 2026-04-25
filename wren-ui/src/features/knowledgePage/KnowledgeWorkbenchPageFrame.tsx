@@ -21,6 +21,7 @@ export default function KnowledgeWorkbenchPageFrame({
     <DirectShellPageFrame
       activeNav="knowledge"
       flushBottomPadding
+      mainPaddingTop="8px"
       stretchContent
     >
       <KnowledgeWorkbenchStage

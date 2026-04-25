@@ -23,8 +23,7 @@ type ErrorLike = {
 };
 
 const resolveTaskErrorMessage = (error?: { message?: string | null } | null) =>
-  error?.message ||
-  'Failed to load relationship recommendations. Please try again.';
+  error?.message || '加载关联关系推荐失败，请稍后重试。';
 
 export default function useRecommendRelationshipsTask({
   enabled,
@@ -93,8 +92,7 @@ export default function useRecommendRelationshipsTask({
       );
     } catch (error) {
       const messageText =
-        (error as ErrorLike)?.message ||
-        'Failed to load relationship recommendations. Please try again.';
+        (error as ErrorLike)?.message || '加载关联关系推荐失败，请稍后重试。';
       setRequestError(messageText);
       setTask({
         id: 'relationship-recommendation-error',

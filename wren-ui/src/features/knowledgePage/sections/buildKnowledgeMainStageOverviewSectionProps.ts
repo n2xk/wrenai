@@ -90,11 +90,9 @@ export function buildKnowledgeOverviewStageProps({
 export function buildKnowledgeModelingSectionProps({
   modelingSummary,
   modelingWorkspaceKey,
-  workbenchModeLabel,
 }: KnowledgeModelingSectionArgs): KnowledgeModelingSectionProps {
   return {
     modelingSummary,
     modelingWorkspaceKey,
-    workbenchModeLabel,
   };
 }

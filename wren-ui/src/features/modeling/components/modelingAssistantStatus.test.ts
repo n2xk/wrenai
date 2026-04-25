@@ -18,8 +18,18 @@ describe('buildModelingAssistantTaskSummaries', () => {
     });
 
     expect(summaries).toEqual([
-      { key: 'semantics', state: 'todo', countLabel: '1' },
-      { key: 'relationships', state: 'done', countLabel: '1' },
+      {
+        key: 'semantics',
+        state: 'todo',
+        countLabel: '1',
+        detailLabel: '还有 1 项缺少描述',
+      },
+      {
+        key: 'relationships',
+        state: 'done',
+        countLabel: '1',
+        detailLabel: '模型中已有 1 条关联关系',
+      },
     ]);
   });
 
@@ -45,8 +55,18 @@ describe('buildModelingAssistantTaskSummaries', () => {
     });
 
     expect(summaries).toEqual([
-      { key: 'semantics', state: 'done', countLabel: '1' },
-      { key: 'relationships', state: 'done', countLabel: '1' },
+      {
+        key: 'semantics',
+        state: 'done',
+        countLabel: '1',
+        detailLabel: '描述已补充完成',
+      },
+      {
+        key: 'relationships',
+        state: 'done',
+        countLabel: '1',
+        detailLabel: '模型中已有 1 条关联关系',
+      },
     ]);
   });
 });

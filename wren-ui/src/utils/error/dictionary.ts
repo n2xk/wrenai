@@ -91,16 +91,16 @@ export const ERROR_TEXTS = {
   },
   ADD_RELATION: {
     FROM_FIELD: {
-      REQUIRED: 'Please select a field.',
+      REQUIRED: '请选择字段。',
     },
     TO_FIELD: {
-      REQUIRED: 'Please select a field.',
+      REQUIRED: '请选择字段。',
     },
     RELATION_TYPE: {
-      REQUIRED: 'Please select a relationship type.',
+      REQUIRED: '请选择关系类型。',
     },
     RELATIONSHIP: {
-      EXIST: 'This relationship already exists.',
+      EXIST: '该关联关系已存在。',
     },
   },
   SETUP_MODEL: {

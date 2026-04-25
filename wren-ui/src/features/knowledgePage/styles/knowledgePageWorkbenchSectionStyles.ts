@@ -108,9 +108,10 @@ export const WorkbenchProcessMeta = styled.div`
 `;
 
 export const WorkbenchStatsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: clamp(6px, 1vw, 12px);
+  min-width: 0;
 `;
 
 export const WorkbenchColumnGrid = styled.div`

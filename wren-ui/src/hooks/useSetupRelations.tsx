@@ -15,7 +15,7 @@ import {
 } from '@/utils/modelingRest';
 import useOnboardingStatus from '@/hooks/useCheckOnboarding';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
-import { buildKnowledgeWorkbenchParams } from '@/utils/knowledgeWorkbench';
+import { buildSetupModelingAssistantParams } from '@/features/setup/setupModelingAssistantSupport';
 
 export default function useSetupRelations() {
   const [stepKey] = useState(SETUP.DEFINE_RELATIONS);
@@ -67,7 +67,7 @@ export default function useSetupRelations() {
   const onFinish = () => {
     runtimeScopeNavigation.push(
       Path.Knowledge,
-      buildKnowledgeWorkbenchParams('modeling'),
+      buildSetupModelingAssistantParams('relationships-review'),
     );
     refetchOnboardingStatus();
   };

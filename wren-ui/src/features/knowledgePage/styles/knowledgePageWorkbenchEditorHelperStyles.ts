@@ -12,6 +12,8 @@ export const WorkbenchHelperGrid = styled.div`
 `;
 
 export const WorkbenchStatCard = styled.div`
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 18px;
   border: 1px solid var(--nova-outline-soft);
   background: linear-gradient(
@@ -19,18 +21,18 @@ export const WorkbenchStatCard = styled.div`
     rgba(248, 246, 251, 0.92) 0%,
     rgba(255, 255, 255, 0.98) 100%
   );
-  padding: 14px 16px;
+  padding: clamp(10px, 1vw, 14px) clamp(8px, 1.1vw, 16px);
 `;
 
 export const WorkbenchStatLabel = styled.div`
   color: var(--nova-text-secondary);
-  font-size: 12px;
-  margin-bottom: 8px;
+  font-size: clamp(10px, 0.85vw, 12px);
+  margin-bottom: clamp(4px, 0.7vw, 8px);
 `;
 
 export const WorkbenchStatValue = styled.div`
   color: var(--nova-text-primary);
-  font-size: clamp(20px, 2vw, 24px);
+  font-size: clamp(13px, 1.6vw, 24px);
   line-height: 1.15;
   font-weight: 700;
   overflow-wrap: anywhere;

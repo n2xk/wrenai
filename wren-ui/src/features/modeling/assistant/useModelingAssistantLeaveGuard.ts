@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { appModal } from '@/utils/antdAppBridge';
 
-const DEFAULT_TITLE = 'Go back to the modeling page?';
+const DEFAULT_TITLE = '返回建模页面？';
 const DEFAULT_DESCRIPTION =
-  'Please be aware that leaving the page will not save your progress, and this action cannot be undone.';
+  '离开当前页面后，未保存的进度将会丢失，且无法恢复。';
 
 export default function useModelingAssistantLeaveGuard({
   onLeave,
@@ -16,8 +16,8 @@ export default function useModelingAssistantLeaveGuard({
         appModal.confirm({
           title: DEFAULT_TITLE,
           content: DEFAULT_DESCRIPTION,
-          okText: 'Go back',
-          cancelText: 'Cancel',
+          okText: '返回',
+          cancelText: '取消',
           onOk: async () => {
             await onLeave();
             resolve(true);

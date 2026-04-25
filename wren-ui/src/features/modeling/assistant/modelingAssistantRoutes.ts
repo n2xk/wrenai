@@ -7,8 +7,8 @@ export const MODELING_ASSISTANT_PATHS = [
 ] as const;
 
 export const MODELING_ASSISTANT_ROUTE_TITLES = {
-  [Path.RecommendRelationships]: 'Generate relationships',
-  [Path.RecommendSemantics]: 'Generate semantics',
+  [Path.RecommendRelationships]: '生成关联关系',
+  [Path.RecommendSemantics]: '生成语义描述',
 } as const;
 
 export const buildModelingAssistantBackParams = () =>

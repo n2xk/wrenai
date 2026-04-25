@@ -50,9 +50,7 @@ export type KnowledgeOverviewSectionArgs = Pick<
 export type KnowledgeModelingSectionArgs = Pick<
   KnowledgeMainStageProps,
   'modelingSummary' | 'modelingWorkspaceKey'
-> & {
-  workbenchModeLabel: string;
-};
+>;
 
 export type {
   KnowledgeModelingSectionProps,

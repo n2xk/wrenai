@@ -63,11 +63,14 @@ describe('buildKnowledgeMainStageSectionProps', () => {
     const props = buildKnowledgeModelingSectionProps({
       modelingSummary: { modelCount: 1, relationCount: 2, viewCount: 3 },
       modelingWorkspaceKey: 'kb:workspace',
-      workbenchModeLabel: '可编辑',
     });
 
     expect(props.modelingWorkspaceKey).toBe('kb:workspace');
-    expect(props.workbenchModeLabel).toBe('可编辑');
+    expect(props.modelingSummary).toEqual({
+      modelCount: 1,
+      relationCount: 2,
+      viewCount: 3,
+    });
   });
 
   it('maps sql and instruction stage props from shared editor state', () => {

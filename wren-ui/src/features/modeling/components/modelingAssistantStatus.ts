@@ -11,6 +11,7 @@ export type ModelingAssistantTaskSummary = {
   key: 'semantics' | 'relationships';
   state: 'todo' | 'done';
   countLabel: string;
+  detailLabel: string;
 };
 
 const hasDescription = (value?: string | null) =>
@@ -65,20 +66,28 @@ export const buildModelingAssistantTaskSummaries = ({
     0,
   );
   const relationshipsState = relationCount > 0 ? 'done' : 'todo';
-  const hasSemanticsGaps =
-    models.some((model) => modelNeedsDescription(model)) ||
-    (views || []).some((view) => viewNeedsDescription(view));
+  const semanticsPendingCount =
+    models.filter((model) => modelNeedsDescription(model)).length +
+    (views || []).filter((view) => viewNeedsDescription(view)).length;
+  const hasSemanticsGaps = semanticsPendingCount > 0;
 
   return [
     {
       key: 'semantics',
       state: hasSemanticsGaps ? 'todo' : 'done',
       countLabel: '1',
+      detailLabel: hasSemanticsGaps
+        ? `还有 ${semanticsPendingCount} 项缺少描述`
+        : '描述已补充完成',
     },
     {
       key: 'relationships',
       state: relationshipsState,
       countLabel: '1',
+      detailLabel:
+        relationCount > 0
+          ? `模型中已有 ${relationCount} 条关联关系`
+          : '还没有已保存的关联关系',
     },
   ];
 };

@@ -1,14 +1,6 @@
 import { useMemo } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Checkbox,
-  Input,
-  Space,
-  Spin,
-  Typography,
-} from 'antd';
+import { Alert, Button, Checkbox, Input, Space, Spin, Typography } from 'antd';
+import styled from 'styled-components';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import ModelingAssistantRouteLayout from '../ModelingAssistantRouteLayout';
@@ -23,15 +15,36 @@ import {
   AssistantDocLink,
   AssistantFooterBar,
   AssistantIntroCard,
+  AssistantMetricCard,
+  AssistantMetricGrid,
   AssistantMutedText,
   AssistantPill,
   AssistantPillRow,
   AssistantPromptChip,
   AssistantSectionCard,
   AssistantSectionHeader,
+  AssistantStateCard,
 } from '../modelingAssistantVisuals';
 
 const { Paragraph, Text, Title } = Typography;
+
+const ModelPickList = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`;
+
+const ModelPickRow = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(109, 74, 255, 0.12);
+  background: #faf8ff;
+  cursor: pointer;
+`;
 
 export default function RecommendSemanticsPage() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -58,28 +71,38 @@ export default function RecommendSemanticsPage() {
 
   const selectedModelCount = semanticsWizard.selectedModels.length;
   const generatedStateTitle = useMemo(
-    () =>
-      semanticsWizard.completed ? 'Generated semantics' : 'Example prompt',
+    () => (semanticsWizard.completed ? '已生成的语义描述' : '示例提示词'),
     [semanticsWizard.completed],
   );
 
   const renderPickStep = () => {
     if (runtimeScopePage.guarding || semanticsWizard.modelList.loading) {
       return (
-        <div style={{ padding: '48px 0', textAlign: 'center' }}>
+        <AssistantStateCard $align="center">
           <Spin />
-        </div>
+          <Text strong>正在加载模型</Text>
+          <AssistantMutedText>
+            正在准备可用于补充语义描述的模型。
+          </AssistantMutedText>
+        </AssistantStateCard>
       );
     }
 
     if (modelingAssistantReadonly.isReadOnly) {
       return (
-        <Alert
-          type="warning"
-          showIcon
-          title="Modeling AI Assistant is unavailable on read-only snapshots"
-          description={modelingAssistantReadonly.readOnlyHint}
-        />
+        <AssistantColumn>
+          <AssistantIntroCard>
+            <AssistantPillRow>
+              <AssistantPill $tone="warning">只读快照</AssistantPill>
+            </AssistantPillRow>
+            <Alert
+              type="warning"
+              showIcon
+              title="历史快照中暂不支持建模 AI 助手"
+              description={modelingAssistantReadonly.readOnlyHint}
+            />
+          </AssistantIntroCard>
+        </AssistantColumn>
       );
     }
 
@@ -88,10 +111,9 @@ export default function RecommendSemanticsPage() {
         <AssistantIntroCard>
           <AssistantSectionHeader>
             <div>
-              <Text strong>Assistant setup</Text>
+              <Text strong>助手设置</Text>
               <AssistantMutedText>
-                Choose the models you want to enrich, then generate concise
-                business-friendly descriptions before saving.
+                选择需要补充描述的模型，再生成简洁、贴近业务的模型和字段说明后保存。
               </AssistantMutedText>
             </div>
             <AssistantDocLink
@@ -99,51 +121,48 @@ export default function RecommendSemanticsPage() {
               target="_blank"
               rel="noreferrer"
             >
-              Learn more
+              了解更多
             </AssistantDocLink>
           </AssistantSectionHeader>
           <AssistantPillRow>
-            <AssistantPill $tone="accent">Step 1 of 2</AssistantPill>
+            <AssistantPill $tone="accent">第 1 步 / 共 2 步</AssistantPill>
             <AssistantPill
               $tone={selectedModelCount > 0 ? 'success' : 'warning'}
             >
-              {selectedModelCount} model{selectedModelCount === 1 ? '' : 's'}{' '}
-              selected
+              已选择 {selectedModelCount} 个模型
             </AssistantPill>
           </AssistantPillRow>
         </AssistantIntroCard>
-        <Card style={{ borderRadius: 16 }}>
+        <AssistantSectionCard>
           <Title level={4} style={{ marginTop: 0 }}>
-            Pick models
+            选择模型
           </Title>
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-            }}
-          >
+          <AssistantMutedText>
+            勾选需要由助手生成描述的模型。继续下一步时会校验是否已完成选择。
+          </AssistantMutedText>
+          <ModelPickList>
             {(semanticsWizard.modelList.data || []).map((model) => (
-              <Checkbox
-                key={model.referenceName}
-                checked={semanticsWizard.selectedModels.includes(
-                  model.referenceName,
-                )}
-                onChange={(event) =>
-                  semanticsWizard.onToggleModel(
+              <ModelPickRow key={model.referenceName}>
+                <Checkbox
+                  checked={semanticsWizard.selectedModels.includes(
                     model.referenceName,
-                    event.target.checked,
-                  )
-                }
-              >
-                <Text strong>{model.displayName}</Text>
-                <Text type="secondary" style={{ marginLeft: 8 }}>
-                  {model.referenceName}
-                </Text>
-              </Checkbox>
+                  )}
+                  onChange={(event) =>
+                    semanticsWizard.onToggleModel(
+                      model.referenceName,
+                      event.target.checked,
+                    )
+                  }
+                />
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                >
+                  <Text strong>{model.displayName}</Text>
+                  <Text type="secondary">{model.referenceName}</Text>
+                </div>
+              </ModelPickRow>
             ))}
-          </div>
+          </ModelPickList>
           {semanticsWizard.validationError ? (
             <Alert
               style={{ marginTop: 16 }}
@@ -152,12 +171,17 @@ export default function RecommendSemanticsPage() {
               title={semanticsWizard.validationError}
             />
           ) : null}
-        </Card>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button type="primary" onClick={semanticsWizard.onNext}>
-            Next
-          </Button>
-        </div>
+        </AssistantSectionCard>
+        <AssistantSectionCard>
+          <AssistantFooterBar>
+            <AssistantMutedText>
+              示例提示词会在下一步展示；点击继续后才会真正进入生成流程。
+            </AssistantMutedText>
+            <Button type="primary" onClick={semanticsWizard.onNext}>
+              下一步
+            </Button>
+          </AssistantFooterBar>
+        </AssistantSectionCard>
       </AssistantColumn>
     );
   };
@@ -167,10 +191,9 @@ export default function RecommendSemanticsPage() {
       <AssistantIntroCard>
         <AssistantSectionHeader>
           <div>
-            <Text strong>Generation workflow</Text>
+            <Text strong>生成流程</Text>
             <AssistantMutedText>
-              Refine the prompt if needed, generate semantics, then save the
-              reviewed descriptions back to modeling.
+              如有需要可补充提示词，生成后确认结果，再将描述保存回建模。
             </AssistantMutedText>
           </div>
           <AssistantDocLink
@@ -178,48 +201,60 @@ export default function RecommendSemanticsPage() {
             target="_blank"
             rel="noreferrer"
           >
-            Learn more
+            了解更多
           </AssistantDocLink>
         </AssistantSectionHeader>
         <AssistantPillRow>
-          <AssistantPill $tone="accent">Step 2 of 2</AssistantPill>
+          <AssistantPill $tone="accent">第 2 步 / 共 2 步</AssistantPill>
           <AssistantPill
             $tone={semanticsWizard.completed ? 'success' : 'warning'}
           >
-            {semanticsWizard.completed ? 'Generated' : 'Awaiting generation'}
+            {semanticsWizard.completed ? '已生成' : '等待生成'}
           </AssistantPill>
           <AssistantPill $tone="default">
-            {selectedModelCount} model{selectedModelCount === 1 ? '' : 's'}
+            {selectedModelCount} 个模型
           </AssistantPill>
         </AssistantPillRow>
       </AssistantIntroCard>
-      <Card style={{ borderRadius: 16 }}>
+      <AssistantMetricGrid>
+        <AssistantMetricCard>
+          <Text type="secondary">已选模型</Text>
+          <Text strong style={{ fontSize: 18 }}>
+            {selectedModelCount}
+          </Text>
+        </AssistantMetricCard>
+        <AssistantMetricCard>
+          <Text type="secondary">提示词</Text>
+          <Text strong style={{ fontSize: 18 }}>
+            {semanticsWizard.prompt.trim() ? '已自定义' : '可选'}
+          </Text>
+        </AssistantMetricCard>
+      </AssistantMetricGrid>
+      <AssistantSectionCard>
         <Title level={4} style={{ marginTop: 0 }}>
-          Generate semantics
+          生成语义描述
         </Title>
-        <Paragraph type="secondary">
-          Selected models: {selectedModelCount}
-        </Paragraph>
+        <Paragraph type="secondary">已选模型：{selectedModelCount}</Paragraph>
         <Input.TextArea
           rows={5}
           value={semanticsWizard.prompt}
           onChange={(event) => semanticsWizard.setPrompt(event.target.value)}
-          placeholder="Add more context for the AI assistant (optional)"
+          placeholder="可选：补充更多业务背景、术语偏好或描述要求"
         />
-      </Card>
+      </AssistantSectionCard>
 
       {semanticsWizard.requestError ? (
         <Alert
           type="error"
           showIcon
-          title="Failed to generate semantics"
+          title="生成语义描述失败"
           description={semanticsWizard.requestError}
           action={
             <Button
               size="small"
               onClick={() => void semanticsWizard.retryGenerate()}
             >
-              Retry
+              重试
             </Button>
           }
         />
@@ -229,11 +264,11 @@ export default function RecommendSemanticsPage() {
         <Alert
           type="error"
           showIcon
-          title="Failed to save semantics"
+          title="保存语义描述失败"
           description={semanticsWizard.saveError}
           action={
             <Button size="small" onClick={() => void semanticsWizard.save()}>
-              Retry save
+              重试保存
             </Button>
           }
         />
@@ -243,6 +278,11 @@ export default function RecommendSemanticsPage() {
         <Title level={5} style={{ marginTop: 0 }}>
           {generatedStateTitle}
         </Title>
+        {!semanticsWizard.completed ? (
+          <AssistantMutedText>
+            这些示例提示词仅供参考，不会自动填入输入框。
+          </AssistantMutedText>
+        ) : null}
         {semanticsWizard.completed ? (
           <GeneratedSemanticsReview items={semanticsWizard.generatedModels} />
         ) : (
@@ -258,31 +298,32 @@ export default function RecommendSemanticsPage() {
 
       {semanticsWizard.polling &&
       semanticsWizard.task?.status === 'GENERATING' ? (
-        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+        <AssistantStateCard $align="center">
           <Spin />
           <Paragraph style={{ marginTop: 12, marginBottom: 0 }}>
-            Generating semantics...
+            正在生成语义描述...
           </Paragraph>
-        </div>
+        </AssistantStateCard>
       ) : null}
 
       <AssistantSectionCard>
         <AssistantFooterBar>
-          <Button onClick={semanticsWizard.onBack}>Back</Button>
+          <Button onClick={semanticsWizard.onBack}>上一步</Button>
           <Space>
             <Button
               onClick={() => void semanticsWizard.save()}
+              type={semanticsWizard.completed ? 'primary' : 'default'}
               loading={semanticsWizard.saving}
               disabled={!semanticsWizard.completed}
             >
-              Save
+              保存
             </Button>
             <Button
-              type="primary"
+              type={semanticsWizard.completed ? 'default' : 'primary'}
               onClick={() => void semanticsWizard.generate()}
               loading={semanticsWizard.polling}
             >
-              {semanticsWizard.completed ? 'Regenerate' : 'Generate'}
+              {semanticsWizard.completed ? '重新生成' : '开始生成'}
             </Button>
           </Space>
         </AssistantFooterBar>
@@ -292,8 +333,8 @@ export default function RecommendSemanticsPage() {
 
   return (
     <ModelingAssistantRouteLayout
-      title="Generate semantics"
-      description="Select models, add optional context, and let Modeling AI Assistant generate descriptions before saving them back to your semantic model."
+      title="生成语义描述"
+      description="选择模型并补充可选上下文，让建模 AI 助手生成描述，确认后再保存回语义模型。"
       onBack={leaveGuard.onBackClick}
     >
       {semanticsWizard.step === 'pick'

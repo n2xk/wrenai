@@ -45,6 +45,10 @@ import type { ModelingAssistantIntent } from '@/features/knowledgePage/knowledge
 import AssetWizardAssetStep from './AssetWizardAssetStep';
 import AssetWizardConnectorDrawer from './AssetWizardConnectorDrawer';
 import AssetWizardSourceStep from './AssetWizardSourceStep';
+import {
+  resolveAssetWizardModelingAssistantIntent,
+  resolveAssetWizardModelingAssistantLabel,
+} from './assetWizardModelingAssistantSupport';
 
 const { Text } = Typography;
 type AssetWizardModalProps = {
@@ -184,6 +188,14 @@ function AssetWizardModal({
         (asset) => asset.kind === 'model' && Boolean(asset.modelId),
       ),
     [assetDraftPreviewList],
+  );
+  const modelingAssistantIntent = useMemo(
+    () =>
+      resolveAssetWizardModelingAssistantIntent({
+        assets: assetDraftPreviewList,
+        isBatchSelection,
+      }),
+    [assetDraftPreviewList, isBatchSelection],
   );
   const recommendationStateKey = useMemo(
     () =>
@@ -609,12 +621,12 @@ function AssetWizardModal({
                   icon={<ArrowRightOutlined />}
                   onClick={async () => {
                     closeAssetModal();
-                    await onNavigateModeling(
-                      isBatchSelection ? 'relationships' : undefined,
-                    );
+                    await onNavigateModeling(modelingAssistantIntent);
                   }}
                 >
-                  {isBatchSelection ? '去生成表关系' : '去建模'}
+                  {resolveAssetWizardModelingAssistantLabel(
+                    modelingAssistantIntent,
+                  )}
                 </PurpleButton>
               </Space>
             </WizardFooter>

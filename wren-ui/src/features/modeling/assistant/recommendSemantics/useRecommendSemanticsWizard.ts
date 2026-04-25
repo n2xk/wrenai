@@ -19,7 +19,7 @@ export type RecommendSemanticsStep = 'pick' | 'generate';
 
 const DEFAULT_PROMPT = '';
 
-const EXAMPLE_PROMPTS = ['College', 'E-commerce', 'Human Resources'] as const;
+const EXAMPLE_PROMPTS = ['高校场景', '电商场景', '人力资源场景'] as const;
 
 export default function useRecommendSemanticsWizard({
   enabled,
@@ -77,7 +77,7 @@ export default function useRecommendSemanticsWizard({
 
   const onNext = useCallback(() => {
     if (selectedModels.length === 0) {
-      setValidationError('Please select at least one model.');
+      setValidationError('请至少选择一个模型。');
       return;
     }
 
@@ -136,7 +136,7 @@ export default function useRecommendSemanticsWizard({
           updateModelMetadata(selector, item.modelId, item.data),
         ),
       );
-      message.success('Semantics saved successfully.');
+      message.success('语义描述保存成功。');
       await onSaveSuccess();
     } catch (error) {
       const messageText =

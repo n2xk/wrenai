@@ -10,6 +10,7 @@ import {
   Typography,
 } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import styled from 'styled-components';
 import { appMessage as message } from '@/utils/antdAppBridge';
 import type {
   RelationFormValues,
@@ -31,14 +32,56 @@ import {
   AssistantDocLink,
   AssistantFooterBar,
   AssistantIntroCard,
+  AssistantMetricCard,
+  AssistantMetricGrid,
   AssistantMutedText,
   AssistantPill,
   AssistantPillRow,
   AssistantSectionCard,
   AssistantSectionHeader,
+  AssistantStateCard,
 } from '../modelingAssistantVisuals';
 
 const { Paragraph, Text } = Typography;
+
+const RelationshipTableCard = styled.div`
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 18px 20px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+
+  .ant-table {
+    background: transparent;
+  }
+
+  .ant-table-thead > tr > th {
+    background: #faf8ff;
+    color: #475467;
+    font-size: 12px;
+    font-weight: 700;
+    border-bottom: 1px solid rgba(109, 74, 255, 0.12);
+  }
+
+  .ant-table-tbody > tr > td {
+    padding-top: 14px;
+    padding-bottom: 14px;
+    vertical-align: top;
+  }
+`;
+
+const RowActionButton = styled.button`
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(109, 74, 255, 0.12);
+  background: #f8f7ff;
+  color: #6d4aff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+`;
 
 type SelectedRelationState = {
   modelName: string;
@@ -59,25 +102,25 @@ const columns = ({
   onDelete: (modelName: string, relationKey: string) => void;
 }) => [
   {
-    title: 'From',
+    title: '来源',
     dataIndex: 'fromField',
     key: 'fromField',
     render: (value: any) => `${value.modelName}.${value.fieldName}`,
   },
   {
-    title: 'To',
+    title: '目标',
     dataIndex: 'toField',
     key: 'toField',
     render: (value: any) => `${value.modelName}.${value.fieldName}`,
   },
   {
-    title: 'Type',
+    title: '类型',
     dataIndex: 'type',
     key: 'type',
     render: (value: string) => getJoinTypeText(value),
   },
   {
-    title: 'Description',
+    title: '描述',
     dataIndex: 'properties',
     key: 'description',
     render: (value: Record<string, any> | undefined) =>
@@ -91,7 +134,9 @@ const columns = ({
       const relationKey = buildRelationKey(relation);
       return (
         <Space size={16}>
-          <EditOutlined
+          <RowActionButton
+            type="button"
+            aria-label="编辑关联关系"
             onClick={() =>
               onEdit({
                 modelName,
@@ -99,14 +144,18 @@ const columns = ({
                 defaultValue: relation,
               })
             }
-          />
+          >
+            <EditOutlined />
+          </RowActionButton>
           <Popconfirm
-            title="Confirm to delete?"
-            okText="Delete"
-            cancelText="Cancel"
+            title="确认删除这条关联关系吗？"
+            okText="删除"
+            cancelText="取消"
             onConfirm={() => onDelete(modelName, relationKey)}
           >
-            <DeleteOutlined />
+            <RowActionButton type="button" aria-label="删除关联关系">
+              <DeleteOutlined />
+            </RowActionButton>
           </Popconfirm>
         </Space>
       );
@@ -138,7 +187,7 @@ export default function RecommendRelationshipsPage() {
       runtimeScopePage.hasRuntimeScope && !modelingAssistantReadonly.isReadOnly,
     selector: runtimeScopeNavigation.selector,
     onSaveSuccess: async () => {
-      message.success('Relationships saved successfully.');
+      message.success('关联关系保存成功。');
       await navigateBack();
     },
   });
@@ -147,15 +196,7 @@ export default function RecommendRelationshipsPage() {
     () =>
       Object.entries(relationshipsTask.editedRelations).map(
         ([modelName, relations]) => (
-          <div
-            key={modelName}
-            style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: 16,
-              padding: 16,
-              background: '#fff',
-            }}
-          >
+          <RelationshipTableCard key={modelName}>
             <Text strong style={{ display: 'block', marginBottom: 12 }}>
               {relationshipsTask.recommendNameMapping[modelName] || modelName}
             </Text>
@@ -173,7 +214,7 @@ export default function RecommendRelationshipsPage() {
               dataSource={relations}
               pagination={false}
             />
-          </div>
+          </RelationshipTableCard>
         ),
       ),
     [
@@ -187,107 +228,144 @@ export default function RecommendRelationshipsPage() {
   const renderContent = () => {
     if (runtimeScopePage.guarding || relationshipsTask.modelListLoading) {
       return (
-        <div style={{ padding: '48px 0', textAlign: 'center' }}>
+        <AssistantStateCard $align="center">
           <Spin />
-        </div>
+          <Text strong>正在加载建模 AI 助手上下文</Text>
+          <AssistantMutedText>
+            正在检查当前模型，并准备关联关系推荐结果。
+          </AssistantMutedText>
+        </AssistantStateCard>
       );
     }
 
     if (modelingAssistantReadonly.isReadOnly) {
       return (
-        <Alert
-          type="warning"
-          showIcon
-          title="Modeling AI Assistant is unavailable on read-only snapshots"
-          description={modelingAssistantReadonly.readOnlyHint}
-        />
+        <AssistantColumn>
+          <AssistantIntroCard>
+            <AssistantPillRow>
+              <AssistantPill $tone="warning">只读快照</AssistantPill>
+            </AssistantPillRow>
+            <Alert
+              type="warning"
+              showIcon
+              title="历史快照中暂不支持建模 AI 助手"
+              description={modelingAssistantReadonly.readOnlyHint}
+            />
+          </AssistantIntroCard>
+        </AssistantColumn>
       );
     }
 
     if (relationshipsTask.requestError) {
       return (
-        <Alert
-          type="error"
-          showIcon
-          title="Failed to load relationship recommendations"
-          description={relationshipsTask.requestError}
-          action={
-            <Button size="small" onClick={() => void relationshipsTask.retry()}>
-              Retry
-            </Button>
-          }
-        />
+        <AssistantColumn>
+          <AssistantIntroCard>
+            <AssistantPillRow>
+              <AssistantPill $tone="warning">需要重试</AssistantPill>
+            </AssistantPillRow>
+            <Alert
+              type="error"
+              showIcon
+              title="加载关联关系推荐失败"
+              description={relationshipsTask.requestError}
+              action={
+                <Button
+                  size="small"
+                  onClick={() => void relationshipsTask.retry()}
+                >
+                  重试
+                </Button>
+              }
+            />
+          </AssistantIntroCard>
+        </AssistantColumn>
       );
     }
 
     if (!relationshipsTask.task) {
       return (
-        <div style={{ padding: '48px 0', textAlign: 'center' }}>
+        <AssistantStateCard $align="center">
           <Spin />
-        </div>
+          <Text strong>正在准备关联关系推荐</Text>
+        </AssistantStateCard>
       );
     }
 
     if (relationshipsTask.polling && !relationshipsTask.task?.response) {
       return (
-        <div style={{ padding: '64px 0', textAlign: 'center' }}>
+        <AssistantStateCard $align="center">
           <Spin size="large" />
           <Paragraph style={{ marginTop: 16, marginBottom: 0 }}>
-            Generating... This may take up to a minute to generate the results.
+            正在生成，生成结果最多可能需要一分钟。
           </Paragraph>
-        </div>
+        </AssistantStateCard>
       );
     }
 
     if (relationshipsTask.emptyState) {
       return (
-        <div
-          style={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 20,
-          }}
-        >
-          <Empty
-            description={
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text strong>No additional recommended relationships</Text>
-                <Text type="secondary">No relationships are recommended.</Text>
+        <AssistantColumn>
+          <AssistantIntroCard>
+            <AssistantSectionHeader>
+              <div>
+                <Text strong>推荐状态</Text>
+                <AssistantMutedText>
+                  本次运行已成功完成，但当前没有新的关联关系建议可应用。
+                </AssistantMutedText>
               </div>
-            }
-          />
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <Text type="secondary">
-              There are currently no relationship recommendations to apply.
-            </Text>
-            <Space>
-              <Button onClick={() => void navigateBack()}>
-                Cancel and Go Back
-              </Button>
-              <Button disabled>Save</Button>
-            </Space>
-          </div>
-        </div>
+              <AssistantDocLink
+                href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
+                target="_blank"
+                rel="noreferrer"
+              >
+                了解更多
+              </AssistantDocLink>
+            </AssistantSectionHeader>
+            <AssistantPillRow>
+              <AssistantPill $tone="success">审核完成</AssistantPill>
+              <AssistantPill>没有可保存的变更</AssistantPill>
+            </AssistantPillRow>
+          </AssistantIntroCard>
+          <AssistantStateCard $align="center">
+            <Empty
+              description={
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                >
+                  <Text strong>暂无新增关联关系建议</Text>
+                  <Text type="secondary">当前没有推荐的关联关系。</Text>
+                </div>
+              }
+            />
+          </AssistantStateCard>
+          <AssistantSectionCard>
+            <AssistantFooterBar>
+              <AssistantMutedText>
+                当前没有可应用的关联关系建议。
+              </AssistantMutedText>
+              <Space>
+                <Button onClick={() => void navigateBack()}>取消并返回</Button>
+                <Button disabled>保存</Button>
+              </Space>
+            </AssistantFooterBar>
+          </AssistantSectionCard>
+        </AssistantColumn>
       );
     }
+
+    const recommendationCount = Object.values(
+      relationshipsTask.editedRelations,
+    ).flat().length;
+    const modelCount = Object.keys(relationshipsTask.editedRelations).length;
 
     return (
       <AssistantColumn>
         <AssistantIntroCard>
           <AssistantSectionHeader>
             <div>
-              <Text strong>Recommendation status</Text>
+              <Text strong>推荐状态</Text>
               <AssistantMutedText>
-                Review the proposed relationships, adjust any edge cases, and
-                only then save them back to your semantic layer.
+                请先审核推荐的关联关系，处理特殊情况后，再保存回当前语义层。
               </AssistantMutedText>
             </div>
             <AssistantDocLink
@@ -295,27 +373,35 @@ export default function RecommendRelationshipsPage() {
               target="_blank"
               rel="noreferrer"
             >
-              Learn more
+              了解更多
             </AssistantDocLink>
           </AssistantSectionHeader>
           <AssistantPillRow>
             <AssistantPill $tone="accent">
-              {Object.values(relationshipsTask.editedRelations).flat().length}{' '}
-              recommendation
-              {Object.values(relationshipsTask.editedRelations).flat()
-                .length === 1
-                ? ''
-                : 's'}
+              {recommendationCount} 条推荐
             </AssistantPill>
-            <AssistantPill $tone="success">Ready to save</AssistantPill>
+            <AssistantPill $tone="success">可保存</AssistantPill>
           </AssistantPillRow>
         </AssistantIntroCard>
+        <AssistantMetricGrid>
+          <AssistantMetricCard>
+            <Text type="secondary">推荐变更</Text>
+            <Text strong style={{ fontSize: 18 }}>
+              {recommendationCount}
+            </Text>
+          </AssistantMetricCard>
+          <AssistantMetricCard>
+            <Text type="secondary">影响模型</Text>
+            <Text strong style={{ fontSize: 18 }}>
+              {modelCount}
+            </Text>
+          </AssistantMetricCard>
+        </AssistantMetricGrid>
         {tableBlocks}
         <AssistantSectionCard>
           <AssistantFooterBar>
             <AssistantMutedText>
-              Suggestions can be edited or deleted before save. The current list
-              only applies after you confirm Save.
+              保存前可编辑或删除推荐项；只有在确认保存后才会真正生效。
             </AssistantMutedText>
             <Button
               type="primary"
@@ -323,7 +409,7 @@ export default function RecommendRelationshipsPage() {
               loading={relationshipsTask.saving}
               disabled={!relationshipsTask.hasResult}
             >
-              Save
+              保存
             </Button>
           </AssistantFooterBar>
         </AssistantSectionCard>
@@ -334,8 +420,8 @@ export default function RecommendRelationshipsPage() {
   return (
     <>
       <ModelingAssistantRouteLayout
-        title="Generate relationships"
-        description="Modeling AI Assistant will use AI to discover potential connections between your models. Review the suggested relationships and adjust them before saving to your data models."
+        title="生成关联关系"
+        description="建模 AI 助手会用 AI 识别模型之间潜在的连接关系。请先审核并按需调整，再保存到当前数据模型。"
         onBack={leaveGuard.onBackClick}
       >
         {renderContent()}

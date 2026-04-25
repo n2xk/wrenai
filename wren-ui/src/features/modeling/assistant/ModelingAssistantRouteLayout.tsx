@@ -18,7 +18,7 @@ export default function ModelingAssistantRouteLayout({
     <ConsoleShellLayout
       activeNav="knowledge"
       navItems={[]}
-      eyebrow="Modeling AI Assistant"
+      eyebrow="建模 AI 助手"
       title={title}
       description={description}
       hideHistorySection
@@ -27,7 +27,7 @@ export default function ModelingAssistantRouteLayout({
       hideSidebarCollapseToggle
       titleExtra={
         <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
-          Back to modeling
+          返回建模
         </Button>
       }
     >

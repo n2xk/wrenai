@@ -7,7 +7,7 @@ import { SampleDatasetName } from '@/types/dataSource';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import { startSampleDataset } from '@/utils/settingsRest';
 import { clearRuntimePagePrefetchCache } from '@/utils/runtimePagePrefetch';
-import { buildKnowledgeWorkbenchParams } from '@/utils/knowledgeWorkbench';
+import { buildSetupModelingAssistantParams } from '@/features/setup/setupModelingAssistantSupport';
 
 export default function useSetupConnectionSampleDataset() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -23,7 +23,7 @@ export default function useSetupConnectionSampleDataset() {
         clearRuntimePagePrefetchCache();
         await runtimeScopeNavigation.push(
           Path.Knowledge,
-          buildKnowledgeWorkbenchParams('modeling'),
+          buildSetupModelingAssistantParams('sample-dataset-import'),
         );
       } catch (error) {
         const normalizedError =

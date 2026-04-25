@@ -77,6 +77,14 @@ export const AssistantMutedText = styled.div`
   line-height: 1.6;
 `;
 
+export const AssistantStateCard = styled(AssistantSectionCard)<{
+  $align?: 'left' | 'center';
+}>`
+  align-items: ${(props) => (props.$align === 'center' ? 'center' : 'stretch')};
+  text-align: ${(props) => (props.$align === 'center' ? 'center' : 'left')};
+  padding: ${(props) => (props.$align === 'center' ? '32px 28px' : '20px')};
+`;
+
 export const AssistantFooterBar = styled.div`
   display: flex;
   align-items: center;
@@ -113,4 +121,20 @@ export const AssistantPromptChip = styled.button`
   font-size: 12px;
   font-weight: 700;
   cursor: default;
+`;
+
+export const AssistantMetricGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+`;
+
+export const AssistantMetricCard = styled.div`
+  border-radius: 16px;
+  border: 1px solid rgba(109, 74, 255, 0.12);
+  background: #f8f7ff;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 `;
