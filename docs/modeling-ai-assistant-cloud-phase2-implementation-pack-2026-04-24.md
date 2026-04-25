@@ -405,22 +405,47 @@ Phase 2 是否纳入：
 
 ## 8. 最低实施清单
 
+> 2026-04-24 当前状态：
+> - Lane A 已完成代码级对齐，并补齐视觉验收文档与截图证据：
+>   - `docs/modeling-ai-assistant-cloud-phase2-visual-parity-verification-2026-04-24.md`
+>   - `docs/assets/modeling-ai-assistant-phase2-2026-04-24/*`
+> - Lane B 已完成 HR / ECOMMERCE / NBA 的本地真实输出评估文档；
+> - Lane B 已把 TiDB knowledge base 升级为 primary benchmark，并补齐 live route 验证、full-artifact/scoring contract 与 real UI/save verification spec：
+>   - `wren-ui/tmp/modeling-ai-assistant-tidb-live-route-verification-2026-04-24.md`
+>   - `wren-ui/tmp/modeling-ai-assistant-quality-evaluation-tidb.md`
+>   - `wren-ui/e2e/specs/modelingAssistantQualityEvaluation.spec.ts`
+>   - `wren-ui/e2e/specs/modelingAssistantTidbReal.spec.ts`
+> - Lane C 已补齐 `openAssistant=...` 激活、knowledge handoff、launcher 状态反映，包括：
+>   - knowledge asset wizard → relationships / semantics
+>   - sample dataset import → relationships
+>   - setup relationships finish → semantics
+>
+> 仍建议后续补做的非阻塞收尾：
+> - Cloud-vs-local 同数据集 AI 质量 A/B 对照
+> - 更大样本的 TiDB / production-like manifest 复跑
+> - same-dataset save 后长期稳定性复验
+> 以上属于 parity hardening，不阻塞当前 implementation-pack 的交付闭环。
+
 ### Phase 2A 必做
-- [ ] launcher 视觉状态对齐
-- [ ] relationships result-state 视觉对齐
-- [ ] semantics completed state 视觉对齐
-- [ ] error/readonly 态视觉统一
+- [x] launcher 视觉状态对齐
+- [x] relationships result-state 视觉对齐
+- [x] semantics completed state 视觉对齐
+- [x] error/readonly 态视觉统一
+- [x] Cloud / local 截图证据沉淀进 repo
 
 ### Phase 2B 必做
-- [ ] 选 3 套数据集
-- [ ] relationships 真实输出评估
-- [ ] semantics 真实输出评估
-- [ ] 形成质量评估文档
+- [x] 选 3 套数据集
+- [x] relationships 真实输出评估
+- [x] semantics 真实输出评估
+- [x] 形成质量评估文档
+- [x] TiDB primary benchmark evidence
+- [x] full-artifact / scoring contract
+- [x] save verification spec hook
 
 ### Phase 2C 必做
-- [ ] 明确 `openAssistant=...` 是否激活
-- [ ] 明确 onboarding / knowledge handoff 是否进入下一轮
-- [ ] 明确 launcher `Todo / Done` / badge 是否升级到 Cloud 级别
+- [x] 激活 `openAssistant=...`
+- [x] onboarding / setup / knowledge handoff 进入实现
+- [x] 明确 launcher `Todo / Done` / badge 是否升级到 Cloud 级别
 
 ---
 

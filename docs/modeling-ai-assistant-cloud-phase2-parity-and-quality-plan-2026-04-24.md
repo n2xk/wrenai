@@ -315,3 +315,25 @@ Phase 2 不再解决“有没有这条交互链路”，而是解决：
 一句话总结：
 
 > **future hooks 应该包含进 Phase 2 规划，但应作为后置的 orchestration/handoff lane，而不是当前 parity 的阻塞项。**
+
+---
+
+## 9. 2026-04-24 delivery addendum
+
+本轮实现已经按这份路线图落地到三个 lane：
+
+- **Phase 2A**
+  - launcher / relationships / semantics / state language 完成 Cloud-style 视觉对齐
+  - 视觉证据见：
+    - `docs/modeling-ai-assistant-cloud-phase2-visual-parity-verification-2026-04-24.md`
+- **Phase 2B**
+  - sample datasets + TiDB workspace knowledge base 完成真实质量评估收口
+  - TiDB 被正式提升为 primary benchmark
+- **Phase 2C**
+  - `openAssistant=...` 已生效
+  - knowledge / setup / sample dataset handoff 已落地
+  - launcher task-state 已升级到 Cloud-style summary
+
+因此：
+
+> **Phase 2 的 P0 / P1 / P2 已完成实现闭环；后续剩余事项属于 parity hardening，而不是 implementation-pack 未完成。**
