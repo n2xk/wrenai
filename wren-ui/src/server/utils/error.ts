@@ -161,7 +161,7 @@ export const errorMessages: Partial<Record<GeneralErrorCodes, string>> = {
   [GeneralErrorCodes.IDENTIED_AS_MISLEADING_QUERY]:
     'The question is identified as a misleading query, please follow-up ask with more specific questions.',
   [GeneralErrorCodes.DEPLOY_TIMEOUT_ERROR]:
-    'LLM deployment timed out after 30 seconds',
+    'LLM deployment timed out after 90 seconds',
 
   // api error
   [GeneralErrorCodes.NON_SQL_QUERY]: 'Cannot generate SQL from this question.',

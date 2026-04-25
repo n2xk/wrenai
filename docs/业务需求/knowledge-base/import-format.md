@@ -53,6 +53,7 @@ priority: high
 status: draft
 applies_to:
   - 综合日报表
+questions: []
 keywords: []
 source_documents:
   - 第一期数据报表需求V1.xlsx
@@ -62,8 +63,11 @@ source_documents:
 
 - `kb_asset_type`：资产类型，规则固定为 `analysis_rule`
 - `import_target`：未来导入目标，规则固定为 `instruction`
-- `scope`：`global` 或 `question_match`
-- `keywords`：仅 `question_match` 规则需要重点配置
+- `scope`：业务文档侧仍使用 `global` 或 `question_match`；导入到系统时应映射为：
+  - `global` -> `isGlobal = true` / `isDefault = true`
+  - `question_match` -> `isGlobal = false` / `isDefault = false`
+- `questions`：仅 `question_match` 规则必填，导入后对应系统的 `instruction.questions`，必须填写完整自然语言问法，不能只写关键词
+- `keywords`：可选，仅作为人工维护时的辅助标签；当前运行时不会直接用它做 instruction 检索
 - `status`：当前统一先用 `draft`
 
 ## 3. 正文结构约定
@@ -82,13 +86,15 @@ source_documents:
 
 1. `# 标题`
 2. `## 规则内容`
-3. `## 导入建议`
-4. `## 作用报表`
-5. `## 关键词`
-6. `## 备注`
+3. `## 建议问题（可转为 instruction.questions，可选，建议与 front matter 同步）`
+4. `## 导入建议`
+5. `## 作用报表`
+6. `## 关键词（可选）`
+7. `## 备注`
 
 ## 4. 当前实现建议
 
 - 单文件 Markdown 作为**权威来源**
 - 汇总页（`analysis-rules.md` / `sql-templates.md`）仅做浏览，不作为导入源
-- 系统真正做导入时，只解析 front matter + `## SQL 模板` / `## 规则内容` 主体即可
+- 系统真正做导入时，规则至少要解析 front matter 中的 `questions` 与 `## 规则内容` 主体
+- SQL 模板导入时，应将 `question_variants` 展开为多条 `sql_pair.question + sql_pair.sql`

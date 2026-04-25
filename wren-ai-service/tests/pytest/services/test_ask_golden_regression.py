@@ -153,6 +153,21 @@ ASK_CASES = [
         },
     },
     {
+        "name": "sql_pairs_without_schema",
+        "query": "本月 GMV",
+        "scenario": {
+            "sql_pairs_documents": [{"question": "GMV", "sql": "SELECT amount"}],
+            "schema_documents": [],
+            "sql_generation": {"valid_sql": "SELECT amount FROM orders"},
+        },
+        "expected": {
+            "status": "finished",
+            "type": "TEXT_TO_SQL",
+            "path": "sql_pairs",
+            "sql": "SELECT amount FROM orders",
+        },
+    },
+    {
         "name": "instructions",
         "query": "本月 GMV",
         "scenario": {

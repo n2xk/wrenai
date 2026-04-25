@@ -5,6 +5,7 @@ parser:
   sql_section_heading: "## SQL 模板"
   instruction_section_heading: "## 规则内容"
   question_section_heading: "## 建议问题（可转为 sql_pair.question）"
+  instruction_question_section_heading: "## 建议问题（可转为 instruction.questions）"
 
 sql_pairs:
   include_globs:
@@ -13,7 +14,6 @@ sql_pairs:
     - draft_sql
   skip_ids:
     - T05
-    - T07
     - T14
     - T15
   defaults:
@@ -31,4 +31,6 @@ instructions:
 notes:
   - 单文件 Markdown 是导入权威来源
   - blocked 模板先不导入，等数据源/模型补齐后再放开
+  - legacy ES 占位模板已归档，当前只保留 TiDB 表 / 视图可执行 SQL pair
   - 导入时优先读取 front matter，再抽取正文中的 SQL / instruction 主体
+  - `question_match` instruction 必须读取 `questions`，不能只靠 `keywords`

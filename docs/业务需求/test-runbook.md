@@ -2,12 +2,16 @@
 
 ## 1. 目的
 
-这份 runbook 用来配合下面两份文件做一次最小回归：
+这份 runbook 用来配合下面几份文件做回归：
 
 - 造数脚本：`docs/业务需求/seed.sql`
 - 预期结果：`docs/业务需求/expected-results.md`
+- 扩展种子结果：`docs/业务需求/extended-seed-results.md`
 
-本轮目标是验证当前已经补好的 **11 个 `draft_sql` 模板** 是否与业务口径一致。
+本轮目标分两层：
+
+- 最小回归：验证当前已经补好的 **11 个 `draft_sql` 模板** 是否与业务口径一致
+- 扩展回归：验证 `seed.sql` 里 04-08+ 扩展业务层、04-15+ 高频大样本层是否已经完整导入，且表间关联可对上
 
 ---
 
@@ -15,11 +19,17 @@
 
 ### 2.1 先准备表结构
 
-先执行：
+先生成并执行本地 TiDB 版建表 SQL：
 
-- `docs/业务需求/数据报表表结构Design_with_comments（4.15 v1.2）.sql`
+1. `python3 docs/业务需求/generate_local_tidb_schema.py`
+2. 执行 `docs/业务需求/local_tidb_schema.sql`
 
-建议在**独立测试库 / 独立 schema** 下执行，避免污染现有环境。
+说明：
+
+- 原始设计稿 `docs/业务需求/数据报表表结构Design_with_comments（4.15 v1.2）.sql` 仍作为结构来源，不直接用于本地导库
+- `local_tidb_schema.sql` 会自动去掉分区语句、TTL hints，以及文件尾部的 ES mapping JSON
+- 这样可以避免本地 TiDB 因固定分区上界或非 SQL 尾部内容导致导入失败
+- 建议在**独立测试库 / 独立 schema** 下执行，避免污染现有环境
 
 ### 2.2 再执行造数
 
@@ -42,11 +52,35 @@
 - `n_days = 7`
 - `period_days = 7`
 
+### 2.4 可选：一键回归
+
+```bash
+python3 docs/业务需求/verify_tidb_regression.py
+```
+
+- 当前覆盖：`schema + T01/T02/T03/T04/T06/T08/T09/T10/T11/T12/T13`
+- 默认连接：`127.0.0.1:4000 / tidb_business_demo / root`
+- 可通过环境变量覆盖：`TIDB_HOST`、`TIDB_PORT`、`TIDB_USER`、`TIDB_PASSWORD`、`TIDB_DATABASE`
+
+### 2.5 可选：扩展种子回归
+
+```bash
+python3 docs/业务需求/verify_tidb_regression.py --extended-seed
+```
+
+- 在最小回归基础上，额外覆盖：
+  - 04-08 ~ 04-14 扩展渠道 `990013 / 990014`
+  - 扩展玩家 `990108 ~ 990121`
+  - 辅助表：`channel_player_statistics_of_day`
+  - 体育预测表：`dwd_sport_predict_relay_record`、`dwd_sport_predict_champion_record`
+  - 04-15+ 高频批量层：玩家 `990200 ~ 990459`
+- 当前本地 TiDB 实测结果：`33 passed, 0 failed`
+
 ---
 
 ## 3. 本轮要测什么 / 不测什么
 
-### 3.1 要测（11 个）
+### 3.1 最小回归要测（11 个）
 
 - T01 渠道日基础汇总
 - T02 渠道与折扣映射
@@ -60,10 +94,19 @@
 - T12 TOP3/5 游戏类型分层
 - T13 首存金额分桶
 
-### 3.2 暂不测（4 个）
+### 3.2 扩展种子已测
+
+- 扩展渠道配置、合作方/占成代理引用关系
+- 扩展玩家在渠道上的分布是否正确
+- 扩展层登录、充值、提现、投注、投注明细
+- 奖励/优惠相关订单子表数量
+- `channel_player_statistics_of_day` 的日级聚合
+- 体育串关 / 冠军预测辅助表
+- 高频批量层千级以上业务数据及其关联完整性
+
+### 3.3 仍暂不测（3 个）
 
 - T05 / T14：缺投放金额
-- T07：缺“统计区间最高 VIP”等级 SQL 化模型
 - T15：缺 PV / UV / 下载点击 UV
 
 ---
@@ -258,4 +301,4 @@
 - 11 个 SQL 全部能跑通
 - 与 `expected-results.md` 核心结果一致
 - 没有把对照渠道 / 失败单 / 缺失天数处理错
-- T05 / T07 / T14 / T15 仍明确标记为“本轮不测”
+- T05 / T14 / T15 仍明确标记为“本轮不测”

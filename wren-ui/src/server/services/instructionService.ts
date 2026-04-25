@@ -31,6 +31,23 @@ const toAskRuntimeIdentity = (
     actorUserId: normalizedRuntimeIdentity.actorUserId ?? null,
   };
 };
+
+const toKnowledgeAssetRuntimeIdentity = (
+  runtimeIdentity: PersistedRuntimeIdentity,
+) => {
+  const normalizedRuntimeIdentity =
+    toPersistedRuntimeIdentityPatch(runtimeIdentity);
+
+  if (!normalizedRuntimeIdentity.knowledgeBaseId) {
+    return normalizedRuntimeIdentity;
+  }
+
+  return {
+    ...normalizedRuntimeIdentity,
+    kbSnapshotId: null,
+    deployHash: null,
+  };
+};
 export interface IInstructionService {
   listInstructions(
     runtimeIdentity: PersistedRuntimeIdentity,
@@ -58,6 +75,8 @@ export interface IInstructionService {
 }
 
 export class InstructionService implements IInstructionService {
+  private static readonly DEPLOY_TIMEOUT_SECONDS = 90;
+
   private readonly instructionRepository: IInstructionRepository;
   private readonly wrenAIAdaptor: IWrenAIAdaptor;
   constructor({
@@ -74,7 +93,9 @@ export class InstructionService implements IInstructionService {
   public async listInstructions(
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<Instruction[]> {
-    return this.instructionRepository.findAllByRuntimeIdentity(runtimeIdentity);
+    return this.instructionRepository.findAllByRuntimeIdentity(
+      toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
+    );
   }
 
   public async getInstruction(
@@ -83,7 +104,7 @@ export class InstructionService implements IInstructionService {
   ): Promise<Instruction | null> {
     return this.instructionRepository.findOneByIdWithRuntimeIdentity(
       id,
-      runtimeIdentity,
+      toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
     );
   }
 
@@ -97,7 +118,7 @@ export class InstructionService implements IInstructionService {
       const newInstruction = await this.instructionRepository.createOne(
         {
           ...input,
-          ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
+          ...toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -134,7 +155,7 @@ export class InstructionService implements IInstructionService {
       const newInstructions = await this.instructionRepository.createMany(
         inputs.map((input) => ({
           ...input,
-          ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
+          ...toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         })),
@@ -232,7 +253,7 @@ export class InstructionService implements IInstructionService {
 
   private async waitDeployInstruction(
     queryId: string,
-    maxRetries = 30, // Default 30 retries (30 seconds)
+    maxRetries = InstructionService.DEPLOY_TIMEOUT_SECONDS,
   ): Promise<InstructionResult> {
     const isFinalStatus = (status: InstructionStatus) =>
       status === InstructionStatus.FINISHED ||

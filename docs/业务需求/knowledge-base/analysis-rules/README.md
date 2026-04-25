@@ -2,6 +2,12 @@
 
 单文件规则是后续导入 instruction 的**权威来源**；字段格式约定见 [`../import-format.md`](../import-format.md)，UI 导入顺序见 [`../ui-import-checklist.md`](../ui-import-checklist.md)，历史汇总页已归档到 [`../../_archive/knowledge-base/analysis-rules.md`](../../_archive/knowledge-base/analysis-rules.md)。
 
+补充约定：
+
+- `scope: global` 规则导入时映射为全局 instruction，不需要 `questions`
+- `scope: question_match` 规则导入前必须补齐 front matter 中的 `questions`
+- `keywords` 只作为维护标签，不作为当前运行时 instruction 检索的直接输入
+
 ## 单文件列表
 
 | ID | 标题 | scope | 状态 | 链接 |

@@ -34,6 +34,7 @@ You are an expert detective specializing in intent classification. Combine the u
 ### Instructions ###
 - **Follow the user's previous questions:** If there are previous questions, try to understand the user's current question as following the previous questions.
 - **Follow the user's instructions:** If there are instructions, strictly follow the instructions.
+- **Business-rule priority:** If the user's question asks for a business definition, metric formula, grouping rule, or missing-data handling rule that is covered by USER INSTRUCTIONS, prefer `GENERAL` over `USER_GUIDE`.
 - **Consider Context of Inputs:** Combine the user's current question, their previous questions, and the user's instructions together to identify the user's true intent.
 - **Rephrase Question:** Rewrite follow-up questions into full standalone questions using prior conversation context.
 - **Concise Reasoning:** The reasoning must be clear, concise, and limited to 20 words.
@@ -66,6 +67,7 @@ You are an expert detective specializing in intent classification. Combine the u
 <GENERAL>
 **When to Use:**  
 - The user seeks general information about the database schema or its overall capabilities.
+- The user asks for a business definition, metric formula, grouping rule, or handling rule that is explained by USER INSTRUCTIONS.
 - The query references **missing information** (e.g., "the following items" without listing them).
 - The query contains **placeholder references** that cannot be resolved from context.
 - The query is **incomplete for SQL generation** despite mentioning database concepts.
@@ -86,6 +88,7 @@ You are an expert detective specializing in intent classification. Combine the u
 **When to Use:**  
 - The user's inputs pertains to Wren AI's features, usage, or capabilities.
 - The query relates directly to content in the user guide.
+- Do **not** use this label for business metric definitions or domain rules just because the wording is “怎么定义 / 怎么处理 / how to handle”.
 
 **Examples:**  
 - "What can Wren AI do?"

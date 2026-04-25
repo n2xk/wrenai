@@ -287,4 +287,148 @@ describe('ModelController scope guards', () => {
     );
     expect(result).toEqual({ status: 'SUCCESS' });
   });
+
+  it('reindexes instructions and sql pairs into the latest deployment scope after deploy succeeds', async () => {
+    const resolver = new ModelController();
+    const ctx = createContext();
+    ctx.mdlService = {
+      makeCurrentModelMDLByRuntimeIdentity: jest.fn().mockResolvedValue({
+        manifest: { models: [] },
+        project: {
+          id: 42,
+          version: '16',
+          type: 'POSTGRES',
+          sampleDataset: null,
+        },
+      }),
+    };
+    ctx.projectService.getProjectConnectionVersion = jest.fn();
+    ctx.projectService.updateProject = jest.fn();
+    ctx.deployService.deploy = jest.fn().mockResolvedValue({
+      status: 'SUCCESS',
+      hash: 'deploy-2',
+    });
+    ctx.deployService.getLastDeploymentByRuntimeIdentity = jest
+      .fn()
+      .mockResolvedValue({
+        id: 99,
+        projectId: 42,
+        hash: 'deploy-2',
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: null,
+      });
+    ctx.knowledgeBaseRepository.findOneBy = jest.fn().mockResolvedValue({
+      id: 'kb-1',
+      name: 'KB 1',
+      workspaceId: 'workspace-1',
+      defaultKbSnapshotId: null,
+    });
+    ctx.modelRepository = {
+      findAllBy: jest.fn().mockResolvedValue([]),
+      updateOne: jest.fn(),
+    };
+    ctx.relationRepository = {
+      findAllBy: jest.fn().mockResolvedValue([]),
+      updateOne: jest.fn(),
+    };
+    ctx.viewRepository = {
+      findAllBy: jest.fn().mockResolvedValue([]),
+      updateOne: jest.fn(),
+    };
+    ctx.knowledgeBaseRepository.updateOne = jest.fn().mockResolvedValue({});
+    ctx.kbSnapshotRepository.findOneBy = jest.fn().mockResolvedValue(null);
+    ctx.kbSnapshotRepository.createOne = jest.fn().mockResolvedValue({
+      id: 'snapshot-2',
+      deployHash: 'deploy-2',
+    });
+    ctx.deployRepository = {
+      updateOne: jest.fn().mockResolvedValue({}),
+    };
+    ctx.instructionService = {
+      listInstructions: jest.fn().mockResolvedValue([
+        {
+          id: 7,
+          instruction: '首存定义为成功存款且 times = 1',
+          questions: ['首充用户怎么定义？'],
+          isDefault: false,
+        },
+      ]),
+    };
+    ctx.sqlPairService = {
+      listSqlPairs: jest.fn().mockResolvedValue([
+        {
+          id: 8,
+          question: '统计全部用户的存款、提现、充提差',
+          sql: 'SELECT 1',
+        },
+      ]),
+    };
+    ctx.wrenAIAdaptor = {
+      generateInstruction: jest
+        .fn()
+        .mockResolvedValue({ queryId: 'instruction-job-1' }),
+      getInstructionResult: jest.fn().mockResolvedValue({ status: 'FINISHED' }),
+      deploySqlPair: jest.fn().mockResolvedValue({ queryId: 'sql-pair-job-1' }),
+      getSqlPairResult: jest.fn().mockResolvedValue({ status: 'FINISHED' }),
+    };
+
+    const result = await resolver.deploy({ force: false, ctx });
+
+    expect(ctx.instructionService.listInstructions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        deployHash: 'deploy-2',
+      }),
+    );
+    expect(ctx.sqlPairService.listSqlPairs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        deployHash: 'deploy-2',
+      }),
+    );
+    expect(ctx.wrenAIAdaptor.generateInstruction).toHaveBeenCalledWith({
+      instructions: [
+        {
+          id: 7,
+          instruction: '首存定义为成功存款且 times = 1',
+          questions: ['首充用户怎么定义？'],
+          isDefault: false,
+        },
+      ],
+      runtimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-2',
+        deployHash: 'deploy-2',
+        actorUserId: 'user-1',
+      },
+    });
+    expect(ctx.wrenAIAdaptor.deploySqlPair).toHaveBeenCalledWith({
+      sqlPair: {
+        id: 8,
+        question: '统计全部用户的存款、提现、充提差',
+        sql: 'SELECT 1',
+      },
+      runtimeIdentity: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-2',
+        deployHash: 'deploy-2',
+        actorUserId: 'user-1',
+      },
+    });
+    expect(result).toEqual({
+      status: 'SUCCESS',
+      hash: 'deploy-2',
+      selector: {
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-2',
+        deployHash: 'deploy-2',
+      },
+    });
+  });
 });

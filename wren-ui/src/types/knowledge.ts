@@ -7,6 +7,7 @@ export type CreateInstructionInput = {
 export type CreateSqlPairInput = {
   question: string;
   sql: string;
+  skipSqlValidation?: boolean;
 };
 
 export type Instruction = {

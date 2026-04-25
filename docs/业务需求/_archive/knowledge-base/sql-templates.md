@@ -38,7 +38,7 @@
 | T05 | cohort ROI | ROI回收表 | `high` | `blocked_missing_source` | `first_deposit_date + relative_day_no` | [T05_cohort ROI.md](./sql-templates/T05_cohort%20ROI.md) | 依赖外部源，当前不能产出 SQL |
 | T14 | 投放金额并表 | 综合日报表/ROI回收表 | `high` | `blocked_missing_source` | `biz_date + channel_id` | [T14_投放金额并表.md](./sql-templates/T14_投放金额并表.md) | 依赖外部源，当前不能产出 SQL |
 | T15 | 流量指标并表 | 综合日报表 | `high` | `blocked_missing_source` | `biz_date + channel_id` | [T15_流量指标并表.md](./sql-templates/T15_流量指标并表.md) | 依赖外部源，当前不能产出 SQL |
-| T07 | VIP 最高等级分层 | ROI/投充比与杀率 | `high` | `blocked_missing_sql_model` | `player_id` | [T07_VIP 最高等级分层.md](./sql-templates/T07_VIP%20最高等级分层.md) | 依赖 ES 对应 SQL 模型，当前不能产出 SQL |
+| T07 | VIP 最高等级分层 | ROI/投充比与杀率 | `high` | `blocked_missing_sql_model` | `player_id` | [T07_VIP 最高等级分层.md](./sql-templates/T07_VIP%20最高等级分层.md) | 已从当前主链路归档；历史上依赖 ES 对应 SQL 模型 |
 
 ## 导入建议
 

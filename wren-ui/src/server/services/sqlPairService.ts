@@ -26,6 +26,23 @@ const logger = getLogger('SqlPairService');
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+const toKnowledgeAssetRuntimeIdentity = (
+  runtimeIdentity: PersistedRuntimeIdentity,
+) => {
+  const normalizedRuntimeIdentity =
+    toPersistedRuntimeIdentityPatch(runtimeIdentity);
+
+  if (!normalizedRuntimeIdentity.knowledgeBaseId) {
+    return normalizedRuntimeIdentity;
+  }
+
+  return {
+    ...normalizedRuntimeIdentity,
+    kbSnapshotId: null,
+    deployHash: null,
+  };
+};
+
 export interface CreateSqlPair {
   sql: string;
   question: string;
@@ -152,7 +169,9 @@ export class SqlPairService implements ISqlPairService {
   public async listSqlPairs(
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<SqlPair[]> {
-    return this.sqlPairRepository.findAllByRuntimeIdentity(runtimeIdentity);
+    return this.sqlPairRepository.findAllByRuntimeIdentity(
+      toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
+    );
   }
 
   public async getSqlPair(
@@ -161,7 +180,7 @@ export class SqlPairService implements ISqlPairService {
   ): Promise<SqlPair | null> {
     return this.sqlPairRepository.findOneByIdWithRuntimeIdentity(
       sqlPairId,
-      runtimeIdentity,
+      toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
     );
   }
 
@@ -174,7 +193,7 @@ export class SqlPairService implements ISqlPairService {
       const newPair = await this.sqlPairRepository.createOne(
         {
           ...sqlPair,
-          ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
+          ...toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
         },
         { tx },
       );
@@ -204,7 +223,7 @@ export class SqlPairService implements ISqlPairService {
     const newPairs = await this.sqlPairRepository.createMany(
       sqlPairs.map((pair) => ({
         ...pair,
-        ...toPersistedRuntimeIdentityPatch(runtimeIdentity),
+        ...toKnowledgeAssetRuntimeIdentity(runtimeIdentity),
       })),
       { tx },
     );

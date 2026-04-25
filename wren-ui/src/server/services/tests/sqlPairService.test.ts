@@ -29,7 +29,7 @@ describe('SqlPairService', () => {
     return { service, sqlPairRepository, wrenAIAdaptor, tx };
   };
 
-  it('lists sql pairs with deployHash-only runtime identity', async () => {
+  it('lists sql pairs at knowledge-base scope instead of snapshot scope', async () => {
     const { service, sqlPairRepository } = createService();
     sqlPairRepository.findAllByRuntimeIdentity.mockResolvedValue([]);
 
@@ -46,13 +46,13 @@ describe('SqlPairService', () => {
       projectId: null,
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
-      kbSnapshotId: 'snapshot-1',
-      deployHash: 'deploy-1',
+      kbSnapshotId: null,
+      deployHash: null,
       actorUserId: 'user-1',
     });
   });
 
-  it('persists runtime identity fields when creating sql pairs without a project bridge', async () => {
+  it('persists sql pairs at knowledge-base scope without snapshot affinity', async () => {
     const { service, sqlPairRepository, wrenAIAdaptor, tx } = createService();
     sqlPairRepository.createOne.mockResolvedValue({
       id: 7,
@@ -80,8 +80,8 @@ describe('SqlPairService', () => {
         projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        kbSnapshotId: null,
+        deployHash: null,
         actorUserId: 'user-1',
       }),
       { tx },
@@ -132,8 +132,8 @@ describe('SqlPairService', () => {
         projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        kbSnapshotId: null,
+        deployHash: null,
       }),
       { tx },
     );

@@ -67,6 +67,7 @@ export class SqlPairRepository
 
   private buildRuntimeScopedQuery(scope: SqlPairRuntimeScope) {
     const query = this.knex(this.tableName);
+    const isKnowledgeBaseScopedQuery = Boolean(scope.knowledgeBaseId);
 
     this.applyBridgeScopeField(
       query,
@@ -75,8 +76,10 @@ export class SqlPairRepository
     );
     this.applyScopeField(query, 'workspaceId', scope.workspaceId);
     this.applyScopeField(query, 'knowledgeBaseId', scope.knowledgeBaseId);
-    this.applyScopeField(query, 'kbSnapshotId', scope.kbSnapshotId);
-    this.applyScopeField(query, 'deployHash', scope.deployHash);
+    if (!isKnowledgeBaseScopedQuery) {
+      this.applyScopeField(query, 'kbSnapshotId', scope.kbSnapshotId);
+      this.applyScopeField(query, 'deployHash', scope.deployHash);
+    }
 
     return query;
   }

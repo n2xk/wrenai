@@ -12,6 +12,10 @@ applies_to:
   - 首存及续存率
   - 投充比与杀率
   - 游戏类型流水分布
+questions:
+  - TOP3渠道按什么口径划分？
+  - 非TOP3用户怎么定义？
+  - TOP5或非TOP5是按整段时间累计有效投注排序吗？
 keywords:
   - TOP3
   - TOP5

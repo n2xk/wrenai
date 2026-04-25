@@ -209,3 +209,30 @@ async def test_deepagents_historical_hit_short_circuits_schema_and_generation():
     ]
     assert updates[-1]["status"] == "finished"
     assert updates[-1]["type"] == "TEXT_TO_SQL"
+
+
+@pytest.mark.asyncio
+async def test_deepagents_passes_retrieved_instructions_to_general_data_assistance():
+    pipelines = make_pipelines(
+        instructions_documents=[{"instruction": "首存定义为成功存款且 times = 1"}],
+    )
+    pipelines["intent_classification"].run.return_value = {
+        "post_process": {
+            "intent": "GENERAL",
+            "reasoning": "业务定义问题",
+            "rephrased_question": "首充用户怎么定义？",
+            "db_schemas": ["CREATE TABLE dwd_order_deposit (times int, status int);"],
+        }
+    }
+
+    result, updates = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(),
+    )
+    await __import__("asyncio").sleep(0)
+
+    assert pipelines["data_assistance"].run.await_args.kwargs["instructions"] == [
+        {"instruction": "首存定义为成功存款且 times = 1"}
+    ]
+    assert result["metadata"]["ask_path"] == "general"
+    assert updates[-1]["type"] == "GENERAL"

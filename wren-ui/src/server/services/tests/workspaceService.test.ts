@@ -20,12 +20,16 @@ describe('WorkspaceService', () => {
     },
   } as any;
 
+  let dashboardRepository: any;
   let workspaceRepository: any;
   let workspaceMemberRepository: any;
   let userRepository: any;
   let service: WorkspaceService;
 
   beforeEach(() => {
+    dashboardRepository = {
+      createOne: jest.fn(),
+    };
     workspaceRepository = {
       findOneBy: jest.fn(),
       findAllBy: jest.fn(),
@@ -48,6 +52,7 @@ describe('WorkspaceService', () => {
     };
 
     service = new WorkspaceService({
+      dashboardRepository,
       workspaceRepository,
       workspaceMemberRepository,
       userRepository,
@@ -70,6 +75,7 @@ describe('WorkspaceService', () => {
       }),
     };
     const structuredService = new WorkspaceService({
+      dashboardRepository,
       workspaceRepository,
       workspaceMemberRepository,
       userRepository,
@@ -127,6 +133,7 @@ describe('WorkspaceService', () => {
       createOne: jest.fn(),
     };
     const structuredService = new WorkspaceService({
+      dashboardRepository,
       workspaceRepository,
       workspaceMemberRepository,
       userRepository,
@@ -185,6 +192,10 @@ describe('WorkspaceService', () => {
       roleKey: 'owner',
       status: 'active',
     });
+    dashboardRepository.createOne.mockImplementation(async (payload: any) => ({
+      id: 11,
+      ...payload,
+    }));
 
     const result = await service.createWorkspace({
       name: 'Demo',
@@ -194,6 +205,52 @@ describe('WorkspaceService', () => {
     expect(result.slug).toBe('demo-2');
     expect(result.status).toBe('active');
     expect(result.kind).toBe('regular');
+    expect(dashboardRepository.createOne).toHaveBeenCalledWith(
+      {
+        isDefault: true,
+        name: 'Dashboard',
+        projectId: null,
+        workspaceId: result.id,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      },
+      { tx: { id: 'tx' } },
+    );
+  });
+
+  it('rolls back workspace creation when default dashboard creation fails', async () => {
+    userRepository.findOneBy.mockResolvedValue({ id: 'user-1' });
+    workspaceRepository.findOneBy.mockResolvedValue(null);
+    workspaceRepository.createOne.mockResolvedValue({
+      id: 'workspace-2',
+      name: 'Demo',
+      slug: 'demo',
+      kind: 'regular',
+      createdBy: 'user-1',
+      status: 'active',
+    });
+    workspaceMemberRepository.createOne.mockResolvedValue({
+      id: 'member-2',
+      workspaceId: 'workspace-2',
+      userId: 'user-1',
+      roleKey: 'owner',
+      status: 'active',
+    });
+    dashboardRepository.createOne.mockRejectedValue(
+      new Error('dashboard create failed'),
+    );
+
+    await expect(
+      service.createWorkspace({
+        name: 'Demo',
+        initialOwnerUserId: 'user-1',
+      }),
+    ).rejects.toThrow('dashboard create failed');
+
+    expect(workspaceRepository.rollback).toHaveBeenCalledWith({ id: 'tx' });
+    expect(workspaceRepository.commit).not.toHaveBeenCalled();
   });
 
   it('lists active workspaces for a user', async () => {
@@ -244,6 +301,7 @@ describe('WorkspaceService', () => {
 
   it('lists all active workspaces when platform admin comes from structured bindings', async () => {
     const structuredService = new WorkspaceService({
+      dashboardRepository,
       workspaceRepository,
       workspaceMemberRepository,
       userRepository,

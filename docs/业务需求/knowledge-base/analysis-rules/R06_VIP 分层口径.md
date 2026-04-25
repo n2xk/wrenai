@@ -10,6 +10,10 @@ status: draft
 applies_to:
   - ROI回收表
   - 投充比与杀率
+questions:
+  - VIP分层按当前等级还是区间最高等级？
+  - VIP0到VIP3用户怎么归类？
+  - ROI里的VIP分层口径是什么？
 keywords:
   - VIP0
   - VIP1

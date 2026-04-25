@@ -636,6 +636,7 @@ class BaseFixedOrderAskRuntime:
                     language=ask_request.configurations.language,
                     query_id=ask_request.query_id,
                     custom_instruction=ask_request.custom_instruction,
+                    instructions=state.effective_instructions,
                 )
             )
 
@@ -743,7 +744,7 @@ class BaseFixedOrderAskRuntime:
             state.table_names = [document.get("table_name") for document in documents]
             state.table_ddls = [document.get("table_ddl") for document in documents]
 
-            if not documents:
+            if not documents and not state.sql_samples:
                 logger.exception("ask pipeline - NO_RELEVANT_DATA: %s", state.user_query)
                 if not is_stopped():
                     set_result(
@@ -773,6 +774,11 @@ class BaseFixedOrderAskRuntime:
                         current_sql_correction_retries=state.current_sql_correction_retries,
                     ),
                     orchestrator=orchestrator,
+                )
+            if not documents and state.sql_samples:
+                logger.info(
+                    "ask pipeline - proceeding with SQL samples only for query: %s",
+                    state.user_query,
                 )
 
         if not is_stopped() and not state.api_results and allow_sql_generation_reasoning:

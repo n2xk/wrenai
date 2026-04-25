@@ -26,7 +26,7 @@ describe('InstructionService', () => {
     return { service, instructionRepository, wrenAIAdaptor, tx };
   };
 
-  it('lists instructions with deployHash-only runtime identity', async () => {
+  it('lists instructions at knowledge-base scope instead of snapshot scope', async () => {
     const { service, instructionRepository } = createService();
     instructionRepository.findAllByRuntimeIdentity.mockResolvedValue([]);
 
@@ -44,14 +44,14 @@ describe('InstructionService', () => {
         projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        kbSnapshotId: null,
+        deployHash: null,
         actorUserId: 'user-1',
       },
     );
   });
 
-  it('persists runtime identity fields when creating instructions without a project bridge', async () => {
+  it('persists instructions at knowledge-base scope without snapshot affinity', async () => {
     const { service, instructionRepository, wrenAIAdaptor, tx } =
       createService();
     instructionRepository.createOne.mockResolvedValue({
@@ -82,8 +82,8 @@ describe('InstructionService', () => {
         projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        kbSnapshotId: null,
+        deployHash: null,
         actorUserId: 'user-1',
       }),
       { tx },
@@ -140,8 +140,8 @@ describe('InstructionService', () => {
         projectId: null,
         workspaceId: 'workspace-1',
         knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        kbSnapshotId: null,
+        deployHash: null,
       }),
       { tx },
     );

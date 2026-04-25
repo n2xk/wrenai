@@ -4,10 +4,12 @@
 
 ## 1. 当前结论
 
-- **分析规则**：14 个，当前都可作为 instruction 导入
-- **SQL 模板**：15 个
+- **分析规则**：14 个
+  - 1 个 `global` 规则可直接作为全局 instruction 导入
+  - 13 个 `question_match` 规则需带 `questions` 后再导入
+- **SQL 模板**：14 个
   - 可先导入：11 个 `draft_sql`
-  - 暂不导入：4 个阻塞模板（`T05/T07/T14/T15`）
+  - 暂不导入：3 个阻塞模板（`T05/T14/T15`）
 
 ## 2. 导入前统一检查
 
@@ -17,10 +19,11 @@
 - `id` 唯一
 - `kb_asset_type` / `import_target` 正确
 - `title`、`priority`、`status` 已填写
+- `questions` 非空（仅 `question_match` 分析规则）
 - `question_variants` 非空（仅 SQL 模板）
 - `## 规则内容` 或 `## SQL 模板` 主体存在
 
-> 2026-04-21 复核结果：当前 `analysis-rules/*.md` 与 `sql-templates/*.md` 均满足上述基础格式要求。
+> 2026-04-24 复核结果：SQL 模板已满足基础格式；分析规则需要以 `questions` 作为 question-match 导入主字段，不能只保留 `keywords`。
 
 ## 3. 建议导入顺序
 
@@ -51,6 +54,8 @@
 
 - 规则建议优先导入，因为它们会影响后续问答和 SQL 模板的解释边界。
 - `R13` 和 `R14` 属于“缺失源 / ES 限制”类规则，建议必须导入，避免系统误答。
+- `R14` 导入后，应确保系统在命中 legacy ES 概念时，统一回到 TiDB 映射表 / 视图的 SQL，不保留独立 ES sql_pair。
+- 其中 `R13` 导入后，应验证它是否会在命中“投放金额 / PV / UV / 下载点击UV / 首存成本 / ROI”时，先要求用户补充外部数据，再继续生成数据表或图表。
 
 ### Step 2：再导入可用 SQL 模板
 
@@ -74,14 +79,16 @@
 
 ### Step 3：阻塞模板先不导入
 
-下面 4 个文件建议在 UI 中标记为“待补齐”，不要当作可执行 SQL 模板导入：
+下面 3 个文件建议在 UI 中标记为“待补齐”，不要当作可执行 SQL 模板导入：
 
 | ID | 文件 | 当前状态 | 阻塞原因 |
 | --- | --- | --- | --- |
 | T05 | `T05_cohort ROI.md` | `blocked_missing_source` | 缺投放金额数据源 |
-| T07 | `T07_VIP 最高等级分层.md` | `blocked_missing_sql_model` | 缺“统计区间最高 VIP”等级 SQL 化模型 |
 | T14 | `T14_投放金额并表.md` | `blocked_missing_source` | 缺投放金额数据源 |
 | T15 | `T15_流量指标并表.md` | `blocked_missing_source` | 缺 PV / UV / 下载点击 UV 数据源 |
+
+补充说明：
+原 `T07_VIP 最高等级分层.md` 依赖 legacy ES 指标映射，现已移入 `_archive`，不参与当前 UI 导入。
 
 ## 4. UI 导入后的验证顺序
 
@@ -93,6 +100,7 @@
    - TOPN 口径
    - VIP 分层口径
    - 缺失数据源处理
+   - 缺失外部指标时是否先索取用户输入再继续出图
 2. 再问模板类问题，确认是否能命中对应 SQL 模板
    - 综合日报
    - cohort 收入

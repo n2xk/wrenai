@@ -27,9 +27,11 @@
 
 ### 1. 分析规则 -> instruction
 
-- `scope: global` 对应全局 instruction
-- `scope: question_match` 对应 questions 匹配型 instruction
+- `scope: global` 对应全局 instruction（`isGlobal = true` / `isDefault = true`）
+- `scope: question_match` 对应 questions 匹配型 instruction（`isGlobal = false` / `isDefault = false`）
 - `import_target` 固定为 `instruction`
+- `question_match` 规则必须补 `questions`
+- `keywords` 仅保留给人工维护参考，当前运行时不会直接拿 `keywords` 做 instruction 检索
 
 ### 2. SQL 模板 -> sql_pair
 
@@ -42,6 +44,8 @@
 - `result_grain`
 - `## SQL 模板` 正文
 
+导入时应把 `question_variants` 展开成多条 `sql_pair` 记录，每条记录都是同一份 SQL 配一个自然语言问题。
+
 推荐状态：
 - `spec_only`：只有模板说明，还没有 SQL
 - `draft_sql`：已经有 SQL 草案，但还没在实际 runtime datasource 验证
@@ -51,19 +55,25 @@
 ## 当前约束
 
 1. 当前系统 SQL pair 创建时会做 SQL 校验，因此 **不能直接导入 ES DSL**。
-2. 当前仓库数据源枚举里没有 Elasticsearch/OpenSearch，因此 **ES 口径要先转成 SQL 化模型**。
+2. 当前主链路只保留 **TiDB 表 / 视图可执行 SQL**；如果 legacy ES 索引已与 TiDB 表存在映射，直接保留对应 TiDB `sql_pair`，**不再单独保留 ES sql_pair**。
 3. 目前已确认缺失的外部数据源：
    - 投放金额
    - 访问 PV
    - 访问 UV
    - 下载点击 UV
 
+> 当前没有这些外部表时，仍可通过分析规则在对话中向用户索取对应数值，
+> 再与 SQL 查询得到的内部指标拼接后输出数据和图表；
+> 但这不等于已经具备可直接导入的 SQL 数据源，因此 `T05/T14/T15` 仍维持阻塞状态。
+
 ## 当前进度
 
 - 分析规则单文件：14 个
-- SQL 模板单文件：15 个
+- SQL 模板单文件：14 个
 - 其中已补 SQL 草案：11 个
-- 仍受阻模板：4 个（`T05/T07/T14/T15`）
+- 仍受阻模板：3 个（`T05/T14/T15`）
+
+> 说明：原 `T07 VIP 最高等级分层` 属于 ES 指标占位模板，已归档到 `../_archive/knowledge-base/sql-templates/`，不再作为当前 `sql_pair` 主链路来源。
 
 ## 当前导入主链路
 

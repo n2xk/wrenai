@@ -9,6 +9,10 @@ priority: high
 status: draft
 applies_to:
   - ROI回收表
+questions:
+  - ROI里的渠道收入怎么计算？
+  - 累计收入口径是什么？
+  - ROI怎么计算？
 keywords:
   - ROI
   - 渠道收入

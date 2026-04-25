@@ -20,6 +20,10 @@ import {
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
 } from '@server/authz';
+import {
+  MAX_SQL_PAIR_QUESTION_LENGTH,
+  MAX_SQL_PAIR_SQL_LENGTH,
+} from './limits';
 
 const logger = getLogger('API_SQL_PAIRS');
 logger.level = 'debug';
@@ -53,6 +57,7 @@ const buildKnowledgeBaseWriteResource = (
 interface CreateSqlPairRequest {
   sql: string;
   question: string;
+  skipSqlValidation?: boolean;
 }
 
 /**
@@ -104,7 +109,7 @@ const handleCreateSqlPair = async (
   executionContext: any,
   startTime: number,
 ) => {
-  const { sql, question } = req.body as CreateSqlPairRequest;
+  const { sql, question, skipSqlValidation } = req.body as CreateSqlPairRequest;
   const runtimeIdentity =
     toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
   const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
@@ -134,16 +139,26 @@ const handleCreateSqlPair = async (
     throw new ApiError('Question is required', 400);
   }
 
-  if (sql.length > 10000) {
-    throw new ApiError('SQL is too long (max 10000 characters)', 400);
+  if (sql.length > MAX_SQL_PAIR_SQL_LENGTH) {
+    throw new ApiError(
+      `SQL is too long (max ${MAX_SQL_PAIR_SQL_LENGTH} characters)`,
+      400,
+    );
   }
 
-  if (question.length > 1000) {
-    throw new ApiError('Question is too long (max 1000 characters)', 400);
+  if (question.length > MAX_SQL_PAIR_QUESTION_LENGTH) {
+    throw new ApiError(
+      `Question is too long (max ${MAX_SQL_PAIR_QUESTION_LENGTH} characters)`,
+      400,
+    );
   }
 
-  // Validate SQL syntax and compatibility
-  await validateSql(sql, executionContext, queryService);
+  // Validate SQL syntax and compatibility unless the caller explicitly opts
+  // into indexing a dialect-specific example pair (for example TiDB/MySQL
+  // templates used as retrieval hints rather than executable Wren SQL).
+  if (!skipSqlValidation) {
+    await validateSql(sql, executionContext, queryService);
+  }
 
   // Create the SQL pair
   const newSqlPair = await sqlPairService.createSqlPair(runtimeIdentity, {

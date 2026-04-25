@@ -233,6 +233,7 @@ export const initComponents = () => {
     wrenAIAdaptor,
   });
   const workspaceService = new WorkspaceService({
+    dashboardRepository,
     workspaceRepository,
     workspaceMemberRepository,
     userRepository,

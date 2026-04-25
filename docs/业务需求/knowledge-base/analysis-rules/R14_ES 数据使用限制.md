@@ -11,6 +11,10 @@ applies_to:
   - ROI回收表
   - 投充比与杀率
   - 游戏类型流水分布
+questions:
+  - 如果需求里提到ES指标该怎么处理？
+  - 玩家日汇总或VIP日快照现在走ES还是TiDB？
+  - legacy ES 指标没有TiDB映射时怎么回答？
 keywords:
   - ES
   - 玩家日汇总
@@ -24,7 +28,7 @@ source_documents:
 
 ## 规则内容
 
-当问题需要使用 legacy ES 指标（如玩家日 VIP、玩家日游戏或线路汇总）时，优先使用对应 SQL 映射表或视图；如果未提供 SQL 映射，不要输出 ES DSL，应说明当前系统仅支持 SQL 模板。
+当问题需要使用 legacy ES 指标（如玩家日 VIP、玩家日游戏或线路汇总）时，如果 ES 索引已经与 TiDB 表 / 视图存在映射，统一使用对应 TiDB SQL 模板或 SQL pair；不要保留也不要输出独立 ES DSL / ES sql_pair。若尚未提供 TiDB SQL 映射，则明确说明当前系统仅支持 SQL 模板，不能直接走 ES。
 
 ## 导入建议
 
@@ -45,4 +49,4 @@ source_documents:
 
 ## 备注
 
-当前系统 SQL pair 创建时会做 SQL 校验，不能直接导入 DSL。
+当前系统 SQL pair 创建时会做 SQL 校验，且当前运行时只连 TiDB；因此 ES 索引类能力只能通过 TiDB 映射表 / 视图落成 SQL。

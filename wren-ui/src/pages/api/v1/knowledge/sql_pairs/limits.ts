@@ -1,0 +1,2 @@
+export const MAX_SQL_PAIR_SQL_LENGTH = 20000;
+export const MAX_SQL_PAIR_QUESTION_LENGTH = 1000;

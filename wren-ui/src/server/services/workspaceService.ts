@@ -39,12 +39,14 @@ export type {
 
 export class WorkspaceService implements IWorkspaceService {
   constructor({
+    dashboardRepository,
     workspaceRepository,
     workspaceMemberRepository,
     userRepository,
     roleRepository,
     principalRoleBindingRepository,
   }: WorkspaceServiceDependencies) {
+    this.dashboardRepository = dashboardRepository;
     this.workspaceRepository = workspaceRepository;
     this.workspaceMemberRepository = workspaceMemberRepository;
     this.userRepository = userRepository;
@@ -52,6 +54,7 @@ export class WorkspaceService implements IWorkspaceService {
     this.principalRoleBindingRepository = principalRoleBindingRepository;
   }
 
+  private readonly dashboardRepository: WorkspaceServiceDependencies['dashboardRepository'];
   private readonly workspaceRepository: WorkspaceServiceDependencies['workspaceRepository'];
   private readonly workspaceMemberRepository: WorkspaceServiceDependencies['workspaceMemberRepository'];
   private readonly userRepository: WorkspaceServiceDependencies['userRepository'];
@@ -116,6 +119,20 @@ export class WorkspaceService implements IWorkspaceService {
           principalRoleBindingRepository: this.principalRoleBindingRepository,
         });
       }
+
+      await this.dashboardRepository.createOne(
+        {
+          isDefault: true,
+          name: 'Dashboard',
+          projectId: null,
+          workspaceId: workspace.id,
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: null,
+          createdBy: workspace.createdBy || input.initialOwnerUserId || null,
+        },
+        { tx },
+      );
 
       await this.workspaceRepository.commit(tx);
       return workspace;

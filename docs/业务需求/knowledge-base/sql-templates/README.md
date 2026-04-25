@@ -9,7 +9,6 @@
 | `draft_sql` | 11 | 已有 SQL 草案 |
 | `spec_only` | 0 | 仅有模板说明 |
 | `blocked_missing_source` | 3 | 缺外部数据源 |
-| `blocked_missing_sql_model` | 1 | 缺 SQL 化模型 |
 
 ## 单文件列表
 
@@ -21,7 +20,6 @@
 | T04 | cohort 累计收入 | `draft_sql` | `first_deposit_date + relative_day_no` | [T04_cohort 累计收入.md](./T04_cohort%20累计收入.md) |
 | T05 | cohort ROI | `blocked_missing_source` | `first_deposit_date + relative_day_no` | [T05_cohort ROI.md](./T05_cohort%20ROI.md) |
 | T06 | TOP3/非TOP3 分层 | `draft_sql` | `player_id` | [T06_TOP3-非TOP3 分层.md](./T06_TOP3-非TOP3%20分层.md) |
-| T07 | VIP 最高等级分层 | `blocked_missing_sql_model` | `player_id` | [T07_VIP 最高等级分层.md](./T07_VIP%20最高等级分层.md) |
 | T08 | 首存 cohort 续存 | `draft_sql` | `first_deposit_date + channel_id` | [T08_首存 cohort 续存.md](./T08_首存%20cohort%20续存.md) |
 | T09 | 所有用户区间汇总 | `draft_sql` | `time_range + user_segment` | [T09_所有用户区间汇总.md](./T09_所有用户区间汇总.md) |
 | T10 | 首存用户日龄趋势 | `draft_sql` | `first_deposit_date + relative_day_no` | [T10_首存用户日龄趋势.md](./T10_首存用户日龄趋势.md) |
@@ -30,3 +28,5 @@
 | T13 | 首存金额分桶 | `draft_sql` | `first_deposit_date + bucket_name` | [T13_首存金额分桶.md](./T13_首存金额分桶.md) |
 | T14 | 投放金额并表 | `blocked_missing_source` | `biz_date + channel_id` | [T14_投放金额并表.md](./T14_投放金额并表.md) |
 | T15 | 流量指标并表 | `blocked_missing_source` | `biz_date + channel_id` | [T15_流量指标并表.md](./T15_流量指标并表.md) |
+
+> legacy ES 占位模板 `T07` 已归档；当前 `sql-templates/` 只保留可沉淀为 TiDB SQL pair 的模板。

@@ -27,11 +27,14 @@ source_documents:
 
 # T07 VIP 最高等级分层
 
+> 已于 2026-04-24 从当前 `knowledge-base/sql-templates/` 主链路归档。
+> 原因：当前系统只保留 TiDB 表 / 视图可执行 SQL pair，不再保留独立 ES sql_pair 占位模板。
+
 ## 模板用途
 
 按统计区间内达到的最高 VIP 等级给用户分层。
 
-## 建议问题（可转为 sql_pair.question）
+## 建议问题（历史记录）
 
 - 按统计区间内达到的最高 VIP 等级给用户分层
 
@@ -54,5 +57,5 @@ source_documents:
 
 ## 备注
 
-- 当前仓库是 SQL-first；ES 需先转成可 SQL 查询模型。
-- 当前缺少可 SQL 查询的数据模型，暂不能形成可执行 SQL pair。
+- 当前仓库是 SQL-first；ES 指标如需保留，应直接改写为 TiDB 可执行 SQL。
+- 当前缺少可 SQL 查询的数据模型，因此本模板仅保留为历史归档。

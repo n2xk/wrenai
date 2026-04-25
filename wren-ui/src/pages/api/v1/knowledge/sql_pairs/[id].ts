@@ -25,6 +25,10 @@ import {
   buildAuthorizationContextFromRequest,
   recordAuditEvent,
 } from '@server/authz';
+import {
+  MAX_SQL_PAIR_QUESTION_LENGTH,
+  MAX_SQL_PAIR_SQL_LENGTH,
+} from './limits';
 
 const logger = getLogger('API_SQL_PAIR_BY_ID');
 logger.level = 'debug';
@@ -82,6 +86,7 @@ const buildKnowledgeBaseWriteResource = (
 interface UpdateSqlPairRequest {
   sql?: string;
   question?: string;
+  skipSqlValidation?: boolean;
 }
 
 /**
@@ -133,26 +138,36 @@ const handleUpdateSqlPair = async (
     context: auditContext,
   });
 
-  const { sql, question } = req.body as UpdateSqlPairRequest;
+  const { sql, question, skipSqlValidation } = req.body as UpdateSqlPairRequest;
 
   // Input validation for provided fields
   if (sql !== undefined) {
     if (!sql) {
       throw new ApiError('SQL cannot be empty', 400);
     }
-    if (sql.length > 10000) {
-      throw new ApiError('SQL is too long (max 10000 characters)', 400);
+    if (sql.length > MAX_SQL_PAIR_SQL_LENGTH) {
+      throw new ApiError(
+        `SQL is too long (max ${MAX_SQL_PAIR_SQL_LENGTH} characters)`,
+        400,
+      );
     }
-    // Validate SQL syntax and compatibility
-    await validateSql(sql, executionContext, queryService);
+    // Validate SQL syntax and compatibility unless the caller explicitly opts
+    // into indexing a dialect-specific example pair (for example TiDB/MySQL
+    // templates used as retrieval hints rather than executable Wren SQL).
+    if (!skipSqlValidation) {
+      await validateSql(sql, executionContext, queryService);
+    }
   }
 
   if (question !== undefined) {
     if (!question) {
       throw new ApiError('Question cannot be empty', 400);
     }
-    if (question.length > 1000) {
-      throw new ApiError('Question is too long (max 1000 characters)', 400);
+    if (question.length > MAX_SQL_PAIR_QUESTION_LENGTH) {
+      throw new ApiError(
+        `Question is too long (max ${MAX_SQL_PAIR_QUESTION_LENGTH} characters)`,
+        400,
+      );
     }
   }
 

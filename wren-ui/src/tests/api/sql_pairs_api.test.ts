@@ -213,6 +213,59 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     );
   });
 
+  it('allows longer analytical sql templates during creation', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: `select 1 -- ${'x'.repeat(12000)}`,
+        question: 'Import long SQL template',
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 10, sql: 'select 1' });
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mockValidateSql).toHaveBeenCalledWith(
+      req.body.sql,
+      executionContext,
+      expect.any(Object),
+    );
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      expect.objectContaining({ sql: req.body.sql }),
+    );
+  });
+
+  it('allows callers to skip sql dry-run validation during creation', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select date_add(current_date, interval 1 day)',
+        question: 'Import TiDB template',
+        skipSqlValidation: true,
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 12, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockValidateSql).not.toHaveBeenCalled();
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      {
+        sql: req.body.sql,
+        question: 'Import TiDB template',
+      },
+    );
+  });
+
   it('updates sql pairs with derived runtime execution context when runtimeScope.project is absent', async () => {
     const handler = (
       await import('../../pages/api/v1/knowledge/sql_pairs/[id]')
@@ -259,6 +312,63 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
           sqlPairId: 7,
         },
       }),
+    );
+  });
+
+  it('allows longer analytical sql templates during updates', async () => {
+    const handler = (
+      await import('../../pages/api/v1/knowledge/sql_pairs/[id]')
+    ).default;
+    const req = createReq({
+      method: 'PUT',
+      query: { id: '11' },
+      body: {
+        sql: `select 2 -- ${'y'.repeat(12000)}`,
+      },
+    });
+    const res = createRes();
+    mockUpdateSqlPair.mockResolvedValue({ id: 11, sql: 'select 2' });
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(mockValidateSql).toHaveBeenCalledWith(
+      req.body.sql,
+      executionContext,
+      expect.any(Object),
+    );
+    expect(mockUpdateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      11,
+      expect.objectContaining({ sql: req.body.sql }),
+    );
+  });
+
+  it('allows callers to skip sql dry-run validation during updates', async () => {
+    const handler = (
+      await import('../../pages/api/v1/knowledge/sql_pairs/[id]')
+    ).default;
+    const req = createReq({
+      method: 'PUT',
+      query: { id: '13' },
+      body: {
+        sql: 'select date_add(current_date, interval 1 day)',
+        skipSqlValidation: true,
+      },
+    });
+    const res = createRes();
+    mockUpdateSqlPair.mockResolvedValue({ id: 13, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockValidateSql).not.toHaveBeenCalled();
+    expect(mockUpdateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      13,
+      {
+        sql: req.body.sql,
+        question: undefined,
+      },
     );
   });
 

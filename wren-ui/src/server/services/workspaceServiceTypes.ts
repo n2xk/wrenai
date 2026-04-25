@@ -1,4 +1,5 @@
 import {
+  IDashboardRepository,
   IPrincipalRoleBindingRepository,
   IRoleRepository,
   IWorkspaceMemberRepository,
@@ -83,6 +84,7 @@ export interface IWorkspaceService {
 }
 
 export interface WorkspaceServiceDependencies {
+  dashboardRepository: Pick<IDashboardRepository, 'createOne'>;
   workspaceRepository: IWorkspaceRepository;
   workspaceMemberRepository: IWorkspaceMemberRepository;
   userRepository: IUserRepository;

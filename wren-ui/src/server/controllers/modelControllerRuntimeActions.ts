@@ -6,6 +6,9 @@ import {
   SyncStatusEnum,
 } from './modelControllerShared';
 
+const KNOWLEDGE_ASSET_DEPLOY_TIMEOUT_MS = 90_000;
+const KNOWLEDGE_ASSET_DEPLOY_POLL_INTERVAL_MS = 500;
+
 interface ModelControllerRuntimeDeps {
   assertKnowledgeBaseReadAccess: (
     ctx: IContext,
@@ -42,6 +45,117 @@ interface ModelControllerRuntimeDeps {
   ) => Promise<void>;
   isInternalAiServiceRequest: (ctx: IContext) => boolean;
 }
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const waitForInstructionDeployment = async ({
+  ctx,
+  queryId,
+}: {
+  ctx: IContext;
+  queryId: string;
+}) => {
+  const deadline = Date.now() + KNOWLEDGE_ASSET_DEPLOY_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const result = await ctx.wrenAIAdaptor.getInstructionResult(queryId);
+    if (result.status === 'FINISHED') {
+      return;
+    }
+    if (result.status === 'FAILED' || result.error) {
+      throw new Error(result.error?.message || 'Failed to index instructions');
+    }
+    await sleep(KNOWLEDGE_ASSET_DEPLOY_POLL_INTERVAL_MS);
+  }
+
+  throw new Error('Instruction indexing timed out');
+};
+
+const waitForSqlPairDeployment = async ({
+  ctx,
+  queryId,
+}: {
+  ctx: IContext;
+  queryId: string;
+}) => {
+  const deadline = Date.now() + KNOWLEDGE_ASSET_DEPLOY_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const result = await ctx.wrenAIAdaptor.getSqlPairResult(queryId);
+    if (result.status === 'FINISHED') {
+      return;
+    }
+    if (result.status === 'FAILED' || result.error) {
+      throw new Error(result.error?.message || 'Failed to index SQL pair');
+    }
+    await sleep(KNOWLEDGE_ASSET_DEPLOY_POLL_INTERVAL_MS);
+  }
+
+  throw new Error('SQL pair indexing timed out');
+};
+
+const syncKnowledgeAssetsToDeployment = async ({
+  ctx,
+  runtimeIdentity,
+}: {
+  ctx: IContext;
+  runtimeIdentity: {
+    workspaceId: string;
+    knowledgeBaseId: string;
+    kbSnapshotId: string;
+    deployHash: string;
+    actorUserId?: string | null;
+  };
+}) => {
+  const [instructions, sqlPairs] = await Promise.all([
+    ctx.instructionService.listInstructions({
+      projectId: null,
+      workspaceId: runtimeIdentity.workspaceId,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId,
+      deployHash: runtimeIdentity.deployHash,
+      actorUserId: runtimeIdentity.actorUserId ?? null,
+    }),
+    ctx.sqlPairService.listSqlPairs({
+      projectId: null,
+      workspaceId: runtimeIdentity.workspaceId,
+      knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+      kbSnapshotId: runtimeIdentity.kbSnapshotId,
+      deployHash: runtimeIdentity.deployHash,
+      actorUserId: runtimeIdentity.actorUserId ?? null,
+    }),
+  ]);
+
+  if (instructions.length > 0) {
+    const instructionQuery = await ctx.wrenAIAdaptor.generateInstruction({
+      instructions: instructions.map((instruction) => ({
+        id: instruction.id,
+        instruction: instruction.instruction,
+        questions: instruction.questions,
+        isDefault: instruction.isDefault,
+      })),
+      runtimeIdentity,
+    });
+    await waitForInstructionDeployment({
+      ctx,
+      queryId: instructionQuery.queryId,
+    });
+  }
+
+  for (const sqlPair of sqlPairs) {
+    const sqlPairQuery = await ctx.wrenAIAdaptor.deploySqlPair({
+      sqlPair,
+      runtimeIdentity,
+    });
+    await waitForSqlPairDeployment({
+      ctx,
+      queryId: sqlPairQuery.queryId,
+    });
+  }
+};
 
 export const checkModelSyncAction = async ({
   ctx,
@@ -172,6 +286,24 @@ export const deployAction = async ({
     });
     latestSnapshotId = latestSnapshot?.id || null;
     latestSnapshotDeployHash = latestSnapshot?.deployHash || null;
+
+    if (
+      runtimeIdentity.workspaceId &&
+      runtimeIdentity.knowledgeBaseId &&
+      latestSnapshotId &&
+      latestSnapshotDeployHash
+    ) {
+      await syncKnowledgeAssetsToDeployment({
+        ctx,
+        runtimeIdentity: {
+          workspaceId: runtimeIdentity.workspaceId,
+          knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+          kbSnapshotId: latestSnapshotId,
+          deployHash: latestSnapshotDeployHash,
+          actorUserId: runtimeIdentity.actorUserId ?? null,
+        },
+      });
+    }
   }
 
   await deps.recordKnowledgeBaseWriteAudit(ctx, {
