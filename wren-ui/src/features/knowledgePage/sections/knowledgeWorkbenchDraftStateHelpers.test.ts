@@ -38,6 +38,7 @@ const createWatchValues = (): KnowledgeWorkbenchDraftWatchValues => ({
   watchedRuleSummary: 'rule-summary',
   watchedSqlContent: 'select 1',
   watchedSqlDescription: 'sql-description',
+  watchedSqlTemplateMode: 'reference',
 });
 
 const createBaselineState = (): KnowledgeWorkbenchDraftBaselineState => ({
@@ -50,6 +51,7 @@ const createBaselineState = (): KnowledgeWorkbenchDraftBaselineState => ({
     description: 'baseline-sql',
     sql: 'select baseline',
     scope: 'all',
+    templateMode: 'reference',
   },
   syncRuleDraftBaseline: jest.fn(),
   syncSqlDraftBaseline: jest.fn(),

@@ -24,6 +24,7 @@ import {
   MAX_SQL_PAIR_QUESTION_LENGTH,
   MAX_SQL_PAIR_SQL_LENGTH,
 } from './limits';
+import { normalizeSqlPairTemplateMetadata } from '@server/utils/sqlPairTemplateMetadata';
 
 const logger = getLogger('API_SQL_PAIRS');
 logger.level = 'debug';
@@ -58,6 +59,15 @@ interface CreateSqlPairRequest {
   sql: string;
   question: string;
   skipSqlValidation?: boolean;
+  assetKind?: string;
+  templateLevel?: string;
+  templateMode?: string;
+  sourceType?: string;
+  scopeType?: string;
+  parameterSchema?: Record<string, any> | null;
+  businessSignature?: Record<string, any> | null;
+  templateVersion?: number;
+  status?: string;
 }
 
 /**
@@ -164,6 +174,7 @@ const handleCreateSqlPair = async (
   const newSqlPair = await sqlPairService.createSqlPair(runtimeIdentity, {
     sql,
     question,
+    ...normalizeSqlPairTemplateMetadata(req.body || {}),
   });
 
   await recordAuditEvent({

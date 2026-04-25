@@ -29,6 +29,7 @@ import {
   MAX_SQL_PAIR_QUESTION_LENGTH,
   MAX_SQL_PAIR_SQL_LENGTH,
 } from './limits';
+import { normalizeSqlPairTemplateMetadata } from '@server/utils/sqlPairTemplateMetadata';
 
 const logger = getLogger('API_SQL_PAIR_BY_ID');
 logger.level = 'debug';
@@ -87,6 +88,15 @@ interface UpdateSqlPairRequest {
   sql?: string;
   question?: string;
   skipSqlValidation?: boolean;
+  assetKind?: string;
+  templateLevel?: string;
+  templateMode?: string;
+  sourceType?: string;
+  scopeType?: string;
+  parameterSchema?: Record<string, any> | null;
+  businessSignature?: Record<string, any> | null;
+  templateVersion?: number;
+  status?: string;
 }
 
 /**
@@ -178,6 +188,9 @@ const handleUpdateSqlPair = async (
     {
       sql,
       question,
+      ...normalizeSqlPairTemplateMetadata(req.body || {}, {
+        includeDefaults: false,
+      }),
     },
   );
 

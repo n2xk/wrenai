@@ -25,6 +25,7 @@ export function useKnowledgeWorkbenchDraftDerivedState({
   watchedRuleSummary,
   watchedSqlContent,
   watchedSqlDescription,
+  watchedSqlTemplateMode,
 }: {
   ruleDraftBaseline: RuleDetailFormValues;
   ruleList: Instruction[];
@@ -39,6 +40,7 @@ export function useKnowledgeWorkbenchDraftDerivedState({
   watchedRuleSummary?: string;
   watchedSqlContent?: string;
   watchedSqlDescription?: string;
+  watchedSqlTemplateMode?: 'reference' | 'business';
 }) {
   const visibleSqlList = useMemo(
     () =>
@@ -84,10 +86,16 @@ export function useKnowledgeWorkbenchDraftDerivedState({
         currentValues: {
           description: watchedSqlDescription,
           sql: watchedSqlContent,
+          templateMode: watchedSqlTemplateMode,
         },
         initialValues: sqlDraftBaseline,
       }),
-    [sqlDraftBaseline, watchedSqlContent, watchedSqlDescription],
+    [
+      sqlDraftBaseline,
+      watchedSqlContent,
+      watchedSqlDescription,
+      watchedSqlTemplateMode,
+    ],
   );
 
   return {

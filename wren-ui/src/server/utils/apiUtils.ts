@@ -135,7 +135,10 @@ export const validateSummaryResult = (result: TextBasedAnswerResult): void => {
 };
 
 export const buildAskDiagnostics = (
-  result?: Pick<AskResult, 'traceId' | 'askPath' | 'shadowCompare'> | null,
+  result?: Pick<
+    AskResult,
+    'traceId' | 'askPath' | 'shadowCompare' | 'templateDecision'
+  > | null,
 ): AskDiagnostics | undefined => {
   if (!result) {
     return undefined;
@@ -150,6 +153,9 @@ export const buildAskDiagnostics = (
   }
   if (result.shadowCompare) {
     diagnostics.shadowCompare = result.shadowCompare;
+  }
+  if (result.templateDecision) {
+    diagnostics.templateDecision = result.templateDecision;
   }
 
   return Object.keys(diagnostics).length > 0 ? diagnostics : undefined;

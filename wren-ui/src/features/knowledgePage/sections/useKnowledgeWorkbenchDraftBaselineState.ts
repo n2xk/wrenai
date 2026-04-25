@@ -27,7 +27,12 @@ export function useKnowledgeWorkbenchDraftBaselineState({
   const readSqlDraftValues = useCallback(
     (): SqlTemplateFormValues => ({
       ...EMPTY_SQL_TEMPLATE_VALUES,
-      ...sqlTemplateForm.getFieldsValue(['description', 'sql', 'scope']),
+      ...sqlTemplateForm.getFieldsValue([
+        'description',
+        'sql',
+        'scope',
+        'templateMode',
+      ]),
     }),
     [sqlTemplateForm],
   );

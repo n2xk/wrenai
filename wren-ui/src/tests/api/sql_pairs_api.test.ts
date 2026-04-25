@@ -111,6 +111,17 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
       actorUserId: 'user-1',
     },
   };
+  const defaultSqlPairMetadata = {
+    assetKind: 'sql_pair',
+    templateLevel: 'L0',
+    templateMode: 'reference',
+    sourceType: 'user_saved',
+    scopeType: 'knowledge_base',
+    parameterSchema: null,
+    businessSignature: null,
+    templateVersion: 1,
+    status: 'active',
+  };
 
   const createReq = (overrides: Partial<any> = {}) =>
     ({
@@ -195,6 +206,7 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
       {
         sql: 'select 1',
         question: 'What happened?',
+        ...defaultSqlPairMetadata,
       },
     );
     expect(mockAssertAuthorizedWithAudit).toHaveBeenCalledWith(
@@ -262,6 +274,50 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
       {
         sql: req.body.sql,
         question: 'Import TiDB template',
+        ...defaultSqlPairMetadata,
+      },
+    );
+  });
+
+  it('passes explicit sql template metadata during creation', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select * from deposits',
+        question: '首存金额分桶',
+        assetKind: 'sql_template',
+        templateLevel: 'L2',
+        templateMode: 'anchored_template',
+        sourceType: 'business_import',
+        scopeType: 'knowledge_base',
+        parameterSchema: { required: ['start_date'] },
+        businessSignature: { ctes: ['base', 'bucketed'] },
+        templateVersion: 2,
+        status: 'active',
+        skipSqlValidation: true,
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 14, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      {
+        sql: req.body.sql,
+        question: req.body.question,
+        assetKind: 'sql_template',
+        templateLevel: 'L2',
+        templateMode: 'anchored_template',
+        sourceType: 'business_import',
+        scopeType: 'knowledge_base',
+        parameterSchema: { required: ['start_date'] },
+        businessSignature: { ctes: ['base', 'bucketed'] },
+        templateVersion: 2,
+        status: 'active',
       },
     );
   });
@@ -368,6 +424,36 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
       {
         sql: req.body.sql,
         question: undefined,
+      },
+    );
+  });
+
+  it('updates only explicitly provided template metadata', async () => {
+    const handler = (
+      await import('../../pages/api/v1/knowledge/sql_pairs/[id]')
+    ).default;
+    const req = createReq({
+      method: 'PUT',
+      query: { id: '15' },
+      body: {
+        templateMode: 'anchored_template',
+      },
+    });
+    const res = createRes();
+    mockUpdateSqlPair.mockResolvedValue({
+      id: 15,
+      templateMode: 'anchored_template',
+    });
+
+    await handler(req, res);
+
+    expect(mockUpdateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      15,
+      {
+        sql: undefined,
+        question: undefined,
+        templateMode: 'anchored_template',
       },
     );
   });

@@ -165,6 +165,35 @@ const transformThinkingTrace = (body: any) => {
   };
 };
 
+const transformAskTemplateDecision = (body: any) => {
+  if (!body || typeof body !== 'object') {
+    return null;
+  }
+
+  return {
+    mode: body.mode || null,
+    templateId: body.template_id ?? body.templateId ?? null,
+    templateTitle: body.template_title ?? body.templateTitle ?? null,
+    score: typeof body.score === 'number' ? body.score : null,
+    margin: typeof body.margin === 'number' ? body.margin : null,
+    parameters:
+      body.parameters && typeof body.parameters === 'object'
+        ? body.parameters
+        : null,
+    missingParameters: Array.isArray(body.missing_parameters)
+      ? body.missing_parameters
+      : Array.isArray(body.missingParameters)
+        ? body.missingParameters
+        : null,
+    decisionReason: body.decision_reason ?? body.decisionReason ?? null,
+    fallbackReason: body.fallback_reason ?? body.fallbackReason ?? null,
+    sqlSource: body.sql_source ?? body.sqlSource ?? null,
+    sourceType: body.source_type ?? body.sourceType ?? null,
+    templateLevel: body.template_level ?? body.templateLevel ?? null,
+    templateMode: body.template_mode ?? body.templateMode ?? null,
+  };
+};
+
 export const transformTextBasedAnswerResult = (
   body: any,
 ): TextBasedAnswerResult => {
@@ -257,6 +286,9 @@ export const transformAskResult = (body: any): AskResult => {
     retrievedTables: body?.retrieved_tables,
     askPath: body?.ask_path,
     shadowCompare: transformAskShadowCompare(body?.shadow_compare),
+    templateDecision: transformAskTemplateDecision(
+      body?.template_decision || body?.metadata?.template_decision,
+    ),
     invalidSql: body?.invalid_sql,
     traceId: body?.trace_id,
     thinking: transformThinkingTrace(body?.thinking),

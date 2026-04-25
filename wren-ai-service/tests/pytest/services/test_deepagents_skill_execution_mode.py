@@ -171,6 +171,84 @@ async def test_deepagents_prepares_sql_pairs_and_skill_instructions_before_inten
 
 
 @pytest.mark.asyncio
+async def test_deepagents_reuses_anchored_template_without_placeholders():
+    pipelines = make_pipelines(
+        historical_documents=[{"statement": "SELECT historical"}],
+        sql_pairs_documents=[
+            {
+                "id": "template-1",
+                "question": "首存金额分桶",
+                "sql": "SELECT bucket, COUNT(*) FROM deposits GROUP BY bucket",
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "score": 0.92,
+            }
+        ],
+    )
+
+    result, updates = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(),
+    )
+
+    assert pipelines["historical_question"].run.await_count == 0
+    assert pipelines["db_schema_retrieval"].run.await_count == 0
+    assert pipelines["sql_generation"].run.await_count == 0
+    assert result["metadata"]["ask_path"] == "sql_pairs"
+    assert result["metadata"]["template_decision"]["mode"] == "anchored_template"
+    assert result["metadata"]["template_decision"]["sql_source"] == "anchored_template"
+    assert result["ask_result"] == [
+        {
+            "sql": "SELECT bucket, COUNT(*) FROM deposits GROUP BY bucket",
+            "type": "sql_pair",
+            "sqlpairId": "template-1",
+        }
+    ]
+    assert updates[-1]["response"][0]["type"] == "sql_pair"
+
+
+@pytest.mark.asyncio
+async def test_deepagents_injects_anchored_template_instruction_when_params_missing():
+    pipelines = make_pipelines(
+        sql_pairs_documents=[
+            {
+                "id": "template-2",
+                "question": "首存用户日龄趋势",
+                "sql": "SELECT * FROM deposits WHERE dt >= :start_date",
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+            }
+        ],
+        valid_sql="SELECT * FROM deposits WHERE dt >= DATE '2026-01-01'",
+    )
+
+    result, _ = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(),
+    )
+
+    generated_instructions = pipelines["sql_generation"].run.await_args.kwargs[
+        "instructions"
+    ]
+    assert any(
+        instruction.get("source") == "template_decision"
+        and "Preserve its CTE hierarchy" in instruction["instruction"]
+        for instruction in generated_instructions
+    )
+    assert result["metadata"]["template_decision"]["mode"] == "anchored_template"
+    assert result["metadata"]["template_decision"]["missing_parameters"] == [
+        "start_date"
+    ]
+    assert result["metadata"]["template_decision"]["fallback_reason"] == (
+        "missing_template_parameters"
+    )
+
+
+@pytest.mark.asyncio
 async def test_deepagents_historical_hit_short_circuits_schema_and_generation():
     pipelines = make_pipelines(
         historical_documents=[

@@ -18,7 +18,23 @@ type InstructionRestPayload = Partial<
 };
 
 type SqlPairRestPayload = Partial<
-  Pick<SqlPair, 'id' | 'question' | 'sql' | 'createdAt' | 'updatedAt'>
+  Pick<
+    SqlPair,
+    | 'id'
+    | 'question'
+    | 'sql'
+    | 'assetKind'
+    | 'templateLevel'
+    | 'templateMode'
+    | 'sourceType'
+    | 'scopeType'
+    | 'parameterSchema'
+    | 'businessSignature'
+    | 'templateVersion'
+    | 'status'
+    | 'createdAt'
+    | 'updatedAt'
+  >
 >;
 
 const buildInstructionsCollectionUrl = (selector: ClientRuntimeScopeSelector) =>
@@ -100,6 +116,33 @@ const normalizeSqlPairItem = (payload: SqlPairRestPayload): SqlPair | null => {
     id: parsedId,
     question: typeof payload.question === 'string' ? payload.question : '',
     sql: typeof payload.sql === 'string' ? payload.sql : '',
+    assetKind:
+      typeof payload.assetKind === 'string' ? payload.assetKind : 'sql_pair',
+    templateLevel:
+      typeof payload.templateLevel === 'string' ? payload.templateLevel : 'L0',
+    templateMode:
+      typeof payload.templateMode === 'string'
+        ? payload.templateMode
+        : 'reference',
+    sourceType:
+      typeof payload.sourceType === 'string'
+        ? payload.sourceType
+        : 'user_saved',
+    scopeType:
+      typeof payload.scopeType === 'string'
+        ? payload.scopeType
+        : 'knowledge_base',
+    parameterSchema:
+      payload.parameterSchema && typeof payload.parameterSchema === 'object'
+        ? payload.parameterSchema
+        : null,
+    businessSignature:
+      payload.businessSignature && typeof payload.businessSignature === 'object'
+        ? payload.businessSignature
+        : null,
+    templateVersion:
+      typeof payload.templateVersion === 'number' ? payload.templateVersion : 1,
+    status: typeof payload.status === 'string' ? payload.status : 'active',
     createdAt: typeof payload.createdAt === 'string' ? payload.createdAt : null,
     updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : null,
   };

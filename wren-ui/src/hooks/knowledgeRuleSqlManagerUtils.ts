@@ -4,6 +4,10 @@ import type {
   Instruction,
   SqlPair,
 } from '@/types/knowledge';
+import {
+  SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
+  SQL_PAIR_REFERENCE_PRESET,
+} from '@/types/knowledge';
 
 export type RuleDetailFormValues = {
   summary: string;
@@ -15,6 +19,7 @@ export type SqlTemplateFormValues = {
   sql: string;
   scope: 'all' | 'matched';
   description: string;
+  templateMode: 'reference' | 'business';
 };
 
 const INSTRUCTION_SUMMARY_PREFIX = '【规则描述】';
@@ -98,10 +103,18 @@ export const buildInstructionPayload = (
 
 export const buildSqlTemplatePayload = (
   values: SqlTemplateFormValues,
-): CreateSqlPairInput => ({
-  sql: values.sql,
-  question: values.description,
-});
+): CreateSqlPairInput => {
+  const templateMetadata =
+    values.templateMode === 'business'
+      ? SQL_PAIR_BUSINESS_TEMPLATE_PRESET
+      : SQL_PAIR_REFERENCE_PRESET;
+
+  return {
+    sql: values.sql,
+    question: values.description,
+    ...templateMetadata,
+  };
+};
 
 export const buildSqlTemplateFormValues = (
   sqlPair?: SqlPair | null,
@@ -109,6 +122,12 @@ export const buildSqlTemplateFormValues = (
   sql: sqlPair?.sql || '',
   scope: 'all',
   description: sqlPair?.question || '',
+  templateMode:
+    sqlPair?.templateMode === 'anchored_template' ||
+    sqlPair?.templateMode === 'executable_template' ||
+    sqlPair?.assetKind === 'sql_template'
+      ? 'business'
+      : 'reference',
 });
 
 const hasSameQuestions = (left: string[] = [], right: string[] = []) =>
@@ -156,7 +175,10 @@ export const findMatchingSqlPair = ({
   return (
     sqlList.find(
       (sqlPair) =>
-        sqlPair.sql === payload.sql && sqlPair.question === payload.question,
+        sqlPair.sql === payload.sql &&
+        sqlPair.question === payload.question &&
+        (sqlPair.templateMode || 'reference') ===
+          (payload.templateMode || 'reference'),
     ) ||
     sqlList[0] ||
     null

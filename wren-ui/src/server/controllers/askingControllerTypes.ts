@@ -4,6 +4,8 @@ import {
   AskResultType,
   RecommendationQuestionStatus,
   AskFeedbackStatus,
+  AskDiagnostics,
+  ThinkingTrace,
 } from '@server/models/adaptor';
 import { ThreadResponse } from '../repositories/threadResponseRepository';
 import { SuggestedQuestion } from '../data';
@@ -40,6 +42,8 @@ export interface AskingTask {
   sqlGenerationReasoning?: string;
   retrievedTables?: string[];
   invalidSql?: string;
+  diagnostics?: AskDiagnostics;
+  thinking?: ThinkingTrace | null;
   traceId?: string;
   queryId?: string;
 }

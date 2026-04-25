@@ -28,8 +28,19 @@ class OutputFormatter:
 
         for doc in documents:
             formatted = {
+                "id": doc.meta.get("sql_pair_id"),
                 "question": doc.content,
                 "sql": doc.meta.get("sql"),
+                "score": getattr(doc, "score", None),
+                "asset_kind": doc.meta.get("asset_kind", "sql_pair"),
+                "template_level": doc.meta.get("template_level", "L0"),
+                "template_mode": doc.meta.get("template_mode", "reference"),
+                "source_type": doc.meta.get("source_type", "user_saved"),
+                "scope_type": doc.meta.get("scope_type", "knowledge_base"),
+                "parameter_schema": doc.meta.get("parameter_schema"),
+                "business_signature": doc.meta.get("business_signature"),
+                "template_version": doc.meta.get("template_version", 1),
+                "status": doc.meta.get("status", "active"),
             }
             list.append(formatted)
 

@@ -20,6 +20,7 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
         description: 'SQL summary',
         sql: 'select 1',
         scope: 'all',
+        templateMode: 'reference',
       })),
     };
 
@@ -55,6 +56,7 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
       description: 'Orders',
       sql: 'select * from orders',
       scope: 'all',
+      templateMode: 'business',
     });
     hook.syncRuleDraftBaseline({
       summary: 'Rules',
@@ -76,6 +78,7 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
       'description',
       'sql',
       'scope',
+      'templateMode',
     ]);
     expect(ruleForm.getFieldsValue).toHaveBeenCalledWith([
       'summary',

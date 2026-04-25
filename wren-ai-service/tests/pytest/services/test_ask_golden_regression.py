@@ -298,3 +298,101 @@ async def test_ask_golden_regression_baseline(case: dict):
         assert ask_result.is_followup == expected["isFollowup"]
 
     assert_runtime_metadata(result["metadata"])
+
+
+@pytest.mark.asyncio
+async def test_ask_reports_template_decision_for_sql_pairs():
+    case = {
+        "query": "首存金额分桶",
+        "scenario": {
+            "sql_pairs_documents": [
+                {
+                    "id": "template-13",
+                    "question": "首存金额分桶",
+                    "sql": "SELECT bucket, COUNT(*) FROM deposits GROUP BY bucket",
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "anchored_template",
+                    "source_type": "business_import",
+                    "score": 0.95,
+                }
+            ],
+            "schema_documents": [],
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert result["metadata"]["ask_path"] == "sql_pairs"
+    assert result["metadata"]["template_decision"]["mode"] == "anchored_template"
+    assert result["metadata"]["template_decision"]["template_id"] == "template-13"
+    assert ask_result.template_decision is not None
+    assert ask_result.template_decision.mode == "anchored_template"
+    assert ask_result.response[0].type == "sql_pair"
+    assert ask_result.response[0].sqlpairId == "template-13"
+
+
+@pytest.mark.asyncio
+async def test_ask_rejects_correction_that_changes_anchored_template_core():
+    template_sql = """
+    WITH base AS (
+      SELECT
+        CASE WHEN amount < 100 THEN 'low' ELSE 'high' END AS bucket
+      FROM deposits
+      WHERE dt >= :start_date
+    )
+    SELECT bucket, COUNT(*) AS users
+    FROM base
+    GROUP BY bucket
+    """
+    case = {
+        "query": "首存金额分桶",
+        "scenario": {
+            "sql_pairs_documents": [
+                {
+                    "id": "template-13",
+                    "question": "首存金额分桶",
+                    "sql": template_sql,
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "anchored_template",
+                }
+            ],
+            "schema_documents": [
+                {
+                    "table_name": "deposits",
+                    "table_ddl": "CREATE TABLE deposits(amount int, dt date);",
+                }
+            ],
+            "sql_generation": {
+                "invalid_generation_result": {
+                    "type": "EXECUTION_ERROR",
+                    "original_sql": template_sql,
+                    "sql": template_sql,
+                    "error": "syntax error",
+                }
+            },
+            "sql_correction": {
+                "valid_sql": "SELECT COUNT(*) AS users FROM deposits"
+            },
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert ask_result.status == "failed"
+    assert ask_result.template_decision is not None
+    assert ask_result.template_decision.fallback_reason == (
+        "template_core_protection_rejected_correction"
+    )
+    assert result["metadata"]["template_decision"]["fallback_reason"] == (
+        "template_core_protection_rejected_correction"
+    )

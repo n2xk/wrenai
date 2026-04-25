@@ -10,6 +10,13 @@ describe('AskingService', () => {
       deployHash: 'deploy-1',
       actorUserId: 'user-1',
     };
+    const canonicalRuntimeIdentity = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    };
 
     it('passes runtimeScopeId when generating thread response charts', async () => {
       const service = Object.create(AskingService.prototype) as any;
@@ -66,7 +73,7 @@ describe('AskingService', () => {
             ],
           }),
           runtimeScopeId: 'scope-1',
-          runtimeIdentity,
+          runtimeIdentity: canonicalRuntimeIdentity,
         }),
       );
       expect(service.chartBackgroundTracker.addTask).toHaveBeenCalledWith(
@@ -599,6 +606,13 @@ describe('AskingService', () => {
       deployHash: 'deploy-1',
       actorUserId: 'user-1',
     };
+    const canonicalRuntimeIdentity = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+    };
 
     it('passes runtimeScopeId when adjusting thread response answers', async () => {
       const service = Object.create(AskingService.prototype) as any;
@@ -634,7 +648,7 @@ describe('AskingService', () => {
       ).toHaveBeenCalledWith(
         expect.objectContaining({
           runtimeScopeId: 'scope-1',
-          runtimeIdentity,
+          runtimeIdentity: canonicalRuntimeIdentity,
         }),
       );
       expect(result).toEqual({ id: 13 });

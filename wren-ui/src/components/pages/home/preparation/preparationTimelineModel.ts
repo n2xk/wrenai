@@ -149,6 +149,23 @@ const toPreparationStepFromThinking = (
         description: '系统直接复用了已有的问数模板结果',
         status: normalizedStatus,
       });
+    case 'ask.template_decision':
+      return buildStep({
+        key: step.key,
+        title:
+          step.messageParams?.mode === 'anchored_template'
+            ? '已按业务口径模板生成'
+            : step.messageParams?.mode === 'executable_template'
+              ? '已执行参数化模板'
+              : step.messageParams?.mode === 'trusted_reference'
+                ? '已采用可信 SQL 参考'
+                : '已按 SQL 参考生成',
+        description:
+          (step.messageParams?.fallbackReason as string | undefined) ||
+          (step.messageParams?.decisionReason as string | undefined) ||
+          null,
+        status: normalizedStatus,
+      });
     case 'ask.sql_corrected':
       return buildStep({
         key: step.key,

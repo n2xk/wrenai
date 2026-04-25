@@ -61,12 +61,18 @@ describe('useKnowledgeWorkbenchDraftWatchValues', () => {
       sqlTemplateForm,
     );
     expect(mockUseWatch).toHaveBeenNthCalledWith(5, 'sql', sqlTemplateForm);
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      6,
+      'templateMode',
+      sqlTemplateForm,
+    );
     expect(hook).toEqual({
       watchedRuleContent: 'ruleForm:content',
       watchedRuleScope: 'ruleForm:scope',
       watchedRuleSummary: 'ruleForm:summary',
       watchedSqlContent: 'sqlForm:sql',
       watchedSqlDescription: 'sqlForm:description',
+      watchedSqlTemplateMode: 'sqlForm:templateMode',
     });
   });
 });

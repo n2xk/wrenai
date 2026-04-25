@@ -163,8 +163,29 @@ export type ResultCandidate = {
   view?: ViewInfo | null;
 };
 
+export type AskTemplateDecision = {
+  decisionReason?: string | null;
+  fallbackReason?: string | null;
+  margin?: number | null;
+  missingParameters?: string[] | null;
+  mode?: string | null;
+  parameters?: Record<string, any> | null;
+  score?: number | null;
+  sourceType?: string | null;
+  sqlSource?: string | null;
+  templateId?: string | number | null;
+  templateLevel?: string | null;
+  templateMode?: string | null;
+  templateTitle?: string | null;
+};
+
 export type AskingTask = {
   candidates: ResultCandidate[];
+  diagnostics?: {
+    askPath?: string | null;
+    templateDecision?: AskTemplateDecision | null;
+    traceId?: string | null;
+  } | null;
   error?: Error | null;
   intentReasoning?: string | null;
   invalidSql?: string | null;

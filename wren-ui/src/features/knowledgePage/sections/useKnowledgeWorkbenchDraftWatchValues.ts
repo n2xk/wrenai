@@ -12,6 +12,7 @@ export function useKnowledgeWorkbenchDraftWatchValues({
   const watchedRuleContent = Form.useWatch('content', ruleForm);
   const watchedSqlDescription = Form.useWatch('description', sqlTemplateForm);
   const watchedSqlContent = Form.useWatch('sql', sqlTemplateForm);
+  const watchedSqlTemplateMode = Form.useWatch('templateMode', sqlTemplateForm);
 
   return {
     watchedRuleContent,
@@ -19,5 +20,6 @@ export function useKnowledgeWorkbenchDraftWatchValues({
     watchedRuleSummary,
     watchedSqlContent,
     watchedSqlDescription,
+    watchedSqlTemplateMode,
   };
 }

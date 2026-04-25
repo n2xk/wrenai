@@ -46,11 +46,29 @@ const toKnowledgeAssetRuntimeIdentity = (
 export interface CreateSqlPair {
   sql: string;
   question: string;
+  assetKind?: string;
+  templateLevel?: string;
+  templateMode?: string;
+  sourceType?: string;
+  scopeType?: string;
+  parameterSchema?: Record<string, any> | null;
+  businessSignature?: Record<string, any> | null;
+  templateVersion?: number;
+  status?: string;
 }
 
 export interface EditSqlPair {
   sql?: string;
   question?: string;
+  assetKind?: string;
+  templateLevel?: string;
+  templateMode?: string;
+  sourceType?: string;
+  scopeType?: string;
+  parameterSchema?: Record<string, any> | null;
+  businessSignature?: Record<string, any> | null;
+  templateVersion?: number;
+  status?: string;
 }
 
 export interface ModelSubstituteOptions {
@@ -287,6 +305,15 @@ export class SqlPairService implements ISqlPairService {
     const updatedData: Partial<SqlPair> = {
       sql: existingPair.sql,
       question: existingPair.question,
+      assetKind: existingPair.assetKind,
+      templateLevel: existingPair.templateLevel,
+      templateMode: existingPair.templateMode,
+      sourceType: existingPair.sourceType,
+      scopeType: existingPair.scopeType,
+      parameterSchema: existingPair.parameterSchema,
+      businessSignature: existingPair.businessSignature,
+      templateVersion: existingPair.templateVersion,
+      status: existingPair.status,
       updatedAt: new Date().toISOString(),
     };
 
@@ -296,6 +323,33 @@ export class SqlPairService implements ISqlPairService {
 
     if (sqlPair.question !== undefined) {
       updatedData.question = sqlPair.question;
+    }
+    if (sqlPair.assetKind !== undefined) {
+      updatedData.assetKind = sqlPair.assetKind;
+    }
+    if (sqlPair.templateLevel !== undefined) {
+      updatedData.templateLevel = sqlPair.templateLevel;
+    }
+    if (sqlPair.templateMode !== undefined) {
+      updatedData.templateMode = sqlPair.templateMode;
+    }
+    if (sqlPair.sourceType !== undefined) {
+      updatedData.sourceType = sqlPair.sourceType;
+    }
+    if (sqlPair.scopeType !== undefined) {
+      updatedData.scopeType = sqlPair.scopeType;
+    }
+    if (sqlPair.parameterSchema !== undefined) {
+      updatedData.parameterSchema = sqlPair.parameterSchema;
+    }
+    if (sqlPair.businessSignature !== undefined) {
+      updatedData.businessSignature = sqlPair.businessSignature;
+    }
+    if (sqlPair.templateVersion !== undefined) {
+      updatedData.templateVersion = sqlPair.templateVersion;
+    }
+    if (sqlPair.status !== undefined) {
+      updatedData.status = sqlPair.status;
     }
     const tx = await this.sqlPairRepository.transaction();
     try {

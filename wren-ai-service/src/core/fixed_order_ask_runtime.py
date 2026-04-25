@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Protocol, Sequence
 
@@ -55,6 +56,7 @@ class AskExecutionState:
     table_ddls: list[str] = field(default_factory=list)
     ask_path: Optional[str] = None
     current_sql_correction_retries: int = 0
+    template_decision: Optional[dict[str, Any]] = None
 
 
 def _normalize_instruction(value: Any) -> Optional[str]:
@@ -85,6 +87,222 @@ def extract_skill_instructions(
             )
 
     return extracted_instructions
+
+
+TEMPLATE_LEVEL_RANK = {"L0": 0, "L1": 1, "L2": 2, "L3": 3}
+TEMPLATE_ANCHORED_MODES = {"anchored_template", "executable_template"}
+TEMPLATE_TRUSTED_MODES = {"trusted_reference", *TEMPLATE_ANCHORED_MODES}
+SQL_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _get_sample_value(sample: Any, key: str, default: Any = None) -> Any:
+    if isinstance(sample, dict):
+        return sample.get(key, default)
+    return getattr(sample, key, default)
+
+
+def _get_sample_score(sample: Any) -> Optional[float]:
+    score = _get_sample_value(sample, "score")
+    return score if isinstance(score, (int, float)) else None
+
+
+def _find_sql_placeholders(sql: Optional[str]) -> list[str]:
+    if not sql:
+        return []
+    return sorted(set(SQL_TEMPLATE_PLACEHOLDER_PATTERN.findall(sql)))
+
+
+def build_template_decision(sql_samples: Sequence[Any]) -> dict[str, Any]:
+    if not sql_samples:
+        return {
+            "mode": "reference",
+            "template_id": None,
+            "template_title": None,
+            "score": None,
+            "margin": None,
+            "parameters": {},
+            "missing_parameters": [],
+            "decision_reason": "no_sql_pair_candidates",
+            "fallback_reason": None,
+            "sql_source": "generated",
+            "source_type": None,
+            "template_level": "L0",
+            "template_mode": "reference",
+        }
+
+    top_sample = sql_samples[0]
+    top_score = _get_sample_score(top_sample)
+    second_score = _get_sample_score(sql_samples[1]) if len(sql_samples) > 1 else None
+    margin = (
+        top_score - second_score
+        if top_score is not None and second_score is not None
+        else None
+    )
+    template_level = _get_sample_value(top_sample, "template_level", "L0") or "L0"
+    template_mode = (
+        _get_sample_value(top_sample, "template_mode", "reference") or "reference"
+    )
+    source_type = _get_sample_value(top_sample, "source_type", "user_saved")
+    asset_kind = _get_sample_value(top_sample, "asset_kind", "sql_pair")
+    missing_parameters = _find_sql_placeholders(_get_sample_value(top_sample, "sql"))
+    is_anchored = (
+        template_mode in TEMPLATE_ANCHORED_MODES
+        or TEMPLATE_LEVEL_RANK.get(str(template_level), 0) >= 2
+        or asset_kind == "sql_template"
+    )
+    is_trusted = (
+        is_anchored
+        or template_mode in TEMPLATE_TRUSTED_MODES
+        or TEMPLATE_LEVEL_RANK.get(str(template_level), 0) >= 1
+    )
+
+    if is_anchored:
+        sql_source = (
+            "rendered_template"
+            if template_mode == "executable_template" and not missing_parameters
+            else "anchored_template"
+            if not missing_parameters
+            else "anchored_generated"
+        )
+        return {
+            "mode": (
+                "executable_template"
+                if template_mode == "executable_template"
+                else "anchored_template"
+            ),
+            "template_id": _get_sample_value(top_sample, "id"),
+            "template_title": _get_sample_value(top_sample, "question"),
+            "score": top_score,
+            "margin": margin,
+            "parameters": {},
+            "missing_parameters": missing_parameters,
+            "decision_reason": "explicit_business_template_selected",
+            "fallback_reason": (
+                "missing_template_parameters" if missing_parameters else None
+            ),
+            "sql_source": sql_source,
+            "source_type": source_type,
+            "template_level": template_level,
+            "template_mode": template_mode,
+        }
+
+    if is_trusted:
+        return {
+            "mode": "trusted_reference",
+            "template_id": _get_sample_value(top_sample, "id"),
+            "template_title": _get_sample_value(top_sample, "question"),
+            "score": top_score,
+            "margin": margin,
+            "parameters": {},
+            "missing_parameters": [],
+            "decision_reason": "trusted_reference_selected",
+            "fallback_reason": None,
+            "sql_source": "generated",
+            "source_type": source_type,
+            "template_level": template_level,
+            "template_mode": template_mode,
+        }
+
+    return {
+        "mode": "reference",
+        "template_id": _get_sample_value(top_sample, "id"),
+        "template_title": _get_sample_value(top_sample, "question"),
+        "score": top_score,
+        "margin": margin,
+        "parameters": {},
+        "missing_parameters": [],
+        "decision_reason": "reference_sql_pair_selected",
+        "fallback_reason": None,
+        "sql_source": "generated",
+        "source_type": source_type,
+        "template_level": template_level,
+        "template_mode": template_mode,
+    }
+
+
+def build_template_instruction(template_decision: Optional[dict[str, Any]]) -> list:
+    if not template_decision:
+        return []
+    if template_decision.get("mode") not in {
+        "trusted_reference",
+        "anchored_template",
+        "executable_template",
+    }:
+        return []
+
+    if template_decision.get("mode") == "trusted_reference":
+        instruction = (
+            "The matched SQL pair is a trusted reference. Prefer its business "
+            "definitions and calculation pattern unless the user question clearly "
+            "asks for a different metric, grain, or filter."
+        )
+    else:
+        instruction = (
+            "The matched SQL pair is an anchored business template. Preserve its "
+            "CTE hierarchy, aggregation grain, GROUP BY level, CASE bucket logic, "
+            "cohort/TOPN logic, date grain, and core business filters. Only adapt "
+            "parameters, identifiers, aliases, quotes, or dialect-compatible "
+            "syntax when necessary."
+        )
+
+    return [
+        {
+            "instruction": instruction,
+            "source": "template_decision",
+            "template_id": template_decision.get("template_id"),
+            "template_mode": template_decision.get("mode"),
+            "sql_source": template_decision.get("sql_source"),
+        }
+    ]
+
+
+def can_reuse_template_sql(template_decision: Optional[dict[str, Any]]) -> bool:
+    return bool(
+        template_decision
+        and template_decision.get("mode")
+        in {"anchored_template", "executable_template"}
+        and template_decision.get("sql_source")
+        in {"anchored_template", "rendered_template"}
+        and not template_decision.get("missing_parameters")
+    )
+
+
+def _normalize_sql_for_signature(sql: Optional[str]) -> str:
+    return re.sub(r"\s+", " ", sql or "").strip().lower()
+
+
+def _extract_cte_names(sql: Optional[str]) -> list[str]:
+    normalized = _normalize_sql_for_signature(sql)
+    if not normalized.startswith("with "):
+        return []
+    return re.findall(r"(?:with|,)\s+([a-zA-Z_]\w*)\s+as\s*\(", normalized)
+
+
+def _count_keyword(sql: Optional[str], keyword_pattern: str) -> int:
+    return len(re.findall(keyword_pattern, _normalize_sql_for_signature(sql)))
+
+
+def is_template_core_preserved(
+    template_sql: Optional[str], candidate_sql: Optional[str]
+) -> bool:
+    if not template_sql or not candidate_sql:
+        return True
+
+    template_ctes = _extract_cte_names(template_sql)
+    candidate_ctes = _extract_cte_names(candidate_sql)
+    if template_ctes and template_ctes != candidate_ctes:
+        return False
+
+    signature_patterns = [
+        r"\bcase\b",
+        r"\bgroup\s+by\b",
+        r"\bpartition\s+by\b",
+        r"\border\s+by\b",
+    ]
+    return all(
+        _count_keyword(template_sql, pattern) == _count_keyword(candidate_sql, pattern)
+        for pattern in signature_patterns
+    )
 
 
 class NL2SQLToolset:
@@ -362,11 +580,14 @@ class BaseFixedOrderAskRuntime:
         *,
         ask_path: Optional[str],
         orchestrator: str,
+        template_decision: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         metadata = result.setdefault("metadata", {})
         metadata["orchestrator"] = orchestrator
         if ask_path:
             metadata["ask_path"] = ask_path
+        if template_decision:
+            metadata["template_decision"] = template_decision
         return result
 
     def _resolve_text_to_sql_path(
@@ -450,6 +671,11 @@ class BaseFixedOrderAskRuntime:
             if retrieval_finished
             else "running" if status == "understanding" else "pending"
         )
+        template_decision_status = (
+            "finished"
+            if state.template_decision
+            else "running" if status == "understanding" else "pending"
+        )
 
         intent_status = (
             "running"
@@ -506,6 +732,21 @@ class BaseFixedOrderAskRuntime:
                 key="ask.sql_instructions_retrieved",
                 status=sql_instructions_status,
                 message_params={"count": len(state.instructions)},
+                phase="retrieval",
+            ),
+            self._build_thinking_step(
+                key="ask.template_decision",
+                status=template_decision_status,
+                message_params={
+                    "mode": (state.template_decision or {}).get("mode"),
+                    "sqlSource": (state.template_decision or {}).get("sql_source"),
+                    "decisionReason": (state.template_decision or {}).get(
+                        "decision_reason"
+                    ),
+                    "fallbackReason": (state.template_decision or {}).get(
+                        "fallback_reason"
+                    ),
+                },
                 phase="retrieval",
             ),
             self._build_thinking_step(
@@ -568,6 +809,7 @@ class BaseFixedOrderAskRuntime:
             ),
             "trace_id": trace_id,
             "is_followup": is_followup,
+            "template_decision": state.template_decision,
             **payload,
         }
 
@@ -624,6 +866,7 @@ class BaseFixedOrderAskRuntime:
                 ),
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
+                template_decision=state.template_decision,
             )
 
         if intent == "GENERAL":
@@ -654,6 +897,7 @@ class BaseFixedOrderAskRuntime:
                 self._mixed_answer_composer.compose_general(results),
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
+                template_decision=state.template_decision,
             )
 
         if intent == "USER_GUIDE":
@@ -681,6 +925,7 @@ class BaseFixedOrderAskRuntime:
                 self._mixed_answer_composer.compose_general(results),
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
+                template_decision=state.template_decision,
             )
 
         if not is_stopped():
@@ -774,6 +1019,7 @@ class BaseFixedOrderAskRuntime:
                         current_sql_correction_retries=state.current_sql_correction_retries,
                     ),
                     orchestrator=orchestrator,
+                    template_decision=state.template_decision,
                 )
             if not documents and state.sql_samples:
                 logger.info(
@@ -862,6 +1108,13 @@ class BaseFixedOrderAskRuntime:
             if sql_valid_result := text_to_sql_generation_results["post_process"][
                 "valid_generation_result"
             ]:
+                if (
+                    state.template_decision
+                    and state.template_decision.get("mode")
+                    in {"anchored_template", "executable_template"}
+                    and state.template_decision.get("sql_source") == "generated"
+                ):
+                    state.template_decision["sql_source"] = "anchored_generated"
                 state.api_results = [
                     build_ask_result(
                         **{
@@ -921,10 +1174,31 @@ class BaseFixedOrderAskRuntime:
                     if valid_generation_result := sql_correction_results[
                         "post_process"
                     ]["valid_generation_result"]:
+                        corrected_sql = valid_generation_result.get("sql")
+                        if (
+                            state.template_decision
+                            and state.template_decision.get("mode")
+                            in {"anchored_template", "executable_template"}
+                            and state.sql_samples
+                            and not is_template_core_preserved(
+                                _get_sample_value(state.sql_samples[0], "sql"),
+                                corrected_sql,
+                            )
+                        ):
+                            state.template_decision["fallback_reason"] = (
+                                "template_core_protection_rejected_correction"
+                            )
+                            state.error_message = (
+                                "SQL correction changed the protected template core"
+                            )
+                            break
+
+                        if state.template_decision:
+                            state.template_decision["sql_source"] = "corrected"
                         state.api_results = [
                             build_ask_result(
                                 **{
-                                    "sql": valid_generation_result.get("sql"),
+                                    "sql": corrected_sql,
                                     "type": "llm",
                                 }
                             )
@@ -990,6 +1264,7 @@ class BaseFixedOrderAskRuntime:
                 current_sql_correction_retries=state.current_sql_correction_retries,
             ),
             orchestrator=orchestrator,
+            template_decision=state.template_decision,
         )
 
 
@@ -1051,8 +1326,12 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                             retrieval_scope_id=retrieval_scope_id,
                         ),
                     )
+                    state.template_decision = build_template_decision(
+                        state.sql_samples
+                    )
                     state.effective_instructions = [
                         *state.instructions,
+                        *build_template_instruction(state.template_decision),
                         *extract_skill_instructions(ask_request.skills),
                     ]
 
@@ -1078,6 +1357,23 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         )
                         if early_result is not None:
                             return early_result
+
+                    if can_reuse_template_sql(state.template_decision):
+                        selected_template = state.sql_samples[0]
+                        state.ask_path = "sql_pairs"
+                        state.api_results = [
+                            build_ask_result(
+                                **{
+                                    "sql": _get_sample_value(
+                                        selected_template, "sql"
+                                    ),
+                                    "type": "sql_pair",
+                                    "sqlpairId": _get_sample_value(
+                                        selected_template, "id"
+                                    ),
+                                }
+                            )
+                        ]
 
             return await self._run_text_to_sql_resolution(
                 state=state,
@@ -1126,6 +1422,7 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     current_sql_correction_retries=state.current_sql_correction_retries,
                 ),
                 orchestrator=orchestrator,
+                template_decision=state.template_decision,
             )
 
 
@@ -1177,8 +1474,10 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         retrieval_scope_id=retrieval_scope_id,
                     ),
                 )
+                state.template_decision = build_template_decision(state.sql_samples)
                 state.effective_instructions = [
                     *state.instructions,
+                    *build_template_instruction(state.template_decision),
                     *extract_skill_instructions(ask_request.skills),
                 ]
 
@@ -1205,7 +1504,22 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     if early_result is not None:
                         return early_result
 
-            if not is_stopped():
+                if can_reuse_template_sql(state.template_decision):
+                    selected_template = state.sql_samples[0]
+                    state.ask_path = "sql_pairs"
+                    state.api_results = [
+                        build_ask_result(
+                            **{
+                                "sql": _get_sample_value(selected_template, "sql"),
+                                "type": "sql_pair",
+                                "sqlpairId": _get_sample_value(
+                                    selected_template, "id"
+                                ),
+                            }
+                        )
+                    ]
+
+            if not is_stopped() and not state.api_results:
                 set_result(
                     **self._build_text_to_sql_result_payload(
                         state=state,
@@ -1274,6 +1588,7 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     current_sql_correction_retries=state.current_sql_correction_retries,
                 ),
                 orchestrator=orchestrator,
+                template_decision=state.template_decision,
             )
 
 

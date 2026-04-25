@@ -1,4 +1,4 @@
-import { Form, Input } from 'antd';
+import { Form, Input, Radio } from 'antd';
 
 import { WorkbenchEditorForm } from '@/features/knowledgePage/index.styles';
 
@@ -19,6 +19,22 @@ export default function KnowledgeSqlTemplateFormFields({
         rules={[{ required: true, message: '请输入模板名称或典型问法' }]}
       >
         <Input disabled={isReadonly} placeholder="例如：最近 30 天 GMV 趋势" />
+      </Form.Item>
+      <Form.Item
+        label="模板用途"
+        name="templateMode"
+        initialValue="reference"
+        tooltip="业务口径会作为 L2 锚定模板使用，系统会尽量保持 SQL 骨架不被改写。"
+      >
+        <Radio.Group
+          disabled={isReadonly}
+          options={[
+            { label: '参考样例', value: 'reference' },
+            { label: '业务口径', value: 'business' },
+          ]}
+          optionType="button"
+          buttonStyle="solid"
+        />
       </Form.Item>
       <Form.Item
         label="SQL 代码"

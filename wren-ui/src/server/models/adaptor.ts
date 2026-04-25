@@ -253,10 +253,27 @@ export interface AskShadowCompare {
   reason?: string | null;
 }
 
+export interface AskTemplateDecision {
+  mode?: string | null;
+  templateId?: string | number | null;
+  templateTitle?: string | null;
+  score?: number | null;
+  margin?: number | null;
+  parameters?: Record<string, any> | null;
+  missingParameters?: string[] | null;
+  decisionReason?: string | null;
+  fallbackReason?: string | null;
+  sqlSource?: string | null;
+  sourceType?: string | null;
+  templateLevel?: string | null;
+  templateMode?: string | null;
+}
+
 export interface AskDiagnostics {
   traceId?: string | null;
   askPath?: string | null;
   shadowCompare?: AskShadowCompare | null;
+  templateDecision?: AskTemplateDecision | null;
 }
 
 export interface AskDetailInput {
@@ -288,6 +305,7 @@ export type AskResult = AskResponse<
   retrievedTables?: string[];
   askPath?: string | null;
   shadowCompare?: AskShadowCompare | null;
+  templateDecision?: AskTemplateDecision | null;
   invalidSql?: string;
   traceId?: string;
   thinking?: ThinkingTrace | null;

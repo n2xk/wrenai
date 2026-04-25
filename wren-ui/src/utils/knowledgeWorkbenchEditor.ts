@@ -12,6 +12,7 @@ export const EMPTY_SQL_TEMPLATE_VALUES: SqlTemplateFormValues = {
   sql: '',
   scope: 'all',
   description: '',
+  templateMode: 'reference',
 };
 
 export const EMPTY_RULE_EDITOR_VALUES: RuleDetailFormValues = {
@@ -83,6 +84,7 @@ export const buildSqlTemplateDraftFromAsset = (
   return {
     scope: 'all',
     description: question,
+    templateMode: 'reference',
     sql:
       trimmedSourceSql ||
       [
@@ -206,6 +208,12 @@ export const hasSqlTemplateDraftChanges = ({
       ? {
           sql: editingSqlPair.sql || '',
           description: editingSqlPair.question || '',
+          templateMode:
+            editingSqlPair.templateMode === 'anchored_template' ||
+            editingSqlPair.templateMode === 'executable_template' ||
+            editingSqlPair.assetKind === 'sql_template'
+              ? 'business'
+              : 'reference',
         }
       : null),
     ...(initialValues || null),
@@ -216,7 +224,9 @@ export const hasSqlTemplateDraftChanges = ({
       collapseWhitespace(resolvedInitialValues.description) ||
     collapseWhitespace(currentValues?.sql) !==
       collapseWhitespace(resolvedInitialValues.sql) ||
-    (currentValues?.scope || 'all') !== resolvedInitialValues.scope
+    (currentValues?.scope || 'all') !== resolvedInitialValues.scope ||
+    (currentValues?.templateMode || 'reference') !==
+      resolvedInitialValues.templateMode
   );
 };
 

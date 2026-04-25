@@ -1,4 +1,8 @@
-import { SqlPair, Instruction } from '@/types/knowledge';
+import {
+  getSqlPairTemplateModeLabel,
+  SqlPair,
+  Instruction,
+} from '@/types/knowledge';
 import {
   memo,
   useCallback,
@@ -27,6 +31,7 @@ import {
   ManageEntryCard,
   ManageEntryDesc,
   ManageEntryMain,
+  ManageEntryMeta,
   ManageEntryTitle,
 } from './index.styles';
 import { VirtualizedManageEntryList } from './virtualizedManageEntryList';
@@ -394,7 +399,9 @@ const areSqlItemsEqual = (previous: SqlPair[], next: SqlPair[]) => {
       prevItem.id !== nextItem.id ||
       prevItem.updatedAt !== nextItem.updatedAt ||
       prevItem.question !== nextItem.question ||
-      prevItem.sql !== nextItem.sql
+      prevItem.sql !== nextItem.sql ||
+      prevItem.templateMode !== nextItem.templateMode ||
+      prevItem.assetKind !== nextItem.assetKind
     ) {
       return false;
     }
@@ -423,6 +430,9 @@ export const SqlManageEntryList = memo(function SqlManageEntryList({
           <ManageEntryTitle>
             {sqlPair.question || '未命名 SQL 模板'}
           </ManageEntryTitle>
+          <ManageEntryMeta>
+            {getSqlPairTemplateModeLabel(sqlPair)}
+          </ManageEntryMeta>
           <ManageEntryDesc>{sqlPair.sql || '暂无 SQL 内容'}</ManageEntryDesc>
         </ManageEntryMain>
         <Space size={8}>

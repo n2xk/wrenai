@@ -311,6 +311,51 @@ describe('WrenAIAdaptor', () => {
       );
     });
 
+    it('should include sql template metadata when deploying sql pairs', async () => {
+      mockedAxios.post.mockResolvedValueOnce({ data: { event_id: 'event-2' } });
+
+      await adaptor.deploySqlPair({
+        runtimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+        },
+        sqlPair: {
+          id: 8,
+          question: '首存金额分桶',
+          sql: 'SELECT * FROM deposits',
+          assetKind: 'sql_template',
+          templateLevel: 'L2',
+          templateMode: 'anchored_template',
+          sourceType: 'business_import',
+          scopeType: 'knowledge_base',
+          parameterSchema: { required: ['start_date'] },
+          businessSignature: { ctes: ['base', 'bucketed'] },
+          templateVersion: 2,
+          status: 'active',
+        },
+      });
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        `${baseEndpoint}/v1/sql-pairs`,
+        expect.objectContaining({
+          sql_pairs: [
+            expect.objectContaining({
+              id: '8',
+              asset_kind: 'sql_template',
+              template_level: 'L2',
+              template_mode: 'anchored_template',
+              source_type: 'business_import',
+              scope_type: 'knowledge_base',
+              parameter_schema: { required: ['start_date'] },
+              business_signature: { ctes: ['base', 'bucketed'] },
+              template_version: 2,
+              status: 'active',
+            }),
+          ],
+        }),
+      );
+    });
+
     it('should delete sql pairs with runtime identity instead of top-level project_id', async () => {
       mockedAxios.delete.mockResolvedValueOnce({ status: 200, data: {} });
 

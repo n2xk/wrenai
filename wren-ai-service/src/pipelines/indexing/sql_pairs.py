@@ -10,7 +10,7 @@ from hamilton.async_driver import AsyncDriver
 from haystack import Document, component
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from langfuse.decorators import observe
-from pydantic import BaseModel
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import DocumentStoreProvider, EmbedderProvider
@@ -25,9 +25,42 @@ logger = logging.getLogger("wren-ai-service")
 
 
 class SqlPair(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     sql: str = ""
     question: str = ""
+    asset_kind: str = Field(
+        default="sql_pair", validation_alias=AliasChoices("asset_kind", "assetKind")
+    )
+    template_level: str = Field(
+        default="L0", validation_alias=AliasChoices("template_level", "templateLevel")
+    )
+    template_mode: str = Field(
+        default="reference",
+        validation_alias=AliasChoices("template_mode", "templateMode"),
+    )
+    source_type: str = Field(
+        default="user_saved",
+        validation_alias=AliasChoices("source_type", "sourceType"),
+    )
+    scope_type: str = Field(
+        default="knowledge_base",
+        validation_alias=AliasChoices("scope_type", "scopeType"),
+    )
+    parameter_schema: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("parameter_schema", "parameterSchema"),
+    )
+    business_signature: Optional[Dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("business_signature", "businessSignature"),
+    )
+    template_version: int = Field(
+        default=1,
+        validation_alias=AliasChoices("template_version", "templateVersion"),
+    )
+    status: str = "active"
 
 
 @component
@@ -61,6 +94,15 @@ class SqlPairsConverter:
                     meta={
                         "sql_pair_id": sql_pair.id,
                         "sql": sql_pair.sql,
+                        "asset_kind": sql_pair.asset_kind,
+                        "template_level": sql_pair.template_level,
+                        "template_mode": sql_pair.template_mode,
+                        "source_type": sql_pair.source_type,
+                        "scope_type": sql_pair.scope_type,
+                        "parameter_schema": sql_pair.parameter_schema,
+                        "business_signature": sql_pair.business_signature,
+                        "template_version": sql_pair.template_version,
+                        "status": sql_pair.status,
                         **addition,
                     },
                     content=sql_pair.question,
@@ -114,6 +156,27 @@ def sql_pairs(
             id=pair.get("id"),
             question=pair.get("question"),
             sql=pair.get("sql"),
+            asset_kind=pair.get("asset_kind") or pair.get("assetKind") or "sql_pair",
+            template_level=pair.get("template_level")
+            or pair.get("templateLevel")
+            or "L0",
+            template_mode=pair.get("template_mode")
+            or pair.get("templateMode")
+            or "reference",
+            source_type=pair.get("source_type")
+            or pair.get("sourceType")
+            or "user_saved",
+            scope_type=pair.get("scope_type")
+            or pair.get("scopeType")
+            or "knowledge_base",
+            parameter_schema=pair.get("parameter_schema")
+            or pair.get("parameterSchema"),
+            business_signature=pair.get("business_signature")
+            or pair.get("businessSignature"),
+            template_version=pair.get("template_version")
+            or pair.get("templateVersion")
+            or 1,
+            status=pair.get("status") or "active",
         )
         for boilerplate in boilerplates
         if boilerplate in external_pairs

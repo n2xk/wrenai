@@ -126,6 +126,44 @@ def test_sql_pairs_converter_normalizes_runtime_scope_before_meta_write():
     )
 
     assert result["documents"][0].meta["project_id"] == "deploy-1"
+    assert result["documents"][0].meta["asset_kind"] == "sql_pair"
+    assert result["documents"][0].meta["template_level"] == "L0"
+    assert result["documents"][0].meta["template_mode"] == "reference"
+
+
+def test_sql_pairs_converter_writes_template_metadata():
+    converter = SqlPairsConverter()
+
+    result = converter.run(
+        sql_pairs=[
+            SqlPair(
+                id="template-1",
+                sql="select * from deposits where dt >= :start_date",
+                question="首存金额分桶",
+                assetKind="sql_template",
+                templateLevel="L2",
+                templateMode="anchored_template",
+                sourceType="business_import",
+                scopeType="knowledge_base",
+                parameterSchema={"required": ["start_date"]},
+                businessSignature={"ctes": ["base", "bucketed"]},
+                templateVersion=2,
+                status="active",
+            )
+        ],
+        runtime_scope_id="deploy-1",
+    )
+
+    meta = result["documents"][0].meta
+    assert meta["asset_kind"] == "sql_template"
+    assert meta["template_level"] == "L2"
+    assert meta["template_mode"] == "anchored_template"
+    assert meta["source_type"] == "business_import"
+    assert meta["scope_type"] == "knowledge_base"
+    assert meta["parameter_schema"] == {"required": ["start_date"]}
+    assert meta["business_signature"] == {"ctes": ["base", "bucketed"]}
+    assert meta["template_version"] == 2
+    assert meta["status"] == "active"
 
 
 def test_project_meta_chunk_normalizes_runtime_scope_before_writing_meta():

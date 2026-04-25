@@ -21,6 +21,12 @@ export const buildSqlTemplateEditorValues = ({
     ? {
         sql: sqlPair.sql || '',
         description: sqlPair.question || '',
+        templateMode:
+          sqlPair.templateMode === 'anchored_template' ||
+          sqlPair.templateMode === 'executable_template' ||
+          sqlPair.assetKind === 'sql_template'
+            ? 'business'
+            : 'reference',
       }
     : null),
   ...(draftValues || null),

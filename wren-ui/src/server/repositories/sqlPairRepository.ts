@@ -10,6 +10,15 @@ export interface SqlPair {
   actorUserId?: string | null;
   sql: string; // SQL query
   question: string; // Natural language question
+  assetKind?: string;
+  templateLevel?: string;
+  templateMode?: string;
+  sourceType?: string;
+  scopeType?: string;
+  parameterSchema?: Record<string, any> | null;
+  businessSignature?: Record<string, any> | null;
+  templateVersion?: number;
+  status?: string;
   createdAt?: string; // Date and time when the SQL pair was created
   updatedAt?: string; // Date and time when the SQL pair was last updated
 }

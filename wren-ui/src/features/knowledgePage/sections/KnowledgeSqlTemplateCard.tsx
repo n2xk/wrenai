@@ -1,4 +1,5 @@
 import type { SqlPair } from '@/types/knowledge';
+import { getSqlPairTemplateModeLabel } from '@/types/knowledge';
 import { formatKnowledgeWorkbenchTimestamp } from '@/utils/knowledgeWorkbenchEditor';
 
 import KnowledgeWorkbenchEditorItemCard from './KnowledgeWorkbenchEditorItemCard';
@@ -32,7 +33,7 @@ export default function KnowledgeSqlTemplateCard({
       isReadonly={isKnowledgeMutationDisabled}
       metaText={`更新于 ${formatKnowledgeWorkbenchTimestamp(
         sqlPair.updatedAt || sqlPair.createdAt,
-      )}`}
+      )} · ${getSqlPairTemplateModeLabel(sqlPair)}`}
       statusLabel={resolveSqlTemplateCardStatus(sqlPair)}
       statusTone="accent"
       title={sqlPair.question || '未命名 SQL 模板'}

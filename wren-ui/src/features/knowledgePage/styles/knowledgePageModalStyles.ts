@@ -233,6 +233,12 @@ export const ManageEntryDesc = styled.span`
   max-width: 600px;
 `;
 
+export const ManageEntryMeta = styled.span`
+  font-size: 11px;
+  color: #2563eb;
+  font-weight: 600;
+`;
+
 export const LightButton = styled(Button)`
   &.ant-btn {
     min-width: 88px;

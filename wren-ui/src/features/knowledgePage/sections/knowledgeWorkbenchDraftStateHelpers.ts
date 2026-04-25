@@ -34,6 +34,7 @@ export type KnowledgeWorkbenchDraftWatchValues = {
   watchedRuleSummary?: string;
   watchedSqlContent?: string;
   watchedSqlDescription?: string;
+  watchedSqlTemplateMode?: 'reference' | 'business';
 };
 
 export type KnowledgeWorkbenchDraftBaselineState = {
@@ -85,6 +86,7 @@ export function buildKnowledgeWorkbenchDraftDerivedStateInput({
     watchedRuleSummary: watchValues.watchedRuleSummary,
     watchedSqlContent: watchValues.watchedSqlContent,
     watchedSqlDescription: watchValues.watchedSqlDescription,
+    watchedSqlTemplateMode: watchValues.watchedSqlTemplateMode,
   };
 }
 

@@ -93,6 +93,7 @@ export default function useKnowledgeRuleSqlManager({
         sql: draft.sql,
         scope: draft.scope,
         description: draft.description,
+        templateMode: draft.templateMode,
       });
     },
     [sqlTemplateForm],

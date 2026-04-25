@@ -1,5 +1,6 @@
 import { IContext } from '@server/types';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
+import { buildAskDiagnostics } from '@server/utils/apiUtils';
 import { toPersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -261,5 +262,7 @@ export const transformAskingTask = async (
       ? safeFormatSQL(askingTask.invalidSql)
       : undefined,
     traceId: askingTask.traceId,
+    diagnostics: buildAskDiagnostics(askingTask),
+    thinking: askingTask.thinking,
   };
 };

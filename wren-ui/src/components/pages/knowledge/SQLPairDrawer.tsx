@@ -3,7 +3,7 @@ import styled from 'styled-components';
 import { getCompactTime } from '@/utils/time';
 import { DrawerAction } from '@/hooks/useDrawerAction';
 import SQLCodeBlock from '@/components/code/SQLCodeBlock';
-import type { SqlPair } from '@/types/knowledge';
+import { getSqlPairTemplateModeLabel, type SqlPair } from '@/types/knowledge';
 
 const StyledDrawer = styled(Drawer)`
   .ant-drawer-header {
@@ -68,6 +68,10 @@ export default function SQLPairDrawer(props: Props) {
       <Section>
         <Label>问题</Label>
         <Value>{defaultValue?.question || '-'}</Value>
+      </Section>
+      <Section>
+        <Label>类型</Label>
+        <Value>{getSqlPairTemplateModeLabel(defaultValue)}</Value>
       </Section>
       <Section>
         <Label>SQL 语句</Label>

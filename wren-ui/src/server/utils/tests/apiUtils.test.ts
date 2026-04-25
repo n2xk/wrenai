@@ -273,11 +273,16 @@ describe('apiUtils', () => {
       expect(buildAskDiagnostics({} as any)).toBeUndefined();
     });
 
-    it('returns ask trace, path and shadow compare when present', () => {
+    it('returns ask trace, path, template decision and shadow compare when present', () => {
       expect(
         buildAskDiagnostics({
           traceId: 'trace-1',
           askPath: 'instructions',
+          templateDecision: {
+            mode: 'anchored_template',
+            templateId: 'template-1',
+            sqlSource: 'anchored_template',
+          },
           shadowCompare: {
             enabled: true,
             executed: true,
@@ -290,6 +295,11 @@ describe('apiUtils', () => {
       ).toEqual({
         traceId: 'trace-1',
         askPath: 'instructions',
+        templateDecision: {
+          mode: 'anchored_template',
+          templateId: 'template-1',
+          sqlSource: 'anchored_template',
+        },
         shadowCompare: {
           enabled: true,
           executed: true,

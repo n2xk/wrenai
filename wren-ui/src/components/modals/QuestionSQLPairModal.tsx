@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { Alert, Button, Form, Input, Modal, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Radio, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
 import SelectOutlined from '@ant-design/icons/SelectOutlined';
 import { appMessage as message } from '@/utils/antdAppBridge';
@@ -15,7 +15,11 @@ import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useModalAction, { ModalAction } from '@/hooks/useModalAction';
 import { DataSource, DataSourceName } from '@/types/dataSource';
 import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
-import type { SqlPair } from '@/types/knowledge';
+import {
+  SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
+  SQL_PAIR_REFERENCE_PRESET,
+  type SqlPair,
+} from '@/types/knowledge';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
@@ -179,6 +183,13 @@ export default function QuestionSQLPairModal(props: Props) {
 
   const sqlValue = Form.useWatch('sql', form);
 
+  const resolveSaveMode = (sqlPair?: SqlPair | null) =>
+    sqlPair?.templateMode === 'anchored_template' ||
+    sqlPair?.templateMode === 'executable_template' ||
+    sqlPair?.assetKind === 'sql_template'
+      ? 'business'
+      : 'reference';
+
   useEffect(() => {
     if (visible) {
       if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
@@ -201,6 +212,7 @@ export default function QuestionSQLPairModal(props: Props) {
       form.setFieldsValue({
         question: defaultValue?.question,
         sql: defaultValue?.sql,
+        saveMode: resolveSaveMode(defaultValue),
       });
     }
   }, [defaultValue, form, runtimeScopeNavigation.selector, visible]);
@@ -256,7 +268,18 @@ export default function QuestionSQLPairModal(props: Props) {
         try {
           await onValidateSQL();
           if (onSubmit) {
-            await onSubmit({ data: values, id: defaultValue?.id });
+            const { saveMode, ...draft } = values;
+            const templateMetadata =
+              saveMode === 'business'
+                ? SQL_PAIR_BUSINESS_TEMPLATE_PRESET
+                : SQL_PAIR_REFERENCE_PRESET;
+            await onSubmit({
+              data: {
+                ...draft,
+                ...templateMetadata,
+              },
+              id: defaultValue?.id,
+            });
           }
           onClose();
         } catch (error) {
@@ -380,6 +403,27 @@ export default function QuestionSQLPairModal(props: Props) {
             ]}
           >
             <Input />
+          </Form.Item>
+          <Form.Item
+            label="保存为"
+            name="saveMode"
+            initialValue="reference"
+            tooltip="业务口径会作为 L2 锚定模板使用，系统会尽量保持 SQL 骨架不被改写。"
+          >
+            <Radio.Group
+              options={[
+                {
+                  label: '参考样例',
+                  value: 'reference',
+                },
+                {
+                  label: '业务口径',
+                  value: 'business',
+                },
+              ]}
+              optionType="button"
+              buttonStyle="solid"
+            />
           </Form.Item>
           <Form.Item
             label="SQL 语句"

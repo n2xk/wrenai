@@ -79,8 +79,9 @@ class StopAskResponse(BaseModel):
 # GET /v1/asks/{query_id}/result
 class AskResult(BaseModel):
     sql: str
-    type: Literal["llm", "view"] = "llm"
+    type: Literal["llm", "view", "sql_pair"] = "llm"
     viewId: Optional[str] = None
+    sqlpairId: Optional[str] = None
 
 
 class AskError(BaseModel):
@@ -150,6 +151,37 @@ class AskShadowCompareStats(BaseModel):
     by_reason: dict[str, int] = Field(default_factory=dict)
 
 
+class AskTemplateDecision(BaseModel):
+    mode: Optional[
+        Literal[
+            "reference",
+            "trusted_reference",
+            "anchored_template",
+            "executable_template",
+        ]
+    ] = None
+    template_id: Optional[str | int] = None
+    template_title: Optional[str] = None
+    score: Optional[float] = None
+    margin: Optional[float] = None
+    parameters: Optional[dict] = None
+    missing_parameters: Optional[list[str]] = None
+    decision_reason: Optional[str] = None
+    fallback_reason: Optional[str] = None
+    sql_source: Optional[
+        Literal[
+            "generated",
+            "anchored_generated",
+            "anchored_template",
+            "rendered_template",
+            "corrected",
+        ]
+    ] = None
+    source_type: Optional[str] = None
+    template_level: Optional[str] = None
+    template_mode: Optional[str] = None
+
+
 class AskShadowCompareRolloutReadiness(BaseModel):
     status: Literal[
         "no_data",
@@ -186,6 +218,7 @@ class _AskResultResponse(BaseModel):
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     ask_path: Optional[AskPath] = None
+    template_decision: Optional[AskTemplateDecision] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     shadow_compare: Optional[AskShadowCompare] = None
@@ -426,10 +459,18 @@ class AskService:
         )
         metadata = result.get("metadata", {})
         ask_path = metadata.get("ask_path")
+        template_decision = metadata.get("template_decision")
         cached_result = self._ask_results.get(query_id)
-        if cached_result is not None and ask_path:
+        if cached_result is not None and (ask_path or template_decision):
+            update_payload = {}
+            if ask_path:
+                update_payload["ask_path"] = ask_path
+            if template_decision:
+                update_payload["template_decision"] = AskTemplateDecision.model_validate(
+                    template_decision
+                )
             self._ask_results[query_id] = cached_result.model_copy(
-                update={"ask_path": ask_path}
+                update=update_payload
             )
         return result
 
