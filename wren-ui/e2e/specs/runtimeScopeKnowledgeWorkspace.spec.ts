@@ -582,7 +582,7 @@ test.describe('Runtime scope knowledge / ask / workspace flows', () => {
     const sqlTabStep = await frontendHealth.measureStep({
       label: 'switch to sql tab on thread detail',
       action: () => page.getByRole('tab', { name: /SQL 查询/ }).click(),
-      ready: () => expect(page.getByText('Wren SQL').last()).toBeVisible(),
+      ready: () => expect(page.getByText('Nova SQL').last()).toBeVisible(),
     });
 
     const chartTabStep = await frontendHealth.measureStep({

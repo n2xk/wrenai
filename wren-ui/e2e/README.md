@@ -74,6 +74,85 @@
    yarn test:e2e --headed
    ```
 
+### Browser launch overrides
+
+The Playwright config accepts a few environment variables so local macOS runs
+can switch away from the default headless-shell path when Chrome launch gets
+flaky:
+
+- `PW_BROWSER_CHANNEL=chromium` — use the full bundled Chromium app instead of
+  `chromium-headless-shell`
+- `PW_BROWSER_EXECUTABLE_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+  — point Playwright at a specific browser binary
+- `PW_HEADLESS=0` — run headed
+- `PW_CONNECT_ENDPOINT_URL=http://127.0.0.1:9222` — attach to an existing
+  Chrome/Chromium remote-debugging endpoint instead of launching a browser child
+- `PW_CONNECT_WS_ENDPOINT=ws://127.0.0.1:9222/devtools/browser/...` — same as
+  above, but with an explicit websocket endpoint
+
+Example when UI/AI services are already running on custom ports:
+
+```bash
+PW_SKIP_WEBSERVER=1 \
+E2E_BASE_URL=http://127.0.0.1:3002 \
+E2E_AI_ENDPOINT=http://127.0.0.1:5555 \
+PW_BROWSER_CHANNEL=chromium \
+npx playwright test e2e/specs/modelingAssistantTidbReal.spec.ts --project=chromium
+```
+
+If local browser child launch is still blocked on macOS, start Chrome yourself
+with remote debugging and attach Playwright to it:
+
+```bash
+open -na "Google Chrome" --args \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/wrenai-playwright-debug
+
+PW_SKIP_WEBSERVER=1 \
+E2E_BASE_URL=http://127.0.0.1:3002 \
+E2E_AI_ENDPOINT=http://127.0.0.1:5555 \
+PW_CONNECT_ENDPOINT_URL=http://127.0.0.1:9222 \
+npx playwright test e2e/specs/modelingAssistantTidbReal.spec.ts --project=chromium
+```
+
+### Modeling AI Assistant real-data specs
+
+#### TiDB real UI flow
+
+The TiDB UI spec can optionally save the generated relationships/semantics back
+to the current runtime and will emit screenshots/report artifacts.
+
+```bash
+PW_SKIP_WEBSERVER=1 \
+E2E_BASE_URL=http://127.0.0.1:3002 \
+E2E_AI_ENDPOINT=http://127.0.0.1:5555 \
+RUN_MODELING_ASSISTANT_TIDB_REAL=1 \
+MODELING_ASSISTANT_TIDB_REAL_SAVE=1 \
+MODELING_ASSISTANT_TIDB_REAL_MODEL_LIMIT=3 \
+MODELING_ASSISTANT_TIDB_REAL_REPORT_PATH=tmp/modeling-ai-assistant-tidb-real-ui.md \
+MODELING_ASSISTANT_TIDB_REAL_ARTIFACT_DIR=tmp/modeling-ai-assistant-tidb-real-artifacts \
+npx playwright test e2e/specs/modelingAssistantTidbReal.spec.ts --project=chromium --no-deps
+```
+
+#### Quality evaluation on a real runtime selector
+
+The quality evaluation spec supports an external runtime selector, emits a full
+JSON artifact per target, and can optionally exercise save verification.
+
+```bash
+PW_SKIP_WEBSERVER=1 \
+E2E_BASE_URL=http://127.0.0.1:3002 \
+E2E_AI_ENDPOINT=http://127.0.0.1:5555 \
+RUN_MODELING_ASSISTANT_QUALITY=1 \
+MODELING_ASSISTANT_QUALITY_SELECTOR_JSON='{"workspaceId":"...","knowledgeBaseId":"...","kbSnapshotId":"...","deployHash":"..."}' \
+MODELING_ASSISTANT_QUALITY_LABEL='TiDB workspace KB' \
+MODELING_ASSISTANT_QUALITY_MODEL_LIMIT=3 \
+MODELING_ASSISTANT_QUALITY_SAVE=1 \
+MODELING_ASSISTANT_QUALITY_REPORT_PATH=tmp/modeling-ai-assistant-quality-evaluation.md \
+MODELING_ASSISTANT_QUALITY_ARTIFACT_ROOT=tmp/modeling-ai-assistant-quality-artifacts \
+npx playwright test e2e/specs/modelingAssistantQualityEvaluation.spec.ts --project=chromium --no-deps
+```
+
 ## How to develop
 
 - Write test with interactive UI mode

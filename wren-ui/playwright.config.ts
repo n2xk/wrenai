@@ -1,5 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
 
+type PlaywrightBrowserChannel =
+  | 'chrome'
+  | 'chrome-beta'
+  | 'chrome-canary'
+  | 'msedge'
+  | 'msedge-beta'
+  | 'msedge-dev'
+  | 'chromium';
+
 const E2E_PG_URL =
   process.env.E2E_PG_URL ||
   process.env.PG_URL ||
@@ -15,6 +24,25 @@ const E2E_AI_ENDPOINT =
 const reuseExistingServer = process.env.PW_REUSE_SERVER === '1';
 const uiServerMode = process.env.PW_UI_SERVER_MODE || 'dev';
 const skipWebServer = process.env.PW_SKIP_WEBSERVER === '1';
+const parseBooleanEnv = (value?: string) => {
+  if (value == null) return undefined;
+  return !['0', 'false', 'no', 'off'].includes(value.toLowerCase());
+};
+const browserHeadless = parseBooleanEnv(process.env.PW_HEADLESS) ?? true;
+const browserExecutablePath =
+  process.env.PW_BROWSER_EXECUTABLE_PATH || undefined;
+const browserConnectOptions: any = process.env.PW_CONNECT_WS_ENDPOINT
+  ? { wsEndpoint: process.env.PW_CONNECT_WS_ENDPOINT }
+  : process.env.PW_CONNECT_ENDPOINT_URL
+    ? { endpointURL: process.env.PW_CONNECT_ENDPOINT_URL }
+    : undefined;
+// Playwright falls back to chromium-headless-shell when no channel is set.
+// Prefer the full bundled Chromium app on local macOS runs because the shell
+// has been fragile there; CI/Linux keeps the previous default behavior.
+const browserChannel = browserExecutablePath
+  ? undefined
+  : (process.env.PW_BROWSER_CHANNEL as PlaywrightBrowserChannel | undefined) ||
+    (!process.env.CI && process.platform === 'darwin' ? 'chromium' : undefined);
 
 const uiServerCommand =
   uiServerMode === 'standalone'
@@ -68,6 +96,20 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/user.json',
+        headless: browserHeadless,
+        ...(browserConnectOptions
+          ? {
+              connectOptions: browserConnectOptions,
+            }
+          : {}),
+        ...(browserChannel ? { channel: browserChannel } : {}),
+        ...(browserExecutablePath
+          ? {
+              launchOptions: {
+                executablePath: browserExecutablePath,
+              },
+            }
+          : {}),
       },
       dependencies: ['auth setup'],
     },

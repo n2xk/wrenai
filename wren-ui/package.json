@@ -20,6 +20,8 @@
     "lint:changed:staged": "node scripts/lint_changed.mjs --staged",
     "test": "jest",
     "test:e2e": "npx playwright install chromium && npx playwright test",
+    "test:e2e:chromium-app": "PW_BROWSER_CHANNEL=chromium npx playwright install chromium && npx playwright test",
+    "test:e2e:attach": "PW_CONNECT_ENDPOINT_URL=http://127.0.0.1:9222 npx playwright test",
     "check-types": "tsc --noEmit",
     "check-types:strict-partial": "tsc --noEmit -p tsconfig.strict.partial.json",
     "migrate": "yarn knex migrate:latest",

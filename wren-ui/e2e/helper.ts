@@ -226,6 +226,19 @@ export const removeDatabase = async () => {
   }
 };
 
+export const loginAsDefaultOwner = async (page: Page) => {
+  const loginResponse = await page.request.post('/api/auth/login', {
+    data: {
+      email: E2E_OWNER_EMAIL,
+      password: E2E_OWNER_PASSWORD,
+    },
+  });
+  const body = await loginResponse.text();
+
+  expect(body).toBeDefined();
+  expect(loginResponse.ok(), body).toBeTruthy();
+};
+
 export const resetDatabase = async () => {
   if (shouldSkipDbReset) {
     return;

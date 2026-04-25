@@ -136,7 +136,7 @@ export const checkThreadResponseSkeletonLoading = async (page: Page) => {
 
 const checkThreadResponseBreakdownContent = async (page: Page) => {
   await page.getByRole('tab', { name: new RegExp(HOME_SQL_TAB_NAME) }).click();
-  await expect(page.getByText('Wren SQL').last()).toBeVisible();
+  await expect(page.getByText('Nova SQL').last()).toBeVisible();
   await expect(page.getByRole('button', { name: '调整 SQL' })).toBeVisible();
   await expect(page.getByRole('button', { name: '查看结果' })).toBeVisible();
 };

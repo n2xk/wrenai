@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { test as setup, expect } from '@playwright/test';
-import { ensureMutableRuntimeScopeForUser } from './helper';
+import {
+  ensureMutableRuntimeScopeForUser,
+  loginAsDefaultOwner,
+} from './helper';
 
 const authStatePath = path.join(__dirname, '.auth', 'user.json');
 const RUNTIME_SCOPE_STORAGE_KEY = 'wren.runtimeScope';
@@ -10,14 +13,7 @@ const E2E_OWNER_EMAIL = 'admin@example.com';
 setup('authenticate default owner', async ({ page }) => {
   fs.mkdirSync(path.dirname(authStatePath), { recursive: true });
 
-  const loginResponse = await page.request.post('/api/auth/login', {
-    data: {
-      email: E2E_OWNER_EMAIL,
-      password: 'Admin@123',
-    },
-  });
-
-  expect(loginResponse.ok()).toBeTruthy();
+  await loginAsDefaultOwner(page);
   await page.goto('/home');
   await expect(page).toHaveURL(/\/home(?:\?.*)?$/, {
     timeout: 60_000,

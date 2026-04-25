@@ -21,6 +21,6 @@ export const saveRecommendedRelationships = async ({
   await page.goto('/setup/relationships');
 
   await page.getByRole('button', { name: 'Finish' }).click();
-  await expectPathname({ page, pathname: '/knowledge' });
-  await expect(page).toHaveURL(/\/knowledge(?:\?.*section=modeling.*)?$/);
+  await expectPathname({ page, pathname: '/recommend-semantics' });
+  await expect(page.getByText('Generate semantics')).toBeVisible();
 };
