@@ -2,7 +2,6 @@ from eval import EvalSettings
 from eval.evaluation import prepare_spider_benchmark_target
 from eval.prediction import generate_meta
 
-
 POSTGRES_TARGET = (
     "postgresql://postgres:postgres@localhost:5432/{db_name}?schema=analytics"
 )

@@ -1,5 +1,5 @@
-from eval import EvalSettings, resolve_host_eval_data_db_path
 import eval.pipelines as pipelines
+from eval import EvalSettings, resolve_host_eval_data_db_path
 from src.core.pipeline import PipelineComponent
 
 

@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import mock_open, patch
 
 import yaml
@@ -136,3 +137,19 @@ def test_settings_components():
         assert len(settings._components) == 1
         assert settings._components[0]["type"] == "llm"
         assert settings._components[0]["provider"] == "openai_llm"
+
+
+def test_settings_prefers_local_override_candidates_before_repo_fallbacks():
+    with patch("src.config.Settings.config_loader", return_value=[]):
+        settings = Settings()
+
+        candidates = Settings._resolve_config_candidates(settings)
+
+        service_root = Path(__file__).resolve().parents[2]
+        repo_root = service_root.parent
+
+        assert service_root / "config.local.yaml" in candidates
+        assert repo_root / "docker" / "config.yaml" in candidates
+        assert candidates.index(service_root / "config.local.yaml") < candidates.index(
+            repo_root / "docker" / "config.yaml"
+        )

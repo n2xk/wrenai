@@ -6,11 +6,11 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.globals import create_service_container
 from src.providers import generate_components
+from src.web.v1.services.sql_pairs import SqlPair, SqlPairsService
 from tests.pytest.conftest import (
     install_test_document_embedder,
     require_pgvector_runtime,
 )
-from src.web.v1.services.sql_pairs import SqlPair, SqlPairsService
 
 
 @pytest.fixture

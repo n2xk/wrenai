@@ -180,6 +180,14 @@ class AskTemplateDecision(BaseModel):
     source_type: Optional[str] = None
     template_level: Optional[str] = None
     template_mode: Optional[str] = None
+    instruction_count: Optional[int] = None
+    retrieved_table_count: Optional[int] = None
+    retrieved_ddl_count: Optional[int] = None
+    correction_retries: Optional[int] = None
+    schema_compatible: Optional[bool] = None
+    dialect_compatible: Optional[bool] = None
+    dry_run_compatible: Optional[bool] = None
+    validation_error: Optional[str] = None
 
 
 class AskShadowCompareRolloutReadiness(BaseModel):
@@ -213,6 +221,7 @@ class _AskResultResponse(BaseModel):
     ]
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
+    content: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
     type: Optional[Literal["GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None

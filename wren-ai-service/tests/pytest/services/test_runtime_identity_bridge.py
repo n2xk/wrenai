@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.core.runtime_identity import DEPRECATED_BRIDGE_ALIAS_WARNING
 from src.web.v1.routers.semantics_preparation import delete_semantics
 from src.web.v1.services.ask import AskRequest, AskResultRequest, AskService
 from src.web.v1.services.ask_feedback import AskFeedbackRequest, AskFeedbackService
@@ -13,7 +14,6 @@ from src.web.v1.services.chart_adjustment import (
 )
 from src.web.v1.services.instructions import InstructionsService
 from src.web.v1.services.question_recommendation import QuestionRecommendation
-from src.core.runtime_identity import DEPRECATED_BRIDGE_ALIAS_WARNING
 from src.web.v1.services.runtime_models import resolve_request_bridge_scope_id
 from src.web.v1.services.semantics_preparation import (
     DeleteSemanticsRequest,
@@ -341,6 +341,7 @@ async def test_ask_result_includes_backend_thinking_steps():
     assert [step.key for step in result.thinking.steps] == [
         "ask.sql_pairs_retrieved",
         "ask.sql_instructions_retrieved",
+        "ask.template_decision",
         "ask.intent_recognized",
         "ask.candidate_models_selected",
         "ask.sql_reasoned",
@@ -348,8 +349,16 @@ async def test_ask_result_includes_backend_thinking_steps():
     ]
     assert result.thinking.steps[0].message_params == {"count": 1}
     assert result.thinking.steps[1].message_params == {"count": 1}
-    assert result.thinking.steps[3].message_params == {"count": 1}
-    assert result.thinking.steps[4].detail == "reasoning"
+    candidate_models_step = next(
+        step
+        for step in result.thinking.steps
+        if step.key == "ask.candidate_models_selected"
+    )
+    sql_reasoned_step = next(
+        step for step in result.thinking.steps if step.key == "ask.sql_reasoned"
+    )
+    assert candidate_models_step.message_params == {"count": 1}
+    assert sql_reasoned_step.detail == "reasoning"
 
 
 @pytest.mark.asyncio
@@ -680,6 +689,40 @@ async def test_question_recommendation_uses_runtime_deploy_hash_when_project_id_
         service._pipelines["sql_generation"].run.await_args.kwargs["runtime_scope_id"]
         == "deploy-1"
     )
+
+
+@pytest.mark.asyncio
+async def test_question_recommendation_accepts_legacy_list_normalized_payload():
+    service = make_question_recommendation_service()
+    service._pipelines["question_recommendation"] = PipelineStub(
+        {
+            "normalized": [
+                {"question": "本月 GMV 是多少", "category": "sales"},
+                {"question": "本周新增用户是多少", "category": "growth"},
+            ]
+        }
+    )
+    event_id = "recommendation-legacy-list"
+    service[event_id] = QuestionRecommendation.Event(event_id=event_id)
+    request = QuestionRecommendation.Request.model_validate(
+        {
+            "event_id": event_id,
+            "mdl": '{"models":[{"name":"orders"}]}',
+            "runtimeIdentity": {
+                "workspaceId": "workspace-1",
+                "knowledgeBaseId": "kb-1",
+                "deployHash": "deploy-1",
+            },
+        }
+    )
+
+    result = await service.recommend(request)
+    resource = result["resource"]
+
+    assert resource.status == "finished"
+    assert "sales" in resource.response["questions"]
+    assert resource.response["questions"]["sales"][0]["sql"] == "SELECT 1"
+    assert "growth" in resource.response["questions"]
 
 
 @pytest.mark.asyncio

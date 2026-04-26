@@ -1,11 +1,13 @@
 import pytest
+from aiohttp import ServerDisconnectedError
 
-from src.providers.engine.wren import WrenUI
+from src.providers.engine.wren import WrenIbis, WrenUI
 
 
 class FakeResponse:
     def __init__(self, payload):
         self._payload = payload
+        self.status = 200
 
     async def __aenter__(self):
         return self
@@ -15,6 +17,9 @@ class FakeResponse:
 
     async def json(self):
         return self._payload
+
+    async def text(self):
+        return str(self._payload)
 
 
 class FakeSession:
@@ -108,9 +113,112 @@ async def test_wren_ui_execute_sql_prefers_runtime_scope_over_legacy_project_bri
     assert session.calls[0]["json"]["runtimeScopeId"] == "deploy-3"
 
 
+@pytest.mark.asyncio
+async def test_wren_ui_execute_sql_passes_sql_mode_to_internal_preview():
+    session = FakeSession(
+        {
+            "data": {"data": [{"id": 1}]},
+            "correlationId": "corr-sql-mode",
+        }
+    )
+    engine = WrenUI(endpoint="http://wren-ui")
+
+    success, result, metadata = await engine.execute_sql(
+        "SELECT 1 LIMIT 10",
+        session=session,
+        runtime_scope_id="deploy-4",
+        dry_run=True,
+        sql_mode="dialect",
+    )
+
+    assert success is True
+    assert result == {"data": [{"id": 1}]}
+    assert metadata == {"correlation_id": "corr-sql-mode"}
+    assert session.calls[0]["json"] == {
+        "sql": "SELECT 1",
+        "runtimeScopeId": "deploy-4",
+        "dryRun": True,
+        "limit": 1,
+        "sqlMode": "dialect",
+    }
+
+
+class FlakySession:
+    def __init__(self):
+        self.calls = []
+        self._attempt = 0
+
+    def post(self, url, headers, json, timeout):
+        self.calls.append(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
+        self._attempt += 1
+        if self._attempt == 1:
+            raise ServerDisconnectedError("disconnected")
+        return FakeResponse(
+            {
+                "data": {"data": [{"id": 1}]},
+                "correlationId": "corr-retry",
+            }
+        )
+
+
+@pytest.mark.asyncio
+async def test_wren_ui_execute_sql_retries_transient_internal_preview_disconnect():
+    session = FlakySession()
+    engine = WrenUI(endpoint="http://wren-ui")
+
+    success, result, metadata = await engine.execute_sql(
+        "SELECT 1 LIMIT 10",
+        session=session,
+        runtime_scope_id="deploy-5",
+        dry_run=True,
+    )
+
+    assert success is True
+    assert result == {"data": [{"id": 1}]}
+    assert metadata == {"correlation_id": "corr-retry"}
+    assert len(session.calls) == 2
+
+
 def test_wren_ui_prefers_runtime_endpoint_env_over_config(monkeypatch):
     monkeypatch.setenv("WREN_UI_ENDPOINT", "http://env-wren-ui")
 
     engine = WrenUI(endpoint="http://config-wren-ui")
 
     assert engine._endpoint == "http://env-wren-ui"
+
+
+class FlakyIbisSession:
+    def __init__(self):
+        self.calls = []
+        self._attempt = 0
+
+    def post(self, url, json, timeout):
+        self.calls.append({"url": url, "json": json, "timeout": timeout})
+        self._attempt += 1
+        if self._attempt == 1:
+            raise ServerDisconnectedError("disconnected")
+        return FakeResponse("dry-run-ok")
+
+
+@pytest.mark.asyncio
+async def test_wren_ibis_execute_sql_retries_transient_disconnects():
+    session = FlakyIbisSession()
+    engine = WrenIbis(
+        endpoint="http://wren-ibis",
+        source="tidb",
+        manifest="{}",
+        connection_info="",
+    )
+
+    success, result, metadata = await engine.execute_sql(
+        "SELECT 1 LIMIT 10",
+        session=session,
+        dry_run=True,
+    )
+
+    assert success is True
+    assert result == "dry-run-ok"
+    assert metadata == {"correlation_id": ""}
+    assert len(session.calls) == 2

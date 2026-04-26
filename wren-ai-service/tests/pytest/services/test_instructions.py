@@ -6,8 +6,8 @@ from src.config import settings
 from src.core.provider import DocumentStoreProvider
 from src.globals import create_service_container
 from src.providers import generate_components
-from tests.pytest.conftest import require_pgvector_runtime
 from src.web.v1.services.instructions import InstructionsService
+from tests.pytest.conftest import require_pgvector_runtime
 
 
 @pytest.fixture

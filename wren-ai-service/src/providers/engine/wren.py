@@ -16,6 +16,12 @@ from src.core.runtime_identity import (
 from src.providers.loader import provider
 
 logger = logging.getLogger("wren-ai-service")
+_TRANSIENT_HTTP_ERRORS = (
+    aiohttp.ClientConnectionError,
+    aiohttp.ClientOSError,
+    aiohttp.ServerDisconnectedError,
+    aiohttp.ServerTimeoutError,
+)
 
 
 @provider("wren_ui")
@@ -52,68 +58,97 @@ class WrenUI(Engine):
             data["limit"] = 1
         else:
             data["limit"] = limit
+        sql_mode = kwargs.get("sql_mode")
+        if isinstance(sql_mode, str) and sql_mode.strip():
+            data["sqlMode"] = sql_mode.strip()
 
-        try:
-            async with session.post(
-                f"{self._endpoint}/api/v1/internal/sql/preview",
-                headers={
-                    "x-wren-ai-service-internal": "1",
-                },
-                json=data,
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as response:
-                res_json = await response.json()
-                response_status = getattr(response, "status", 200)
-                if response_status < 400:
-                    res = res_json.get("data", {}) if res_json else {}
-                    if dry_run:
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                async with session.post(
+                    f"{self._endpoint}/api/v1/internal/sql/preview",
+                    headers={
+                        "x-wren-ai-service-internal": "1",
+                    },
+                    json=data,
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                ) as response:
+                    res_json = await response.json()
+                    response_status = getattr(response, "status", 200)
+                    if response_status < 400:
+                        res = res_json.get("data", {}) if res_json else {}
+                        if dry_run:
+                            return (
+                                True,
+                                res,
+                                {
+                                    "correlation_id": res_json.get(
+                                        "correlationId", ""
+                                    ),
+                                },
+                            )
+
+                        data = res.get("data", []) if res else []
+                        if len(data) > 0:
+                            return (
+                                True,
+                                res,
+                                {
+                                    "correlation_id": res_json.get(
+                                        "correlationId", ""
+                                    ),
+                                },
+                            )
+
                         return (
-                            True,
+                            False,
                             res,
                             {
                                 "correlation_id": res_json.get("correlationId", ""),
                             },
                         )
 
-                    data = res.get("data", []) if res else []
-                    if len(data) > 0:
-                        return (
-                            True,
-                            res,
-                            {
-                                "correlation_id": res_json.get("correlationId", ""),
-                            },
-                        )
+                    error_payload = res_json.get("error", {}) if res_json else {}
+                    error_message = error_payload.get("message", "Unknown error")
+                    logger.error(f"Error executing SQL: {error_message}")
+                    dialect_sql = error_payload.get("dialectSql", "") or ""
+                    planned_sql = error_payload.get("plannedSql", "") or ""
 
                     return (
                         False,
-                        res,
+                        {},
                         {
+                            "error_message": error_message,
+                            "error_sql": dialect_sql or planned_sql or sql,
                             "correlation_id": res_json.get("correlationId", ""),
                         },
                     )
-
-                error_payload = res_json.get("error", {}) if res_json else {}
-                error_message = error_payload.get("message", "Unknown error")
-                logger.error(f"Error executing SQL: {error_message}")
-                dialect_sql = error_payload.get("dialectSql", "") or ""
-                planned_sql = error_payload.get("plannedSql", "") or ""
-
+            except asyncio.TimeoutError:
                 return (
                     False,
                     {},
-                    {
-                        "error_message": error_message,
-                        "error_sql": dialect_sql or planned_sql or sql,
-                        "correlation_id": res_json.get("correlationId", ""),
-                    },
+                    {"error_message": f"Request timed out: {timeout} seconds"},
                 )
-        except asyncio.TimeoutError:
-            return (
-                False,
-                {},
-                {"error_message": f"Request timed out: {timeout} seconds"},
-            )
+            except _TRANSIENT_HTTP_ERRORS as error:
+                last_error = error
+                if attempt == 1:
+                    break
+                logger.warning(
+                    "Transient SQL preview failure from wren-ui, retrying once: %s",
+                    error,
+                )
+
+        error_message = str(last_error or "Unknown error")
+        logger.warning("Failed to execute SQL through wren-ui preview: %s", error_message)
+        return (
+            False,
+            {},
+            {
+                "error_message": error_message,
+                "error_sql": sql,
+                "correlation_id": "",
+            },
+        )
 
 
 @provider("wren_ibis")
@@ -154,40 +189,82 @@ class WrenIbis(Engine):
         else:
             api_endpoint += f"?limit={limit}"
 
-        try:
-            async with session.post(
-                api_endpoint,
-                json={
-                    "sql": remove_limit_statement(sql),
-                    "manifestStr": self._manifest,
-                    "connectionInfo": self._connection_info,
-                },
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as response:
-                if dry_run:
-                    res = await response.text()
-                else:
-                    res = await response.json()
+        last_error: Optional[Exception] = None
+        for attempt in range(2):
+            try:
+                async with session.post(
+                    api_endpoint,
+                    json={
+                        "sql": remove_limit_statement(sql),
+                        "manifestStr": self._manifest,
+                        "connectionInfo": self._connection_info,
+                    },
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                ) as response:
+                    if dry_run:
+                        res = await response.text()
+                    else:
+                        res = await response.json()
 
-                if response.status == 200 or response.status == 204:
+                    if response.status == 200 or response.status == 204:
+                        return (
+                            True,
+                            res,
+                            {
+                                "correlation_id": "",
+                            },
+                        )
+
                     return (
-                        True,
-                        res,
+                        False,
+                        None,
                         {
+                            "error_message": res,
+                            "error_sql": sql,
                             "correlation_id": "",
                         },
                     )
-
+            except asyncio.TimeoutError:
                 return (
                     False,
                     None,
                     {
-                        "error_message": res,
+                        "error_message": f"Request timed out: {timeout} seconds",
+                        "error_sql": sql,
                         "correlation_id": "",
                     },
                 )
-        except asyncio.TimeoutError:
-            return False, None, f"Request timed out: {timeout} seconds"
+            except _TRANSIENT_HTTP_ERRORS as error:
+                last_error = error
+                if attempt == 1:
+                    break
+                logger.warning(
+                    "Transient SQL query failure from wren-ibis, retrying once: %s",
+                    error,
+                )
+            except Exception as error:
+                logger.exception(f"Unexpected error during execute_sql: {str(error)}")
+                return (
+                    False,
+                    None,
+                    {
+                        "error_message": str(error),
+                        "error_sql": sql,
+                        "correlation_id": "",
+                    },
+                )
+
+        error_message = str(last_error or "Unknown error")
+        logger.warning("Failed to execute SQL through wren-ibis query: %s", error_message)
+        return (
+            False,
+            None,
+            {
+                "error_message": error_message,
+                "error_sql": sql,
+                "correlation_id": "",
+            },
+        )
 
     async def dry_plan(
         self,

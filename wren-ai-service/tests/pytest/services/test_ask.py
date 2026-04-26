@@ -7,7 +7,6 @@ import pytest
 from src.config import settings
 from src.pipelines import generation, indexing, retrieval
 from src.providers import generate_components
-from tests.pytest.conftest import require_pgvector_runtime
 from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
     AskRequest,
@@ -18,6 +17,7 @@ from src.web.v1.services.semantics_preparation import (
     SemanticsPreparationRequest,
     SemanticsPreparationService,
 )
+from tests.pytest.conftest import require_pgvector_runtime
 
 
 @pytest.fixture

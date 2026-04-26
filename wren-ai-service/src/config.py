@@ -133,8 +133,14 @@ class Settings(BaseSettings):
 
         repo_root = Path(__file__).resolve().parents[2]
         service_root = Path(__file__).resolve().parents[1]
+        local_override = configured.with_name(
+            f"{configured.stem}.local{configured.suffix}"
+        )
 
         for candidate in (
+            Path.cwd() / local_override,
+            service_root / local_override,
+            repo_root / local_override,
             Path.cwd() / configured,
             service_root / configured,
             repo_root / configured,

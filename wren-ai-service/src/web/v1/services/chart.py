@@ -6,6 +6,7 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
+from src.pipelines.generation.utils.chart import build_deterministic_chart_result
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest
 
@@ -219,6 +220,17 @@ class ChartService:
                 custom_instruction=merged_custom_instruction,
             )
             chart_result = chart_generation_result["post_process"]["results"]
+            if not chart_result.get("chart_schema", {}):
+                deterministic_chart_result = build_deterministic_chart_result(
+                    data=sql_data,
+                    query=chart_request.query,
+                    language=chart_request.configurations.language,
+                )
+                if deterministic_chart_result:
+                    logger.info(
+                        "Chart generation fallback produced a deterministic chart"
+                    )
+                    chart_result = deterministic_chart_result
 
             if not chart_result.get("chart_schema", {}) and not chart_result.get(
                 "reasoning", ""

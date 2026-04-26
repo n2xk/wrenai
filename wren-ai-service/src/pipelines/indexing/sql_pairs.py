@@ -33,6 +33,12 @@ class SqlPair(BaseModel):
     asset_kind: str = Field(
         default="sql_pair", validation_alias=AliasChoices("asset_kind", "assetKind")
     )
+    approved_at: Optional[str] = Field(
+        default=None, validation_alias=AliasChoices("approved_at", "approvedAt")
+    )
+    approved_by: Optional[str] = Field(
+        default=None, validation_alias=AliasChoices("approved_by", "approvedBy")
+    )
     template_level: str = Field(
         default="L0", validation_alias=AliasChoices("template_level", "templateLevel")
     )
@@ -55,6 +61,14 @@ class SqlPair(BaseModel):
     business_signature: Optional[Dict[str, Any]] = Field(
         default=None,
         validation_alias=AliasChoices("business_signature", "businessSignature"),
+    )
+    effective_from: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("effective_from", "effectiveFrom"),
+    )
+    effective_to: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("effective_to", "effectiveTo"),
     )
     template_version: int = Field(
         default=1,
@@ -95,12 +109,16 @@ class SqlPairsConverter:
                         "sql_pair_id": sql_pair.id,
                         "sql": sql_pair.sql,
                         "asset_kind": sql_pair.asset_kind,
+                        "approved_at": sql_pair.approved_at,
+                        "approved_by": sql_pair.approved_by,
                         "template_level": sql_pair.template_level,
                         "template_mode": sql_pair.template_mode,
                         "source_type": sql_pair.source_type,
                         "scope_type": sql_pair.scope_type,
                         "parameter_schema": sql_pair.parameter_schema,
                         "business_signature": sql_pair.business_signature,
+                        "effective_from": sql_pair.effective_from,
+                        "effective_to": sql_pair.effective_to,
                         "template_version": sql_pair.template_version,
                         "status": sql_pair.status,
                         **addition,
@@ -157,6 +175,8 @@ def sql_pairs(
             question=pair.get("question"),
             sql=pair.get("sql"),
             asset_kind=pair.get("asset_kind") or pair.get("assetKind") or "sql_pair",
+            approved_at=pair.get("approved_at") or pair.get("approvedAt"),
+            approved_by=pair.get("approved_by") or pair.get("approvedBy"),
             template_level=pair.get("template_level")
             or pair.get("templateLevel")
             or "L0",
@@ -173,6 +193,9 @@ def sql_pairs(
             or pair.get("parameterSchema"),
             business_signature=pair.get("business_signature")
             or pair.get("businessSignature"),
+            effective_from=pair.get("effective_from")
+            or pair.get("effectiveFrom"),
+            effective_to=pair.get("effective_to") or pair.get("effectiveTo"),
             template_version=pair.get("template_version")
             or pair.get("templateVersion")
             or 1,

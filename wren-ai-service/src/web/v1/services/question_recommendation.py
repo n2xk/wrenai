@@ -74,6 +74,11 @@ class QuestionRecommendation:
         runtime_scope_id: Optional[str] = None,
         allow_data_preview: bool = True,
     ):
+        if isinstance(candidate, str):
+            candidate = {"question": candidate}
+        elif not isinstance(candidate, dict):
+            return {"error": "invalid_candidate"}
+
         candidate_question = (
             candidate.get("question")
             or candidate.get("prompt")
@@ -212,7 +217,13 @@ class QuestionRecommendation:
 
     async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
-        questions = resp.get("normalized", {}).get("questions", [])
+        normalized = resp.get("normalized", {})
+        if isinstance(normalized, dict):
+            questions = normalized.get("questions", [])
+        elif isinstance(normalized, list):
+            questions = normalized
+        else:
+            questions = []
         validation_tasks = [
             self._validate_question(
                 question,

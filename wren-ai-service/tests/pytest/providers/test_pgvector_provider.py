@@ -7,10 +7,10 @@ from src.providers.document_store.pgvector import (
     PgvectorProvider,
     PgvectorRetrieverAdapter,
     PgvectorStoreAdapter,
+    _ensure_haystack_filter_convert_compatibility,
     _filter_supported_store_kwargs,
     _normalize_pgvector_filters,
     _table_scoped_index_name,
-    _ensure_haystack_filter_convert_compatibility,
 )
 
 

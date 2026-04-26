@@ -16,9 +16,9 @@ from src.pipelines.retrieval.historical_question_retrieval import (
 )
 from src.pipelines.retrieval.instructions import Instructions
 from src.pipelines.retrieval.sql_executor import SQLExecutor
-from src.pipelines.retrieval.sql_pairs_retrieval import SqlPairsRetrieval
 from src.pipelines.retrieval.sql_functions import SqlFunctions
 from src.pipelines.retrieval.sql_knowledge import SqlKnowledges
+from src.pipelines.retrieval.sql_pairs_retrieval import SqlPairsRetrieval
 
 
 def _metadata_retriever(data_source: str = "postgres") -> SimpleNamespace:
@@ -239,3 +239,53 @@ async def test_sql_gen_post_processor_normalizes_runtime_scope_before_engine_exe
     )
 
     assert engine.execute_sql.await_args.kwargs["runtime_scope_id"] == "deploy-1"
+
+
+@pytest.mark.asyncio
+async def test_sql_gen_post_processor_forwards_sql_mode_to_engine(monkeypatch):
+    monkeypatch.setattr(
+        "src.pipelines.generation.utils.sql.aiohttp.ClientSession",
+        lambda: _DummyClientSession(),
+    )
+
+    engine = SimpleNamespace(
+        execute_sql=AsyncMock(return_value=(True, [], {"correlation_id": "corr-2"}))
+    )
+    post_processor = SQLGenPostProcessor(engine=engine)
+
+    await post_processor.run(
+        replies=['{"sql":"select 1"}'],
+        runtime_scope_id="deploy-2",
+        sql_mode="dialect",
+    )
+
+    assert engine.execute_sql.await_args.kwargs["sql_mode"] == "dialect"
+
+
+@pytest.mark.asyncio
+async def test_sql_gen_post_processor_converts_engine_exceptions_into_invalid_result(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "src.pipelines.generation.utils.sql.aiohttp.ClientSession",
+        lambda: _DummyClientSession(),
+    )
+
+    engine = SimpleNamespace(
+        execute_sql=AsyncMock(side_effect=RuntimeError("Server disconnected"))
+    )
+    post_processor = SQLGenPostProcessor(engine=engine)
+
+    result = await post_processor.run(
+        replies=['{"sql":"select 1"}'],
+        runtime_scope_id="deploy-3",
+    )
+
+    assert result["valid_generation_result"] == {}
+    assert result["invalid_generation_result"] == {
+        "sql": "select 1",
+        "original_sql": "select 1",
+        "type": "DRY_RUN",
+        "error": "Server disconnected",
+        "correlation_id": "",
+    }

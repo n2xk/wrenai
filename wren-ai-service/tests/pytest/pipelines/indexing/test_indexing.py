@@ -6,17 +6,23 @@ from haystack import Document
 from haystack.document_stores.types import DocumentStore
 
 from src.pipelines.common import build_runtime_scope_filters
+from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 from src.pipelines.indexing.db_schema import DBSchema
 from src.pipelines.indexing.historical_question import HistoricalQuestion
-from src.pipelines.indexing import AsyncDocumentWriter, DocumentCleaner, MDLValidator
 from src.pipelines.indexing.instructions import (
     Instruction,
     Instructions,
     InstructionsCleaner,
     InstructionsConverter,
 )
-from src.pipelines.indexing.project_meta import ProjectMeta, chunk as chunk_project_meta
-from src.pipelines.indexing.sql_pairs import SqlPair, SqlPairs, SqlPairsCleaner, SqlPairsConverter
+from src.pipelines.indexing.project_meta import ProjectMeta
+from src.pipelines.indexing.project_meta import chunk as chunk_project_meta
+from src.pipelines.indexing.sql_pairs import (
+    SqlPair,
+    SqlPairs,
+    SqlPairsCleaner,
+    SqlPairsConverter,
+)
 from src.pipelines.indexing.table_description import TableDescription
 
 
@@ -141,12 +147,16 @@ def test_sql_pairs_converter_writes_template_metadata():
                 sql="select * from deposits where dt >= :start_date",
                 question="首存金额分桶",
                 assetKind="sql_template",
+                approvedAt="2026-04-25T08:00:00Z",
+                approvedBy="admin-user",
                 templateLevel="L2",
                 templateMode="anchored_template",
                 sourceType="business_import",
                 scopeType="knowledge_base",
                 parameterSchema={"required": ["start_date"]},
                 businessSignature={"ctes": ["base", "bucketed"]},
+                effectiveFrom="2026-04-01T00:00:00Z",
+                effectiveTo="2026-04-30T23:59:59Z",
                 templateVersion=2,
                 status="active",
             )
@@ -156,12 +166,16 @@ def test_sql_pairs_converter_writes_template_metadata():
 
     meta = result["documents"][0].meta
     assert meta["asset_kind"] == "sql_template"
+    assert meta["approved_at"] == "2026-04-25T08:00:00Z"
+    assert meta["approved_by"] == "admin-user"
     assert meta["template_level"] == "L2"
     assert meta["template_mode"] == "anchored_template"
     assert meta["source_type"] == "business_import"
     assert meta["scope_type"] == "knowledge_base"
     assert meta["parameter_schema"] == {"required": ["start_date"]}
     assert meta["business_signature"] == {"ctes": ["base", "bucketed"]}
+    assert meta["effective_from"] == "2026-04-01T00:00:00Z"
+    assert meta["effective_to"] == "2026-04-30T23:59:59Z"
     assert meta["template_version"] == 2
     assert meta["status"] == "active"
 

@@ -36,7 +36,9 @@ class SQLGenPostProcessor:
         data_source: str = "",
         allow_data_preview: bool = False,
         bridge_scope_id: str | None = None,
+        sql_mode: str | None = None,
     ) -> dict:
+        cleaned_generation_result = ""
         try:
             runtime_scope_id = resolve_pipeline_runtime_scope_id(
                 runtime_scope_id, bridge_scope_id=bridge_scope_id
@@ -59,6 +61,7 @@ class SQLGenPostProcessor:
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 data_source=data_source,
                 allow_data_preview=allow_data_preview,
+                sql_mode=sql_mode,
             )
 
             return {
@@ -67,10 +70,24 @@ class SQLGenPostProcessor:
             }
         except Exception as e:
             logger.exception(f"Error in SQLGenPostProcessor: {e}")
+            error_message = str(e)
+            invalid_generation_result = {
+                "sql": cleaned_generation_result or "",
+                "original_sql": cleaned_generation_result or "",
+                "type": (
+                    "TIME_OUT"
+                    if error_message.startswith("Request timed out")
+                    else "DRY_PLAN"
+                    if use_dry_plan
+                    else "DRY_RUN"
+                ),
+                "error": error_message,
+                "correlation_id": "",
+            }
 
             return {
                 "valid_generation_result": {},
-                "invalid_generation_result": {},
+                "invalid_generation_result": invalid_generation_result,
             }
 
     async def _classify_generation_result(
@@ -81,6 +98,7 @@ class SQLGenPostProcessor:
         allow_dry_plan_fallback: bool = True,
         data_source: str = "",
         allow_data_preview: bool = False,
+        sql_mode: str | None = None,
     ) -> Dict[str, str]:
         valid_generation_result = {}
         invalid_generation_result = {}
@@ -116,6 +134,7 @@ class SQLGenPostProcessor:
                     runtime_scope_id=runtime_scope_id,
                     limit=1,
                     dry_run=True,
+                    sql_mode=sql_mode,
                 )
 
                 if success:
@@ -141,6 +160,7 @@ class SQLGenPostProcessor:
                     runtime_scope_id=runtime_scope_id,
                     limit=1,
                     dry_run=False,
+                    sql_mode=sql_mode,
                 )
 
                 if has_data:
@@ -466,6 +486,16 @@ otherwise, you will put the relative timeframe in the SQL query.
 The final answer must be a reasoning plan in plain Markdown string format
 """
 
+_MYSQL_COMPATIBLE_TEXT_TO_SQL_RULES = """
+### MYSQL / TIDB DIALECT RULES ###
+- For MySQL- and TiDB-compatible engines, do NOT use double-quoted identifiers like "table"."column" unless ANSI_QUOTES is explicitly guaranteed.
+- Prefer bare identifiers (table.column) or backticks (`table`.`column`) when quoting is required.
+- Use MySQL / TiDB date arithmetic syntax such as DATE_ADD(<date_expr>, INTERVAL <n> DAY), DATE_SUB(...), and DATEDIFF(<lhs>, <rhs>).
+- Prefer IFNULL(...) or COALESCE(...) for NULL handling and avoid dialect-specific casts such as <expr>::type.
+- Keep recursive CTE syntax and window functions compatible with MySQL 8.0 / TiDB semantics.
+- Do not use PostgreSQL-only or BigQuery-only features such as ILIKE, QUALIFY, SAFE_CAST, or DISTINCT ON.
+"""
+
 
 def _extract_from_sql_knowledge(
     sql_knowledge: SqlKnowledge | None, attribute_name: str, default_value: str
@@ -478,8 +508,11 @@ def _extract_from_sql_knowledge(
 
 
 def _with_data_source_specific_rules(base_rules: str, data_source: str | None) -> str:
-    if (data_source or "").strip().lower() == "trino":
+    normalized_data_source = (data_source or "").strip().lower()
+    if normalized_data_source == "trino":
         return f"{base_rules}\n\n{_TRINO_TEXT_TO_SQL_RULES}"
+    if normalized_data_source in {"mysql", "tidb"}:
+        return f"{base_rules}\n\n{_MYSQL_COMPATIBLE_TEXT_TO_SQL_RULES}"
 
     return base_rules
 

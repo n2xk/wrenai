@@ -5,6 +5,7 @@ import uuid
 import orjson
 import pytest
 from fastapi.testclient import TestClient
+
 from tests.pytest.conftest import require_pgvector_runtime
 
 
