@@ -90,6 +90,9 @@ interface UpdateInstructionRequest {
   instruction?: string;
   questions?: string[];
   isGlobal?: boolean;
+  relatedBusinessTerms?: string[];
+  relatedExternalDependencies?: string[];
+  runtimeUsage?: Record<string, any> | null;
 }
 
 /**
@@ -140,8 +143,14 @@ const handleUpdateInstruction = async (
     context: auditContext,
   });
 
-  const { instruction, questions, isGlobal } =
-    req.body as UpdateInstructionRequest;
+  const {
+    instruction,
+    questions,
+    isGlobal,
+    relatedBusinessTerms,
+    relatedExternalDependencies,
+    runtimeUsage,
+  } = req.body as UpdateInstructionRequest;
 
   // Get the original instruction
   const existingInstruction = await instructionService.getInstruction(
@@ -158,6 +167,13 @@ const handleUpdateInstruction = async (
     instruction: instruction ?? existingInstruction.instruction,
     questions: questions ?? existingInstruction.questions,
     isGlobal: isGlobal ?? existingInstruction.isDefault,
+    relatedBusinessTerms:
+      relatedBusinessTerms ?? existingInstruction.relatedBusinessTerms ?? [],
+    relatedExternalDependencies:
+      relatedExternalDependencies ??
+      existingInstruction.relatedExternalDependencies ??
+      [],
+    runtimeUsage: runtimeUsage ?? existingInstruction.runtimeUsage ?? null,
   };
 
   // If isGlobal is true, set questions to empty array
@@ -173,6 +189,21 @@ const handleUpdateInstruction = async (
       instruction: mergedInstruction.instruction,
       questions: mergedInstruction.questions,
       isDefault: mergedInstruction.isGlobal,
+      relatedBusinessTerms: Array.isArray(
+        mergedInstruction.relatedBusinessTerms,
+      )
+        ? mergedInstruction.relatedBusinessTerms
+        : [],
+      relatedExternalDependencies: Array.isArray(
+        mergedInstruction.relatedExternalDependencies,
+      )
+        ? mergedInstruction.relatedExternalDependencies
+        : [],
+      runtimeUsage:
+        mergedInstruction.runtimeUsage &&
+        typeof mergedInstruction.runtimeUsage === 'object'
+          ? mergedInstruction.runtimeUsage
+          : null,
     },
   );
 
@@ -204,6 +235,10 @@ const handleUpdateInstruction = async (
       instruction: updatedInstruction.instruction,
       questions: updatedInstruction.questions,
       isGlobal: isGlobalValue,
+      relatedBusinessTerms: updatedInstruction.relatedBusinessTerms || [],
+      relatedExternalDependencies:
+        updatedInstruction.relatedExternalDependencies || [],
+      runtimeUsage: updatedInstruction.runtimeUsage || null,
       createdAt: updatedInstruction.createdAt ?? null,
       updatedAt: updatedInstruction.updatedAt ?? null,
     },

@@ -76,6 +76,26 @@ export default function KnowledgeSqlTemplateFormFields({
           placeholder="请输入可复用的 SQL 示例，建议优先沉淀稳定口径。"
         />
       </Form.Item>
+      <Form.Item
+        label="业务签名 business_signature（JSON）"
+        name="businessSignatureJson"
+        tooltip="用于描述 concepts / features / metrics / dimensions / externalDependencies / cues，参与模板匹配和外部依赖检测。"
+      >
+        <Input.TextArea
+          disabled={isReadonly}
+          rows={8}
+          placeholder={`{
+  "concepts": ["first_deposit"],
+  "features": ["cohort"],
+  "metrics": [],
+  "dimensions": [],
+  "externalDependencies": [],
+  "positiveCues": [],
+  "negativeCues": [],
+  "expectedGrain": "biz_date + channel_id"
+}`}
+        />
+      </Form.Item>
     </WorkbenchEditorForm>
   );
 }

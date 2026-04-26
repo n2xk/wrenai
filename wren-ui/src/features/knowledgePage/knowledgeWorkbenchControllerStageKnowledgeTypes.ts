@@ -1,6 +1,8 @@
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import type { KnowledgeBaseRecord } from './types';
 
 export type KnowledgeStateInput = {
+  activeKnowledgeRuntimeSelector?: ClientRuntimeScopeSelector;
   activeKnowledgeBase?: KnowledgeBaseRecord | null;
   canCreateKnowledgeBase: boolean;
   createKnowledgeBaseBlockedReason: string | null;

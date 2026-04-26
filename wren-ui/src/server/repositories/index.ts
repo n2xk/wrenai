@@ -17,6 +17,8 @@ export * from './dashboardItemRepository';
 export * from './sqlPairRepository';
 export * from './askingTaskRepository';
 export * from './instructionRepository';
+export * from './businessTermRepository';
+export * from './externalDependencyRepository';
 export * from './apiHistoryRepository';
 export * from './dashboardItemRefreshJobRepository';
 export * from './workspaceRepository';

@@ -81,6 +81,9 @@ export default function useKnowledgeRuleSqlManager({
         summary: draft.summary,
         scope: draft.scope,
         content: draft.content,
+        relatedBusinessTermsText: draft.relatedBusinessTermsText,
+        relatedExternalDependenciesText: draft.relatedExternalDependenciesText,
+        runtimeUsageJson: draft.runtimeUsageJson,
       });
     },
     [ruleForm],
@@ -94,6 +97,7 @@ export default function useKnowledgeRuleSqlManager({
         scope: draft.scope,
         description: draft.description,
         templateMode: draft.templateMode,
+        businessSignatureJson: draft.businessSignatureJson,
       });
     },
     [sqlTemplateForm],

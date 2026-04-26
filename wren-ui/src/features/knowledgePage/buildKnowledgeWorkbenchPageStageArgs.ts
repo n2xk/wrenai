@@ -30,6 +30,8 @@ export function buildKnowledgeWorkbenchPageStageArgs<
   const { actions, ruleSqlState, viewState } = interactionState;
 
   return {
+    activeKnowledgeRuntimeSelector:
+      knowledgeState.activeKnowledgeRuntimeSelector,
     actions,
     contentData,
     knowledgeState,

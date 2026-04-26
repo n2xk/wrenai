@@ -1,5 +1,4 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -7,8 +6,9 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
+import { BaseRepository, IBasicRepository } from './baseRepository';
 
-export interface Instruction {
+export interface ExternalDependency {
   id: number;
   projectId?: number | null;
   workspaceId?: string | null;
@@ -16,18 +16,26 @@ export interface Instruction {
   kbSnapshotId?: string | null;
   deployHash?: string | null;
   actorUserId?: string | null;
-  instruction: string;
-  questions: string[];
-  isDefault: boolean;
-  relatedBusinessTerms?: string[];
-  relatedExternalDependencies?: string[];
-  runtimeUsage?: Record<string, any> | null;
-  createdAt: string;
-  updatedAt: string;
+  dependencyId: string;
+  name: string;
+  aliases: string[];
+  sourceStatus: string;
+  missingBehavior: string;
+  requiredGrain: string[];
+  requiredByTerms: string[];
+  requiredByTemplates: string[];
+  relatedRules: string[];
+  askUserPrompt?: string | null;
+  validation?: Record<string, any> | null;
+  status: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export type InstructionRuntimeScope = Pick<
-  Instruction,
+export type ExternalDependencyRuntimeScope = Pick<
+  ExternalDependency,
   | 'projectId'
   | 'workspaceId'
   | 'knowledgeBaseId'
@@ -35,55 +43,64 @@ export type InstructionRuntimeScope = Pick<
   | 'deployHash'
 >;
 
-export interface IInstructionRepository extends IBasicRepository<Instruction> {
+export interface IExternalDependencyRepository extends IBasicRepository<ExternalDependency> {
   findAllByRuntimeIdentity(
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction[]>;
+    runtimeIdentity: ExternalDependencyRuntimeScope,
+  ): Promise<ExternalDependency[]>;
   findOneByIdWithRuntimeIdentity(
     id: number,
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction | null>;
+    runtimeIdentity: ExternalDependencyRuntimeScope,
+  ): Promise<ExternalDependency | null>;
 }
 
-export class InstructionRepository
-  extends BaseRepository<Instruction>
-  implements IInstructionRepository
+export class ExternalDependencyRepository
+  extends BaseRepository<ExternalDependency>
+  implements IExternalDependencyRepository
 {
   private readonly jsonbColumns = [
-    'questions',
-    'relatedBusinessTerms',
-    'relatedExternalDependencies',
-    'runtimeUsage',
+    'aliases',
+    'requiredGrain',
+    'requiredByTerms',
+    'requiredByTemplates',
+    'relatedRules',
+    'validation',
   ];
-  private readonly canonicalScopeFields: (keyof InstructionRuntimeScope)[] = [
-    'workspaceId',
-    'knowledgeBaseId',
-    'kbSnapshotId',
-    'deployHash',
+  private readonly arrayJsonbColumns = [
+    'aliases',
+    'requiredGrain',
+    'requiredByTerms',
+    'requiredByTemplates',
+    'relatedRules',
   ];
+  private readonly canonicalScopeFields: (keyof ExternalDependencyRuntimeScope)[] =
+    ['workspaceId', 'knowledgeBaseId', 'kbSnapshotId', 'deployHash'];
 
   constructor(knexPg: Knex) {
-    super({ knexPg, tableName: 'instruction' });
+    super({ knexPg, tableName: 'knowledge_external_dependencies' });
   }
 
   public async findAllByRuntimeIdentity(
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction[]> {
-    const query = this.buildRuntimeScopedQuery(runtimeIdentity);
+    runtimeIdentity: ExternalDependencyRuntimeScope,
+  ): Promise<ExternalDependency[]> {
+    const query = this.buildRuntimeScopedQuery(runtimeIdentity).orderBy(
+      'updated_at',
+      'desc',
+    );
     const rows = await query;
     return rows.map((row) => this.transformFromDBData(row));
   }
 
   public async findOneByIdWithRuntimeIdentity(
     id: number,
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction | null> {
-    const query = this.buildRuntimeScopedQuery(runtimeIdentity).where({ id });
-    const row = await query.first();
+    runtimeIdentity: ExternalDependencyRuntimeScope,
+  ): Promise<ExternalDependency | null> {
+    const row = await this.buildRuntimeScopedQuery(runtimeIdentity)
+      .where({ id })
+      .first();
     return row ? this.transformFromDBData(row) : null;
   }
 
-  private buildRuntimeScopedQuery(scope: InstructionRuntimeScope) {
+  private buildRuntimeScopedQuery(scope: ExternalDependencyRuntimeScope) {
     const query = this.knex(this.tableName);
     const isKnowledgeBaseScopedQuery = Boolean(scope.knowledgeBaseId);
 
@@ -102,7 +119,7 @@ export class InstructionRepository
     return query;
   }
 
-  private hasCanonicalRuntimeScope(scope: InstructionRuntimeScope) {
+  private hasCanonicalRuntimeScope(scope: ExternalDependencyRuntimeScope) {
     return this.canonicalScopeFields.some((field) => scope[field] != null);
   }
 
@@ -125,7 +142,7 @@ export class InstructionRepository
 
   private applyScopeField(
     query: Knex.QueryBuilder,
-    field: Exclude<keyof InstructionRuntimeScope, 'projectId'>,
+    field: Exclude<keyof ExternalDependencyRuntimeScope, 'projectId'>,
     value?: string | null,
   ) {
     const column = snakeCase(field);
@@ -143,21 +160,17 @@ export class InstructionRepository
     }
     const camelCaseData = mapKeys(data, (_value, key) => camelCase(key));
     const transformData = mapValues(camelCaseData, (value, key) => {
-      if (this.jsonbColumns.includes(key)) {
-        if (typeof value === 'string') {
-          return value ? JSON.parse(value) : value;
-        }
-        if (
-          key === 'relatedBusinessTerms' ||
-          key === 'relatedExternalDependencies'
-        ) {
-          return Array.isArray(value) ? value : [];
-        }
+      if (!this.jsonbColumns.includes(key)) {
         return value;
       }
-      return value;
+      const parsed =
+        typeof value === 'string' && value ? JSON.parse(value) : value;
+      if (this.arrayJsonbColumns.includes(key)) {
+        return Array.isArray(parsed) ? parsed : [];
+      }
+      return parsed && typeof parsed === 'object' ? parsed : null;
     });
-    return transformData as Instruction;
+    return transformData as ExternalDependency;
   };
 
   protected override transformToDBData = (data: any) => {
@@ -165,11 +178,13 @@ export class InstructionRepository
       throw new Error('Unexpected dbdata');
     }
     const transformedData = mapValues(data, (value, key) => {
-      if (this.jsonbColumns.includes(key)) {
-        return value == null ? null : JSON.stringify(value);
-      } else {
+      if (!this.jsonbColumns.includes(key)) {
         return value;
       }
+      if (this.arrayJsonbColumns.includes(key)) {
+        return JSON.stringify(Array.isArray(value) ? value : []);
+      }
+      return value == null ? null : JSON.stringify(value);
     });
     return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };

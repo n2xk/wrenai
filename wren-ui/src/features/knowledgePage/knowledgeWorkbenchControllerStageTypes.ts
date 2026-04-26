@@ -1,3 +1,4 @@
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import type { ActionsInput } from './knowledgeWorkbenchControllerStageActionsTypes';
 import type { ContentDataInput } from './knowledgeWorkbenchControllerStageContentTypes';
 import type { KnowledgeStateInput } from './knowledgeWorkbenchControllerStageKnowledgeTypes';
@@ -15,6 +16,7 @@ export type { RuleSqlStateInput } from './knowledgeWorkbenchControllerStageRuleS
 export type { ViewStateInput } from './knowledgeWorkbenchControllerStageViewTypes';
 
 export type KnowledgeWorkbenchControllerStageArgs = {
+  activeKnowledgeRuntimeSelector?: ClientRuntimeScopeSelector;
   actions: ActionsInput;
   contentData: ContentDataInput;
   knowledgeState: KnowledgeStateInput;

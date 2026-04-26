@@ -94,6 +94,9 @@ interface CreateInstructionRequest {
   instruction: string;
   questions?: string[];
   isGlobal?: boolean;
+  relatedBusinessTerms?: string[];
+  relatedExternalDependencies?: string[];
+  runtimeUsage?: Record<string, any> | null;
 }
 
 /**
@@ -132,6 +135,10 @@ const handleGetInstructions = async (
       instruction: instruction.instruction,
       questions: instruction.questions,
       isGlobal: isGlobalValue,
+      relatedBusinessTerms: instruction.relatedBusinessTerms || [],
+      relatedExternalDependencies:
+        instruction.relatedExternalDependencies || [],
+      runtimeUsage: instruction.runtimeUsage || null,
       createdAt: instruction.createdAt ?? null,
       updatedAt: instruction.updatedAt ?? null,
     };
@@ -179,8 +186,14 @@ const handleCreateInstruction = async (
     resource,
     context: auditContext,
   });
-  const { instruction, questions, isGlobal } =
-    req.body as CreateInstructionRequest;
+  const {
+    instruction,
+    questions,
+    isGlobal,
+    relatedBusinessTerms,
+    relatedExternalDependencies,
+    runtimeUsage,
+  } = req.body as CreateInstructionRequest;
 
   // Input validation
   if (!instruction) {
@@ -241,6 +254,14 @@ const handleCreateInstruction = async (
       instruction,
       questions: questions || [],
       isDefault: isGlobal === true,
+      relatedBusinessTerms: Array.isArray(relatedBusinessTerms)
+        ? relatedBusinessTerms
+        : [],
+      relatedExternalDependencies: Array.isArray(relatedExternalDependencies)
+        ? relatedExternalDependencies
+        : [],
+      runtimeUsage:
+        runtimeUsage && typeof runtimeUsage === 'object' ? runtimeUsage : null,
     },
   );
 
@@ -270,6 +291,10 @@ const handleCreateInstruction = async (
       instruction: newInstruction.instruction,
       questions: newInstruction.questions,
       isGlobal: isGlobalValue,
+      relatedBusinessTerms: newInstruction.relatedBusinessTerms || [],
+      relatedExternalDependencies:
+        newInstruction.relatedExternalDependencies || [],
+      runtimeUsage: newInstruction.runtimeUsage || null,
       createdAt: newInstruction.createdAt ?? null,
       updatedAt: newInstruction.updatedAt ?? null,
     },

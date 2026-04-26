@@ -7,6 +7,8 @@ export const KNOWLEDGE_WORKBENCH_SECTIONS = [
   'modeling',
   'sqlTemplates',
   'instructions',
+  'businessTerms',
+  'externalDependencies',
 ] as const;
 
 export type KnowledgeWorkbenchSection =

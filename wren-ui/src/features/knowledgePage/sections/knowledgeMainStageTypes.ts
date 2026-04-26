@@ -1,3 +1,4 @@
+import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import type { KnowledgeDetailFieldFilter } from '@/hooks/useKnowledgeAssetDetail';
 import type {
   KnowledgeAssetDetailField,
@@ -57,4 +58,5 @@ export type KnowledgeMainStageProps = {
   modelingWorkspaceKey: string;
   modelingSummary?: KnowledgeWorkbenchModelingSummary;
   onOpenModeling: () => void;
+  runtimeSelector?: ClientRuntimeScopeSelector;
 };

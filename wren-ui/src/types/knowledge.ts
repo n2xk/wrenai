@@ -2,6 +2,9 @@ export type CreateInstructionInput = {
   instruction: string;
   isDefault: boolean;
   questions: string[];
+  relatedBusinessTerms?: string[];
+  relatedExternalDependencies?: string[];
+  runtimeUsage?: Record<string, any> | null;
 };
 
 export type CreateSqlPairInput = {
@@ -30,8 +33,70 @@ export type Instruction = {
   instruction: string;
   isDefault: boolean;
   questions: string[];
+  relatedBusinessTerms?: string[];
+  relatedExternalDependencies?: string[];
+  runtimeUsage?: Record<string, any> | null;
   updatedAt: string;
 };
+
+export type BusinessTermCategory =
+  | 'metric'
+  | 'dimension'
+  | 'segment'
+  | 'formula'
+  | 'event'
+  | 'business_process';
+
+export type BusinessTerm = {
+  id: number;
+  termId: string;
+  name: string;
+  category: BusinessTermCategory | string;
+  aliases: string[];
+  definition: string;
+  canonicalExpression?: string | null;
+  sourceTables: string[];
+  sourceFields: string[];
+  relatedRules: string[];
+  relatedTemplates: string[];
+  features: string[];
+  conflictTerms: string[];
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type CreateBusinessTermInput = Omit<
+  BusinessTerm,
+  'id' | 'createdAt' | 'updatedAt'
+>;
+
+export type ExternalDependency = {
+  id: number;
+  dependencyId: string;
+  name: string;
+  aliases: string[];
+  sourceStatus: 'available' | 'missing' | 'partial' | 'manual_input' | string;
+  missingBehavior:
+    | 'ask_user'
+    | 'block_answer'
+    | 'allow_partial_answer'
+    | string;
+  requiredGrain: string[];
+  requiredByTerms: string[];
+  requiredByTemplates: string[];
+  relatedRules: string[];
+  askUserPrompt?: string | null;
+  validation?: Record<string, any> | null;
+  status: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type CreateExternalDependencyInput = Omit<
+  ExternalDependency,
+  'id' | 'createdAt' | 'updatedAt'
+>;
 
 export type SqlPair = {
   __typename?: 'SqlPair';

@@ -45,6 +45,36 @@ export default function KnowledgeInstructionFormFields({
           placeholder="请描述口径定义、字段约束、过滤条件和特殊说明。"
         />
       </Form.Item>
+      <Form.Item
+        label="关联业务概念 ID（逗号或换行分隔）"
+        name="relatedBusinessTermsText"
+      >
+        <Input.TextArea
+          disabled={isReadonly}
+          rows={3}
+          placeholder="first_deposit"
+        />
+      </Form.Item>
+      <Form.Item
+        label="关联外部依赖 ID（逗号或换行分隔）"
+        name="relatedExternalDependenciesText"
+      >
+        <Input.TextArea disabled={isReadonly} rows={3} placeholder="ad_spend" />
+      </Form.Item>
+      <Form.Item
+        label="运行时用途 runtime_usage（JSON）"
+        name="runtimeUsageJson"
+        tooltip="用于声明规则是否参与 instruction_retrieval / template_matching / external_dependency_detection 等流程。"
+      >
+        <Input.TextArea
+          disabled={isReadonly}
+          rows={6}
+          placeholder={`{
+  "participates_in": ["instruction_retrieval"],
+  "priority_hint": "high"
+}`}
+        />
+      </Form.Item>
     </WorkbenchEditorForm>
   );
 }

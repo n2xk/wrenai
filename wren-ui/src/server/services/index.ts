@@ -8,6 +8,7 @@ export * from './metadataService';
 export * from './dashboardService';
 export * from './askingTaskTracker';
 export * from './instructionService';
+export * from './businessKnowledgeService';
 export * from './authService';
 export * from './automationService';
 export * from './workspaceService';

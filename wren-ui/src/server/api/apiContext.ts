@@ -80,6 +80,7 @@ export const buildApiContextFromRequest = async ({
     dashboardService: components.dashboardService,
     sqlPairService: components.sqlPairService,
     instructionService: components.instructionService,
+    businessKnowledgeService: components.businessKnowledgeService,
     authService: components.authService,
     workspaceService: components.workspaceService,
     secretService: components.secretService,
@@ -103,6 +104,8 @@ export const buildApiContextFromRequest = async ({
     dashboardItemRepository: components.dashboardItemRepository,
     sqlPairRepository: components.sqlPairRepository,
     instructionRepository: components.instructionRepository,
+    businessTermRepository: components.businessTermRepository,
+    externalDependencyRepository: components.externalDependencyRepository,
     apiHistoryRepository: components.apiHistoryRepository,
     dashboardItemRefreshJobRepository:
       components.dashboardItemRefreshJobRepository,

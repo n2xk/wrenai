@@ -2,13 +2,18 @@ import type { KnowledgeWorkbenchMainStageProps } from './buildKnowledgeWorkbench
 import type { KnowledgeWorkbenchControllerStageArgs } from './knowledgeWorkbenchControllerStageTypes';
 
 export default function buildKnowledgeWorkbenchMainStageEditorInput({
+  activeKnowledgeRuntimeSelector,
   localState,
   modelingState,
   ruleSqlState,
   viewState,
 }: Pick<
   KnowledgeWorkbenchControllerStageArgs,
-  'localState' | 'modelingState' | 'ruleSqlState' | 'viewState'
+  | 'activeKnowledgeRuntimeSelector'
+  | 'localState'
+  | 'modelingState'
+  | 'ruleSqlState'
+  | 'viewState'
 >): Pick<
   KnowledgeWorkbenchMainStageProps,
   | 'ruleList'
@@ -34,6 +39,7 @@ export default function buildKnowledgeWorkbenchMainStageEditorInput({
   | 'modelingWorkspaceKey'
   | 'modelingSummary'
   | 'onOpenModeling'
+  | 'runtimeSelector'
 > {
   return {
     ruleList: ruleSqlState.ruleList,
@@ -59,5 +65,6 @@ export default function buildKnowledgeWorkbenchMainStageEditorInput({
     modelingWorkspaceKey: modelingState.committedModelingWorkspaceKey,
     modelingSummary: modelingState.modelingSummary,
     onOpenModeling: viewState.handleNavigateModeling,
+    runtimeSelector: activeKnowledgeRuntimeSelector || {},
   };
 }

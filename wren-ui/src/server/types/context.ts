@@ -26,6 +26,8 @@ import {
   IDashboardItemRepository,
   ISqlPairRepository,
   IInstructionRepository,
+  IBusinessTermRepository,
+  IExternalDependencyRepository,
   IApiHistoryRepository,
   IDashboardItemRefreshJobRepository,
   IKnowledgeBaseRepository,
@@ -49,6 +51,7 @@ import {
   IProjectService,
   IDashboardService,
   IInstructionService,
+  IBusinessKnowledgeService,
   IWorkspaceService,
   ISecretService,
   IConnectorService,
@@ -81,6 +84,7 @@ export interface IContext {
   dashboardService: IDashboardService;
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
+  businessKnowledgeService: IBusinessKnowledgeService;
   authService: IAuthService;
   workspaceService: IWorkspaceService;
   secretService: ISecretService;
@@ -106,6 +110,8 @@ export interface IContext {
   dashboardItemRepository: IDashboardItemRepository;
   sqlPairRepository: ISqlPairRepository;
   instructionRepository: IInstructionRepository;
+  businessTermRepository: IBusinessTermRepository;
+  externalDependencyRepository: IExternalDependencyRepository;
   apiHistoryRepository: IApiHistoryRepository;
   dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
   workspaceRepository: IWorkspaceRepository;

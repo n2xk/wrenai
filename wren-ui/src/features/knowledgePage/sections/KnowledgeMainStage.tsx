@@ -8,6 +8,8 @@ import {
 } from '@/features/knowledgePage/sections/buildKnowledgeMainStageSectionProps';
 import { MainStage } from '@/features/knowledgePage/index.styles';
 import KnowledgeWorkbenchHeader from '@/features/knowledgePage/sections/KnowledgeWorkbenchHeader';
+import KnowledgeBusinessTermsStage from '@/features/knowledgePage/sections/KnowledgeBusinessTermsStage';
+import KnowledgeExternalDependenciesStage from '@/features/knowledgePage/sections/KnowledgeExternalDependenciesStage';
 import KnowledgeInstructionsStage from '@/features/knowledgePage/sections/KnowledgeInstructionsStage';
 import KnowledgeModelingSection from '@/features/knowledgePage/sections/KnowledgeModelingSection';
 import KnowledgeOverviewStage from '@/features/knowledgePage/sections/KnowledgeOverviewStage';
@@ -64,6 +66,7 @@ function KnowledgeMainStage({
   modelingWorkspaceKey,
   modelingSummary,
   onOpenModeling,
+  runtimeSelector = {},
 }: KnowledgeMainStageProps) {
   const editors = useKnowledgeWorkbenchEditors(
     buildKnowledgeMainStageEditorsInput({
@@ -175,6 +178,20 @@ function KnowledgeMainStage({
             ruleManageLoading,
             updateInstructionLoading,
           })}
+        />
+      ) : null}
+
+      {activeWorkbenchSection === 'businessTerms' ? (
+        <KnowledgeBusinessTermsStage
+          isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
+          runtimeSelector={runtimeSelector}
+        />
+      ) : null}
+
+      {activeWorkbenchSection === 'externalDependencies' ? (
+        <KnowledgeExternalDependenciesStage
+          isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
+          runtimeSelector={runtimeSelector}
         />
       ) : null}
     </MainStage>

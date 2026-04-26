@@ -280,7 +280,15 @@ export class InstructionService implements IInstructionService {
   private pickGenerateInstructionInput(
     instruction: Instruction,
   ): GenerateInstructionInput {
-    return pick(instruction, ['id', 'instruction', 'questions', 'isDefault']);
+    return pick(instruction, [
+      'id',
+      'instruction',
+      'questions',
+      'isDefault',
+      'relatedBusinessTerms',
+      'relatedExternalDependencies',
+      'runtimeUsage',
+    ]);
   }
 
   private validateInstructionInput(input: InstructionInput): void {

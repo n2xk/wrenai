@@ -19,6 +19,8 @@ import {
   SqlPairRepository,
   AskingTaskRepository,
   InstructionRepository,
+  BusinessTermRepository,
+  ExternalDependencyRepository,
   ApiHistoryRepository,
   DashboardItemRefreshJobRepository,
   WorkspaceRepository,
@@ -65,6 +67,7 @@ import {
   DashboardService,
   AskingTaskTracker,
   InstructionService,
+  BusinessKnowledgeService,
   WorkspaceService,
   WorkspaceBootstrapService,
   KnowledgeBaseService,
@@ -116,6 +119,8 @@ export const initComponents = () => {
   const sqlPairRepository = new SqlPairRepository(knex);
   const askingTaskRepository = new AskingTaskRepository(knex);
   const instructionRepository = new InstructionRepository(knex);
+  const businessTermRepository = new BusinessTermRepository(knex);
+  const externalDependencyRepository = new ExternalDependencyRepository(knex);
   const apiHistoryRepository = new ApiHistoryRepository(knex);
   const dashboardItemRefreshJobRepository =
     new DashboardItemRefreshJobRepository(knex);
@@ -230,6 +235,11 @@ export const initComponents = () => {
   });
   const instructionService = new InstructionService({
     instructionRepository,
+    wrenAIAdaptor,
+  });
+  const businessKnowledgeService = new BusinessKnowledgeService({
+    businessTermRepository,
+    externalDependencyRepository,
     wrenAIAdaptor,
   });
   const workspaceService = new WorkspaceService({
@@ -433,6 +443,8 @@ export const initComponents = () => {
     askingTaskRepository,
     apiHistoryRepository,
     instructionRepository,
+    businessTermRepository,
+    externalDependencyRepository,
     dashboardItemRefreshJobRepository,
     workspaceRepository,
     userRepository,
@@ -475,6 +487,7 @@ export const initComponents = () => {
     dashboardService,
     sqlPairService,
     instructionService,
+    businessKnowledgeService,
     workspaceService,
     knowledgeBaseService,
     workspaceBootstrapService,

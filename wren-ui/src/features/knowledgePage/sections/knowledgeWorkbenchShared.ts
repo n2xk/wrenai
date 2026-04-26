@@ -4,7 +4,9 @@ export type KnowledgeWorkbenchSectionKey =
   | 'overview'
   | 'modeling'
   | 'sqlTemplates'
-  | 'instructions';
+  | 'instructions'
+  | 'businessTerms'
+  | 'externalDependencies';
 
 export type KnowledgeWorkbenchDetailTab = 'overview' | 'fields' | 'usage';
 

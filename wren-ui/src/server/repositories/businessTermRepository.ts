@@ -1,5 +1,4 @@
 import { Knex } from 'knex';
-import { BaseRepository, IBasicRepository } from './baseRepository';
 import {
   camelCase,
   isPlainObject,
@@ -7,8 +6,9 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
+import { BaseRepository, IBasicRepository } from './baseRepository';
 
-export interface Instruction {
+export interface BusinessTerm {
   id: number;
   projectId?: number | null;
   workspaceId?: string | null;
@@ -16,18 +16,27 @@ export interface Instruction {
   kbSnapshotId?: string | null;
   deployHash?: string | null;
   actorUserId?: string | null;
-  instruction: string;
-  questions: string[];
-  isDefault: boolean;
-  relatedBusinessTerms?: string[];
-  relatedExternalDependencies?: string[];
-  runtimeUsage?: Record<string, any> | null;
-  createdAt: string;
-  updatedAt: string;
+  termId: string;
+  name: string;
+  category: string;
+  aliases: string[];
+  definition: string;
+  canonicalExpression?: string | null;
+  sourceTables: string[];
+  sourceFields: string[];
+  relatedRules: string[];
+  relatedTemplates: string[];
+  features: string[];
+  conflictTerms: string[];
+  status: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export type InstructionRuntimeScope = Pick<
-  Instruction,
+export type BusinessTermRuntimeScope = Pick<
+  BusinessTerm,
   | 'projectId'
   | 'workspaceId'
   | 'knowledgeBaseId'
@@ -35,27 +44,30 @@ export type InstructionRuntimeScope = Pick<
   | 'deployHash'
 >;
 
-export interface IInstructionRepository extends IBasicRepository<Instruction> {
+export interface IBusinessTermRepository extends IBasicRepository<BusinessTerm> {
   findAllByRuntimeIdentity(
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction[]>;
+    runtimeIdentity: BusinessTermRuntimeScope,
+  ): Promise<BusinessTerm[]>;
   findOneByIdWithRuntimeIdentity(
     id: number,
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction | null>;
+    runtimeIdentity: BusinessTermRuntimeScope,
+  ): Promise<BusinessTerm | null>;
 }
 
-export class InstructionRepository
-  extends BaseRepository<Instruction>
-  implements IInstructionRepository
+export class BusinessTermRepository
+  extends BaseRepository<BusinessTerm>
+  implements IBusinessTermRepository
 {
   private readonly jsonbColumns = [
-    'questions',
-    'relatedBusinessTerms',
-    'relatedExternalDependencies',
-    'runtimeUsage',
+    'aliases',
+    'sourceTables',
+    'sourceFields',
+    'relatedRules',
+    'relatedTemplates',
+    'features',
+    'conflictTerms',
   ];
-  private readonly canonicalScopeFields: (keyof InstructionRuntimeScope)[] = [
+  private readonly canonicalScopeFields: (keyof BusinessTermRuntimeScope)[] = [
     'workspaceId',
     'knowledgeBaseId',
     'kbSnapshotId',
@@ -63,27 +75,31 @@ export class InstructionRepository
   ];
 
   constructor(knexPg: Knex) {
-    super({ knexPg, tableName: 'instruction' });
+    super({ knexPg, tableName: 'knowledge_business_terms' });
   }
 
   public async findAllByRuntimeIdentity(
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction[]> {
-    const query = this.buildRuntimeScopedQuery(runtimeIdentity);
+    runtimeIdentity: BusinessTermRuntimeScope,
+  ): Promise<BusinessTerm[]> {
+    const query = this.buildRuntimeScopedQuery(runtimeIdentity).orderBy(
+      'updated_at',
+      'desc',
+    );
     const rows = await query;
     return rows.map((row) => this.transformFromDBData(row));
   }
 
   public async findOneByIdWithRuntimeIdentity(
     id: number,
-    runtimeIdentity: InstructionRuntimeScope,
-  ): Promise<Instruction | null> {
-    const query = this.buildRuntimeScopedQuery(runtimeIdentity).where({ id });
-    const row = await query.first();
+    runtimeIdentity: BusinessTermRuntimeScope,
+  ): Promise<BusinessTerm | null> {
+    const row = await this.buildRuntimeScopedQuery(runtimeIdentity)
+      .where({ id })
+      .first();
     return row ? this.transformFromDBData(row) : null;
   }
 
-  private buildRuntimeScopedQuery(scope: InstructionRuntimeScope) {
+  private buildRuntimeScopedQuery(scope: BusinessTermRuntimeScope) {
     const query = this.knex(this.tableName);
     const isKnowledgeBaseScopedQuery = Boolean(scope.knowledgeBaseId);
 
@@ -102,7 +118,7 @@ export class InstructionRepository
     return query;
   }
 
-  private hasCanonicalRuntimeScope(scope: InstructionRuntimeScope) {
+  private hasCanonicalRuntimeScope(scope: BusinessTermRuntimeScope) {
     return this.canonicalScopeFields.some((field) => scope[field] != null);
   }
 
@@ -125,7 +141,7 @@ export class InstructionRepository
 
   private applyScopeField(
     query: Knex.QueryBuilder,
-    field: Exclude<keyof InstructionRuntimeScope, 'projectId'>,
+    field: Exclude<keyof BusinessTermRuntimeScope, 'projectId'>,
     value?: string | null,
   ) {
     const column = snakeCase(field);
@@ -145,19 +161,13 @@ export class InstructionRepository
     const transformData = mapValues(camelCaseData, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
         if (typeof value === 'string') {
-          return value ? JSON.parse(value) : value;
+          return value ? JSON.parse(value) : [];
         }
-        if (
-          key === 'relatedBusinessTerms' ||
-          key === 'relatedExternalDependencies'
-        ) {
-          return Array.isArray(value) ? value : [];
-        }
-        return value;
+        return Array.isArray(value) ? value : [];
       }
       return value;
     });
-    return transformData as Instruction;
+    return transformData as BusinessTerm;
   };
 
   protected override transformToDBData = (data: any) => {
@@ -166,10 +176,9 @@ export class InstructionRepository
     }
     const transformedData = mapValues(data, (value, key) => {
       if (this.jsonbColumns.includes(key)) {
-        return value == null ? null : JSON.stringify(value);
-      } else {
-        return value;
+        return JSON.stringify(Array.isArray(value) ? value : []);
       }
+      return value;
     });
     return mapKeys(transformedData, (_value, key) => snakeCase(key));
   };

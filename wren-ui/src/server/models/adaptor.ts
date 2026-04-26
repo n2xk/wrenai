@@ -497,10 +497,22 @@ export interface QuestionsResult {
 }
 
 export interface GenerateInstructionInput {
-  id: number;
+  id: string | number;
   instruction: string;
   questions: string[];
   isDefault: boolean;
+  knowledgeAssetType?: string;
+  businessTermId?: string;
+  externalDependencyId?: string;
+  aliases?: string[];
+  relatedBusinessTerms?: string[];
+  relatedExternalDependencies?: string[];
+  runtimeUsage?: Record<string, any> | null;
+  sourceStatus?: string;
+  missingBehavior?: string;
+  askUserPrompt?: string | null;
+  requiredGrain?: string[];
+  metadata?: Record<string, any> | null;
 }
 
 export interface GenerateInstructionsPayload {
@@ -509,7 +521,7 @@ export interface GenerateInstructionsPayload {
 }
 
 export interface DeleteInstructionsInput {
-  ids: number[];
+  ids: Array<string | number>;
   runtimeIdentity?: AskRuntimeIdentity | null;
 }
 
