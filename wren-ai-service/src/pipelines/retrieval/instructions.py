@@ -31,6 +31,18 @@ class OutputFormatter:
                 "instruction": doc.meta.get("instruction", ""),
                 "question": doc.content,
                 "instruction_id": doc.meta.get("instruction_id", ""),
+                "knowledge_asset_type": doc.meta.get("knowledge_asset_type"),
+                "business_term_id": doc.meta.get("business_term_id"),
+                "external_dependency_id": doc.meta.get("external_dependency_id"),
+                "aliases": doc.meta.get("aliases") or [],
+                "related_business_terms": doc.meta.get("related_business_terms") or [],
+                "related_external_dependencies": doc.meta.get("related_external_dependencies") or [],
+                "runtime_usage": doc.meta.get("runtime_usage"),
+                "source_status": doc.meta.get("source_status"),
+                "missing_behavior": doc.meta.get("missing_behavior"),
+                "ask_user_prompt": doc.meta.get("ask_user_prompt"),
+                "required_grain": doc.meta.get("required_grain") or [],
+                "metadata": doc.meta.get("metadata") or {},
             }
             list.append(formatted)
 

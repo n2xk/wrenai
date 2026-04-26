@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -21,6 +21,18 @@ class InstructionsService:
         # This is used to identify the default instruction needed to be retrieved for the project
         is_default: bool = False
         scope: Literal["sql", "answer", "chart"] = "sql"
+        knowledge_asset_type: Optional[str] = None
+        business_term_id: Optional[str] = None
+        external_dependency_id: Optional[str] = None
+        aliases: List[str] = []
+        related_business_terms: List[str] = []
+        related_external_dependencies: List[str] = []
+        runtime_usage: Optional[Dict[str, Any]] = None
+        source_status: Optional[str] = None
+        missing_behavior: Optional[str] = None
+        ask_user_prompt: Optional[str] = None
+        required_grain: List[str] = []
+        metadata: Optional[Dict[str, Any]] = None
 
     class Error(BaseModel):
         code: Literal["OTHERS"]
@@ -88,6 +100,18 @@ class InstructionsService:
                             question="",
                             is_default=True,
                             scope=instruction.scope,
+                            knowledge_asset_type=instruction.knowledge_asset_type,
+                            business_term_id=instruction.business_term_id,
+                            external_dependency_id=instruction.external_dependency_id,
+                            aliases=instruction.aliases,
+                            related_business_terms=instruction.related_business_terms,
+                            related_external_dependencies=instruction.related_external_dependencies,
+                            runtime_usage=instruction.runtime_usage,
+                            source_status=instruction.source_status,
+                            missing_behavior=instruction.missing_behavior,
+                            ask_user_prompt=instruction.ask_user_prompt,
+                            required_grain=instruction.required_grain,
+                            metadata=instruction.metadata,
                         )
                     )
                 else:
@@ -99,6 +123,18 @@ class InstructionsService:
                                 question=question,
                                 is_default=False,
                                 scope=instruction.scope,
+                                knowledge_asset_type=instruction.knowledge_asset_type,
+                                business_term_id=instruction.business_term_id,
+                                external_dependency_id=instruction.external_dependency_id,
+                                aliases=instruction.aliases,
+                                related_business_terms=instruction.related_business_terms,
+                                related_external_dependencies=instruction.related_external_dependencies,
+                                runtime_usage=instruction.runtime_usage,
+                                source_status=instruction.source_status,
+                                missing_behavior=instruction.missing_behavior,
+                                ask_user_prompt=instruction.ask_user_prompt,
+                                required_grain=instruction.required_grain,
+                                metadata=instruction.metadata,
                             )
                         )
 

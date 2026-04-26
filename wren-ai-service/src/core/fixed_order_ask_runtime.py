@@ -191,6 +191,171 @@ MISSING_SOURCE_PROMPTS = {
 }
 
 
+def _normalize_string_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    raw_values = value if isinstance(value, (list, tuple, set)) else [value]
+    normalized_values: list[str] = []
+    for raw_value in raw_values:
+        normalized_value = str(raw_value or "").strip()
+        if normalized_value and normalized_value not in normalized_values:
+            normalized_values.append(normalized_value)
+    return normalized_values
+
+
+def _get_mapping_value(mapping: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    for key in keys:
+        if key in mapping and mapping[key] not in (None, ""):
+            return mapping[key]
+    return default
+
+
+def _normalize_dependency_id(value: Any) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    aliases = {
+        "spend_amount": "ad_spend",
+        "pv": "access_pv",
+        "uv": "access_uv",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _canonical_dependency_name(dependency_id: str) -> str:
+    fallback_names = {
+        "ad_spend": "投放金额",
+        "access_pv": "访问PV",
+        "access_uv": "访问UV",
+        "download_click_uv": "下载点击UV",
+    }
+    return fallback_names.get(dependency_id, dependency_id)
+
+
+def _extract_business_signature_list(
+    business_signature: dict[str, Any],
+    *keys: str,
+) -> list[str]:
+    for key in keys:
+        values = _normalize_string_list(business_signature.get(key))
+        if values:
+            return values
+    return []
+
+
+def _query_matches_any_text(query: str, texts: Sequence[Any]) -> bool:
+    normalized_query = query.lower()
+    for text in _normalize_string_list(texts):
+        if text.lower() and text.lower() in normalized_query:
+            return True
+        if re.search(re.escape(text), query, flags=re.IGNORECASE):
+            return True
+    return False
+
+
+def _extract_configured_external_dependencies(
+    sql_samples: Sequence[Any] | None = None,
+    instructions: Sequence[Any] | None = None,
+) -> list[dict[str, Any]]:
+    dependencies: dict[str, dict[str, Any]] = {}
+
+    def upsert_dependency(dependency_id: str, **values: Any) -> None:
+        normalized_dependency_id = _normalize_dependency_id(dependency_id)
+        if not normalized_dependency_id:
+            return
+
+        existing = dependencies.setdefault(
+            normalized_dependency_id,
+            {
+                "id": normalized_dependency_id,
+                "name": _canonical_dependency_name(normalized_dependency_id),
+                "aliases": [],
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "ask_user_prompt": None,
+                "required_grain": [],
+                "required_by_terms": [],
+                "required_by_templates": [],
+                "matched_by_signature": False,
+                "matched_by_instruction": False,
+            },
+        )
+        for key, value in values.items():
+            if key in {
+                "aliases",
+                "required_grain",
+                "required_by_terms",
+                "required_by_templates",
+            }:
+                for item in _normalize_string_list(value):
+                    if item not in existing[key]:
+                        existing[key].append(item)
+                continue
+            if value not in (None, ""):
+                existing[key] = value
+
+    for sample in sql_samples or []:
+        signature = _get_business_signature(sample)
+        dependency_ids = _extract_business_signature_list(
+            signature,
+            "externalDependencies",
+            "external_dependencies",
+        )
+        template_ids = _normalize_string_list(
+            signature.get("templateId") or signature.get("template_id")
+        )
+        for dependency_id in dependency_ids:
+            upsert_dependency(
+                dependency_id,
+                required_by_templates=template_ids,
+                matched_by_signature=True,
+            )
+
+    for instruction in instructions or []:
+        asset_type = _get_sample_value(instruction, "knowledge_asset_type") or _get_sample_value(
+            instruction, "knowledgeAssetType"
+        )
+        if asset_type != "external_dependency":
+            continue
+
+        dependency_id = (
+            _get_sample_value(instruction, "external_dependency_id")
+            or _get_sample_value(instruction, "externalDependencyId")
+        )
+        metadata = _get_sample_value(instruction, "metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        upsert_dependency(
+            dependency_id,
+            name=_canonical_dependency_name(_normalize_dependency_id(dependency_id))
+            if not _get_sample_value(instruction, "name")
+            else _get_sample_value(instruction, "name"),
+            aliases=_get_sample_value(instruction, "aliases") or [],
+            source_status=_get_sample_value(instruction, "source_status")
+            or _get_sample_value(instruction, "sourceStatus")
+            or "missing",
+            missing_behavior=_get_sample_value(instruction, "missing_behavior")
+            or _get_sample_value(instruction, "missingBehavior")
+            or "ask_user",
+            ask_user_prompt=_get_sample_value(instruction, "ask_user_prompt")
+            or _get_sample_value(instruction, "askUserPrompt"),
+            required_grain=_get_sample_value(instruction, "required_grain")
+            or _get_sample_value(instruction, "requiredGrain")
+            or [],
+            required_by_terms=metadata.get("required_by_terms")
+            or metadata.get("requiredByTerms")
+            or _get_sample_value(instruction, "related_business_terms")
+            or [],
+            required_by_templates=metadata.get("required_by_templates")
+            or metadata.get("requiredByTemplates")
+            or [],
+            matched_by_instruction=True,
+        )
+
+    return list(dependencies.values())
+
+
 def _first_match(patterns: Sequence[str], query: str) -> Optional[str]:
     for pattern in patterns:
         match = re.search(pattern, query, flags=re.IGNORECASE)
@@ -581,7 +746,28 @@ def _score_sql_sample_for_query(
     )
     query_features = _extract_query_features(query)
     sample_features = _extract_query_features(sample_text)
+    business_signature = _get_business_signature(sample)
+    signature_positive_cues = _extract_business_signature_list(
+        business_signature, "positiveCues", "positive_cues"
+    )
+    signature_negative_cues = _extract_business_signature_list(
+        business_signature, "negativeCues", "negative_cues"
+    )
+    signature_features = set(
+        _extract_business_signature_list(business_signature, "features")
+    )
     score = base_score
+
+    for cue in signature_positive_cues:
+        if query and _query_matches_any_text(query, [cue]):
+            score += 0.45
+
+    for cue in signature_negative_cues:
+        if query and _query_matches_any_text(query, [cue]):
+            score -= 1.2
+
+    for feature in query_features & signature_features:
+        score += TEMPLATE_FEATURE_WEIGHTS.get(feature, 0.5) * 0.45
 
     for feature, weight in TEMPLATE_FEATURE_WEIGHTS.items():
         if feature in query_features and feature in sample_features:
@@ -1180,6 +1366,18 @@ def _build_template_decision_payload(
         "dialect_compatible": None,
         "dry_run_compatible": None,
         "validation_error": None,
+        "business_signature": _get_business_signature(sample),
+        "detected_concepts": _extract_business_signature_list(
+            _get_business_signature(sample),
+            "concepts",
+            "businessConcepts",
+            "business_concepts",
+        ),
+        "required_external_dependencies": _extract_business_signature_list(
+            _get_business_signature(sample),
+            "externalDependencies",
+            "external_dependencies",
+        ),
     }
 
 
@@ -1218,9 +1416,123 @@ def _update_template_runtime_metrics(
 
 def detect_missing_external_source_requirement(
     query: Optional[str],
+    *,
+    sql_samples: Sequence[Any] | None = None,
+    instructions: Sequence[Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not query:
         return None
+
+    configured_dependencies = _extract_configured_external_dependencies(
+        sql_samples=sql_samples,
+        instructions=instructions,
+    )
+
+    def build_requirement(
+        dependencies: Sequence[dict[str, Any]],
+        *,
+        source: str,
+        granularity_hint: Optional[str] = None,
+    ) -> Optional[dict[str, Any]]:
+        missing_dependencies = [
+            dependency
+            for dependency in dependencies
+            if str(dependency.get("source_status") or "missing").lower()
+            in {"missing", "partial", "manual_input"}
+            and str(dependency.get("missing_behavior") or "ask_user").lower()
+            in {"ask_user", "block_answer"}
+        ]
+        if not missing_dependencies:
+            return None
+
+        required_metrics = []
+        required_dependency_ids = []
+        prompts = []
+        required_grain_values: list[str] = []
+        for dependency in missing_dependencies:
+            name = str(dependency.get("name") or dependency.get("id") or "").strip()
+            dependency_id = str(dependency.get("id") or "").strip()
+            if name and name not in required_metrics:
+                required_metrics.append(name)
+            if dependency_id and dependency_id not in required_dependency_ids:
+                required_dependency_ids.append(dependency_id)
+            prompt = _normalize_instruction(dependency.get("ask_user_prompt"))
+            if prompt and prompt not in prompts:
+                prompts.append(prompt)
+            for grain in _normalize_string_list(dependency.get("required_grain")):
+                if grain not in required_grain_values:
+                    required_grain_values.append(grain)
+
+        if not required_metrics:
+            return None
+
+        if granularity_hint is None:
+            if required_grain_values:
+                granularity_hint = "请按以下统计粒度提供：" + "、".join(required_grain_values) + "。"
+            elif re.search(r"cohort|ROI|回收|首存成本", query, flags=re.IGNORECASE):
+                granularity_hint = "请按对应统计周期提供这些外部指标。"
+            elif re.search(r"日报|趋势|按天|日期|渠道", query, flags=re.IGNORECASE):
+                granularity_hint = "请按每个日期、每个渠道提供这些外部指标。"
+            else:
+                granularity_hint = "请按当前问题对应的统计粒度提供这些外部指标。"
+
+        missing_metrics = "、".join(required_metrics)
+        prompt_suffix = "" if not prompts else " " + " ".join(prompts)
+        content = (
+            "当前知识库还缺少以下外部指标："
+            f"{missing_metrics}。所以现在不能直接输出或并表这些结果，也不能编造。"
+            f"{granularity_hint}"
+            "请先把这些指标补充给我后，我再和现有 SQL 可查询的内部指标一起输出。"
+            f"{prompt_suffix}"
+        )
+        return {
+            "reasoning": (
+                f"问题依赖当前知识库中缺失的外部指标：{missing_metrics}。"
+                "在用户补充这些指标前，不能直接编造结果。"
+            ),
+            "content": content,
+            "instruction": {
+                "instruction": (
+                    "当前知识库缺少以下外部指标："
+                    f"{missing_metrics}。请先明确告知用户当前无法直接计算，并要求用户补充这些指标；"
+                    "不能编造，也不能用其他字段替代。"
+                    f"{granularity_hint}"
+                ),
+                "source": source,
+                "required_metrics": required_metrics,
+                "required_external_dependencies": required_dependency_ids,
+            },
+            "required_external_dependencies": required_dependency_ids,
+        }
+
+    configured_matches: list[dict[str, Any]] = []
+    for dependency in configured_dependencies:
+        match_texts = [
+            dependency.get("name"),
+            dependency.get("id"),
+            *(_normalize_string_list(dependency.get("aliases"))),
+        ]
+        required_by_terms = _normalize_string_list(dependency.get("required_by_terms"))
+        required_by_templates = _normalize_string_list(
+            dependency.get("required_by_templates")
+        )
+        signature_matched = bool(dependency.get("matched_by_signature"))
+        instruction_matched = bool(dependency.get("matched_by_instruction"))
+        if (
+            _query_matches_any_text(query, match_texts)
+            or (required_by_terms and _query_matches_any_text(query, required_by_terms))
+            or (required_by_templates and _query_matches_any_text(query, required_by_templates))
+            or signature_matched
+            or instruction_matched
+        ):
+            configured_matches.append(dependency)
+
+    configured_requirement = build_requirement(
+        configured_matches,
+        source="configured_external_dependency",
+    )
+    if configured_requirement:
+        return configured_requirement
 
     required_metrics: list[str] = []
     normalized_query = query.upper()
@@ -1273,31 +1585,19 @@ def detect_missing_external_source_requirement(
     else:
         granularity_hint = "请按当前问题对应的统计粒度提供这些外部指标。"
 
-    missing_metrics = "、".join(required_metrics)
-    content = (
-        "当前知识库还缺少以下外部指标："
-        f"{missing_metrics}。所以现在不能直接输出或并表这些结果，也不能编造。"
-        f"{granularity_hint}"
-        "请先把这些指标补充给我后，我再和现有 SQL 可查询的内部指标一起输出。"
+    return build_requirement(
+        [
+            {
+                "id": metric,
+                "name": metric,
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+            }
+            for metric in required_metrics
+        ],
+        source="missing_source_rule",
+        granularity_hint=granularity_hint,
     )
-    return {
-        "reasoning": (
-            f"问题依赖当前知识库中缺失的外部指标：{missing_metrics}。"
-            "在用户补充这些指标前，不能直接编造结果。"
-        ),
-        "content": content,
-        "instruction": {
-            "instruction": (
-                "当前知识库缺少以下外部指标："
-                f"{missing_metrics}。请先明确告知用户当前无法直接计算，并要求用户补充这些指标；"
-                "不能编造，也不能用其他字段替代。"
-                f"{granularity_hint}"
-            ),
-            "source": "missing_source_rule",
-            "required_metrics": required_metrics,
-        },
-    }
-
 
 def _format_template_parameter(value: Any) -> str:
     if isinstance(value, bool):
@@ -1392,6 +1692,9 @@ def build_template_decision(
             "dialect_compatible": None,
             "dry_run_compatible": None,
             "validation_error": None,
+            "business_signature": {},
+            "detected_concepts": [],
+            "required_external_dependencies": [],
         }
 
     top_sample = sql_samples[0]
@@ -2630,7 +2933,9 @@ class BaseFixedOrderAskRuntime:
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
         missing_source_requirement = detect_missing_external_source_requirement(
-            state.user_query
+            state.user_query,
+            sql_samples=state.sql_samples,
+            instructions=state.effective_instructions or state.instructions,
         )
         if not missing_source_requirement:
             return None
@@ -2639,6 +2944,12 @@ class BaseFixedOrderAskRuntime:
             *state.effective_instructions,
             missing_source_requirement["instruction"],
         ]
+        if state.template_decision is not None:
+            state.template_decision["required_external_dependencies"] = (
+                missing_source_requirement.get("required_external_dependencies")
+                or state.template_decision.get("required_external_dependencies")
+                or []
+            )
         state.intent_reasoning = missing_source_requirement["reasoning"]
         state.ask_path = "general"
 
