@@ -249,6 +249,78 @@ def test_build_template_decision_keeps_followup_history_template_anchor():
     assert result["parameters"]["cohort_end_date"] == "2026-04-02"
 
 
+def test_build_template_decision_keeps_history_backed_anchor_for_low_margin_followup():
+    correct_template = {
+        "id": "template-04",
+        "question": "统计某渠道首存 cohort 在指定回收周期内的累计渠道收入",
+        "sql": (
+            "WITH RECURSIVE seq AS ( SELECT 1 AS relative_day_no UNION ALL "
+            "SELECT relative_day_no + 1 FROM seq WHERE relative_day_no < :period_days), "
+            "first_deposit_cohort AS ( SELECT d.player_id, DATE(MIN(d.callback_time)) "
+            "AS first_deposit_date FROM dwd_order_deposit d WHERE d.tenant_plat_id "
+            "= :tenant_plat_id AND d.channel_id = :channel_id AND d.callback_time "
+            ">= :cohort_start_date AND d.callback_time < DATE_ADD(:cohort_end_date, "
+            "INTERVAL 1 DAY) GROUP BY d.player_id ) SELECT * FROM first_deposit_cohort"
+        ),
+        "asset_kind": "sql_template",
+        "template_level": "L2",
+        "template_mode": "anchored_template",
+        "source_type": "business_import",
+        "business_signature": {"templateId": "T04"},
+        "score": 0.82,
+        "status": "active",
+    }
+    competing_template = {
+        "id": "template-10",
+        "question": "统计首存 cohort 从首存当日开始的每日趋势",
+        "sql": (
+            "WITH RECURSIVE seq AS ( SELECT 1 AS relative_day_no UNION ALL "
+            "SELECT relative_day_no + 1 FROM seq WHERE relative_day_no < :n_days), "
+            "first_deposit_cohort AS ( SELECT d.player_id, DATE(MIN(d.callback_time)) "
+            "AS first_deposit_date FROM dwd_order_deposit d WHERE d.tenant_plat_id "
+            "= :tenant_plat_id AND d.channel_id = :channel_id AND d.callback_time "
+            ">= :cohort_start_date AND d.callback_time < DATE_ADD(:cohort_end_date, "
+            "INTERVAL 1 DAY) GROUP BY d.player_id ) SELECT * FROM first_deposit_cohort"
+        ),
+        "asset_kind": "sql_template",
+        "template_level": "L2",
+        "template_mode": "anchored_template",
+        "source_type": "business_import",
+        "business_signature": {"templateId": "T10"},
+        "score": 0.82,
+        "status": "active",
+    }
+
+    result = build_template_decision(
+        [correct_template, competing_template],
+        query="那只看 2026-04-02 的首存 cohort 呢？",
+        histories=[
+            {
+                "question": (
+                    "统计租户平台990001下渠道990011在2026-04-01到2026-04-03"
+                    "首存cohort从D1到D7的累计收入"
+                ),
+                "sql": (
+                    "WITH RECURSIVE tidb_business_demo_seq AS (SELECT 1 AS "
+                    "relative_day_no UNION ALL SELECT relative_day_no + 1 FROM "
+                    "tidb_business_demo_seq WHERE relative_day_no < 7), "
+                    "tidb_business_demo_first_deposit_cohort AS (SELECT * FROM "
+                    "tidb_business_demo_dwd_order_deposit) SELECT * FROM "
+                    "tidb_business_demo_first_deposit_cohort"
+                ),
+            }
+        ],
+    )
+
+    assert result["template_id"] == "template-04"
+    assert result["mode"] == "anchored_template"
+    assert result["fallback_reason"] is None
+    assert result["parameters"]["tenant_plat_id"] == 990001
+    assert result["parameters"]["channel_id"] == 990011
+    assert result["parameters"]["cohort_start_date"] == "2026-04-02"
+    assert result["parameters"]["cohort_end_date"] == "2026-04-02"
+
+
 def test_build_template_decision_ignores_optional_is_null_placeholders():
     result = build_template_decision(
         [

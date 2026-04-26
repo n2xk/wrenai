@@ -5,7 +5,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Callable, Optional, Protocol, Sequence
+from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
 
 from src.core.mixed_answer_composer import MixedAnswerComposer
 from src.core.pipeline import BasicPipeline
@@ -700,6 +700,77 @@ def _extract_relation_names(sql: Optional[str]) -> set[str]:
     return relation_names
 
 
+def _normalize_relation_name_against(
+    relation_name: str,
+    reference_relation_names: Iterable[str],
+) -> str:
+    lowered_relation_name = relation_name.lower()
+    lowered_references = [str(name).lower() for name in reference_relation_names if name]
+    if lowered_relation_name in lowered_references:
+        return lowered_relation_name
+
+    suffix_matches = [
+        reference
+        for reference in lowered_references
+        if lowered_relation_name.endswith(f"_{reference}")
+        or lowered_relation_name.endswith(f".{reference}")
+    ]
+    if suffix_matches:
+        return max(suffix_matches, key=len)
+
+    return lowered_relation_name
+
+
+def _normalize_relation_names_against(
+    relation_names: Iterable[str],
+    reference_relation_names: Iterable[str],
+) -> set[str]:
+    reference_relation_names = list(reference_relation_names)
+    return {
+        _normalize_relation_name_against(relation_name, reference_relation_names)
+        for relation_name in relation_names
+        if relation_name
+    }
+
+
+def _relation_name_sets_overlap(
+    left_relation_names: Iterable[str],
+    right_relation_names: Iterable[str],
+) -> bool:
+    left_relation_names = {str(name).lower() for name in left_relation_names if name}
+    right_relation_names = {str(name).lower() for name in right_relation_names if name}
+    if not left_relation_names or not right_relation_names:
+        return False
+
+    normalized_left = _normalize_relation_names_against(
+        left_relation_names,
+        right_relation_names,
+    )
+    normalized_right = _normalize_relation_names_against(
+        right_relation_names,
+        left_relation_names,
+    )
+    return bool(
+        normalized_left & right_relation_names or left_relation_names & normalized_right
+    )
+
+
+def _relation_name_set_is_subset(
+    possible_subset: Iterable[str],
+    possible_superset: Iterable[str],
+) -> bool:
+    possible_subset = {str(name).lower() for name in possible_subset if name}
+    possible_superset = {str(name).lower() for name in possible_superset if name}
+    if not possible_subset or not possible_superset:
+        return False
+
+    normalized_subset = _normalize_relation_names_against(
+        possible_subset,
+        possible_superset,
+    )
+    return normalized_subset.issubset(possible_superset)
+
+
 def _matches_history_template_context(
     template_sql: Optional[str], history_sql: Optional[str]
 ) -> bool:
@@ -714,17 +785,28 @@ def _matches_history_template_context(
 
     template_ctes = set(_extract_cte_names(template_sql))
     history_ctes = set(_extract_cte_names(history_sql))
-    if template_ctes and history_ctes and template_ctes & history_ctes:
-        if history_ctes.issubset(template_ctes) or template_ctes.issubset(history_ctes):
+    if template_ctes and history_ctes and _relation_name_sets_overlap(
+        template_ctes,
+        history_ctes,
+    ):
+        if _relation_name_set_is_subset(
+            history_ctes,
+            template_ctes,
+        ) or _relation_name_set_is_subset(template_ctes, history_ctes):
             return True
 
     history_relations = _extract_relation_names(history_sql)
-    if template_ctes and history_relations and template_ctes & history_relations:
+    if template_ctes and history_relations and _relation_name_sets_overlap(
+        template_ctes,
+        history_relations,
+    ):
         return True
 
     template_relations = _extract_relation_names(template_sql)
     return bool(
-        template_relations and history_relations and template_relations & history_relations
+        template_relations
+        and history_relations
+        and _relation_name_sets_overlap(template_relations, history_relations)
     )
 
 
@@ -1756,6 +1838,15 @@ def build_template_decision(
         and _is_trusted_template_candidate(second_sample)
         and not is_same_template_family_conflict
     )
+    latest_history_sql = _get_latest_history_sql(histories)
+    has_history_backed_template_continuity = bool(
+        latest_history_sql
+        and not missing_parameters
+        and _matches_history_template_context(
+            _get_sample_value(top_sample, "sql"),
+            latest_history_sql,
+        )
+    )
     has_min_retrieval_support = _has_min_retrieval_support(raw_score, top_adjusted_score)
 
     if _is_anchored_template_candidate(top_sample):
@@ -1788,7 +1879,7 @@ def build_template_decision(
                 sql_source="generated",
             )
 
-        if has_low_margin_conflict:
+        if has_low_margin_conflict and not has_history_backed_template_continuity:
             return _build_template_decision_payload(
                 decision_reason="trusted_reference_selected",
                 fallback_reason="template_conflict_low_margin",
