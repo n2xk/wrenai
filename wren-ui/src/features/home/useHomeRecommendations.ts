@@ -262,7 +262,7 @@ export function useHomeRecommendations({
     }
 
     if (sampleQuestions.length > 0) {
-      return '问题来自当前运行时的样例题库，点击后会填入输入框。';
+      return '问题来自当前知识库的推荐问法或样例题库，点击后会填入输入框。';
     }
 
     if (recommendationKnowledgeBase) {

@@ -1,4 +1,5 @@
 import { IContext } from '@server/types';
+import type { Instruction, SqlPair } from '@server/repositories';
 import { getSampleAskQuestions, SampleDatasetName } from '../data';
 import { TelemetryEvent, WrenService } from '../telemetry/telemetry';
 import {
@@ -25,6 +26,150 @@ import {
   transformAskingTask,
 } from './askingControllerScopeSupport';
 
+const MAX_KNOWLEDGE_BASE_SUGGESTED_QUESTIONS = 6;
+
+const TEMPLATE_LEVEL_RANK: Record<string, number> = {
+  L0: 0,
+  L1: 1,
+  L2: 2,
+  L3: 3,
+};
+
+const GOVERNED_SQL_TEMPLATE_SOURCE_TYPES = new Set([
+  'admin_marked',
+  'business_import',
+  'system_promoted',
+]);
+
+const normalizeText = (value?: string | null) => String(value || '').trim();
+
+const getTemplateLevelRank = (templateLevel?: string | null) =>
+  TEMPLATE_LEVEL_RANK[String(templateLevel || 'L0').toUpperCase()] || 0;
+
+const getBusinessSignatureTemplateId = (
+  businessSignature?: Record<string, any> | null,
+) => {
+  const templateId =
+    businessSignature?.templateId || businessSignature?.template_id;
+  return typeof templateId === 'string' ? templateId.trim() : '';
+};
+
+const getSqlPairSuggestionPriority = (sqlPair: SqlPair) => {
+  const levelRank = getTemplateLevelRank(sqlPair.templateLevel);
+  const sourceType = String(sqlPair.sourceType || '');
+
+  if (sqlPair.assetKind === 'sql_template') {
+    return 300 + levelRank;
+  }
+  if (levelRank >= 2) {
+    return 250 + levelRank;
+  }
+  if (GOVERNED_SQL_TEMPLATE_SOURCE_TYPES.has(sourceType)) {
+    return 220;
+  }
+  if (sqlPair.templateMode === 'trusted_reference') {
+    return 150;
+  }
+  return 100 + levelRank;
+};
+
+const buildSqlPairSuggestionLabel = (sqlPair: SqlPair) => {
+  const templateId = getBusinessSignatureTemplateId(sqlPair.businessSignature);
+  if (templateId) {
+    return `业务模板 ${templateId}`;
+  }
+
+  if (sqlPair.assetKind === 'sql_template') {
+    const templateLevel = normalizeText(sqlPair.templateLevel);
+    return templateLevel ? `${templateLevel} 业务模板` : '业务模板';
+  }
+
+  if (sqlPair.templateMode === 'trusted_reference') {
+    return '可信参考';
+  }
+
+  return '问数样例';
+};
+
+const buildKnowledgeBaseSuggestedQuestionsFromSqlPairs = (
+  sqlPairs: SqlPair[],
+) => {
+  const seenQuestions = new Set<string>();
+
+  return [...sqlPairs]
+    .filter((sqlPair) => {
+      const question = normalizeText(sqlPair.question);
+      const status = String(sqlPair.status || 'active');
+      return Boolean(question) && status !== 'deprecated';
+    })
+    .sort((left, right) => {
+      const priorityDelta =
+        getSqlPairSuggestionPriority(right) -
+        getSqlPairSuggestionPriority(left);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+
+      return (left.id || 0) - (right.id || 0);
+    })
+    .flatMap((sqlPair) => {
+      const question = normalizeText(sqlPair.question);
+      const normalizedQuestion = question.toLowerCase();
+      if (seenQuestions.has(normalizedQuestion)) {
+        return [];
+      }
+      seenQuestions.add(normalizedQuestion);
+
+      return [
+        {
+          question,
+          label: buildSqlPairSuggestionLabel(sqlPair),
+        },
+      ];
+    })
+    .slice(0, MAX_KNOWLEDGE_BASE_SUGGESTED_QUESTIONS);
+};
+
+const buildKnowledgeBaseSuggestedQuestionsFromInstructions = (
+  instructions: Instruction[],
+) => {
+  const seenQuestions = new Set<string>();
+
+  return instructions
+    .flatMap((instruction) =>
+      (instruction.questions || []).map((question) => normalizeText(question)),
+    )
+    .filter((question) => {
+      const normalizedQuestion = question.toLowerCase();
+      if (!question || seenQuestions.has(normalizedQuestion)) {
+        return false;
+      }
+      seenQuestions.add(normalizedQuestion);
+      return true;
+    })
+    .slice(0, MAX_KNOWLEDGE_BASE_SUGGESTED_QUESTIONS)
+    .map((question) => ({ question, label: '分析规则' }));
+};
+
+const getKnowledgeBaseSuggestedQuestions = async (ctx: IContext) => {
+  if (!ctx.runtimeScope) {
+    return [];
+  }
+
+  const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+  const sqlPairs =
+    await ctx.sqlPairRepository.findAllByRuntimeIdentity(runtimeIdentity);
+  const sqlPairQuestions =
+    buildKnowledgeBaseSuggestedQuestionsFromSqlPairs(sqlPairs);
+  if (sqlPairQuestions.length > 0) {
+    return sqlPairQuestions;
+  }
+
+  const instructions =
+    await ctx.instructionRepository.findAllByRuntimeIdentity(runtimeIdentity);
+  return buildKnowledgeBaseSuggestedQuestionsFromInstructions(instructions);
+};
+
 export const getSuggestedQuestionsAction = async (
   ctx: IContext,
 ): Promise<SuggestedQuestionResponse> => {
@@ -41,7 +186,7 @@ export const getSuggestedQuestionsAction = async (
         questions:
           getSampleAskQuestions(sampleDataset as SampleDatasetName) || [],
       }
-    : { questions: [] };
+    : { questions: await getKnowledgeBaseSuggestedQuestions(ctx) };
 
   await recordKnowledgeBaseReadAudit(ctx, {
     payloadJson: {

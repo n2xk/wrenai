@@ -153,6 +153,10 @@ describe('AskingController', () => {
       },
       sqlPairRepository: {
         findOneBy: jest.fn(),
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+      },
+      instructionRepository: {
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
       },
       knowledgeBaseRepository: {
         findOneBy: jest.fn(),
@@ -448,6 +452,94 @@ describe('AskingController', () => {
       ),
     ).rejects.toThrow('This snapshot is outdated and cannot be executed');
     expect(ctx.askingService.createAskingTask).not.toHaveBeenCalled();
+  });
+
+  it('returns knowledge-base SQL template questions when no sample dataset is configured', async () => {
+    const resolver = new AskingController();
+    const ctx = createContext({
+      sqlPairRepository: {
+        findOneBy: jest.fn(),
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            question: '  What is total revenue by day?  ',
+            sql: 'select 1',
+            assetKind: 'sql_pair',
+            templateLevel: 'L0',
+            status: 'active',
+          },
+          {
+            id: 2,
+            question: 'Which channel has the lowest ROI?',
+            sql: 'select 2',
+            assetKind: 'sql_template',
+            templateLevel: 'L2',
+            sourceType: 'business_import',
+            businessSignature: { template_id: 'T08' },
+            status: 'active',
+          },
+          {
+            id: 3,
+            question: 'Deprecated question',
+            sql: 'select 3',
+            assetKind: 'sql_template',
+            status: 'deprecated',
+          },
+        ]),
+      },
+    });
+
+    const result = await resolver.getSuggestedQuestions(null, {}, ctx);
+
+    expect(ctx.sqlPairRepository.findAllByRuntimeIdentity).toHaveBeenCalledWith(
+      runtimeIdentity,
+    );
+    expect(result.questions).toEqual([
+      {
+        question: 'Which channel has the lowest ROI?',
+        label: '业务模板 T08',
+      },
+      {
+        question: 'What is total revenue by day?',
+        label: '问数样例',
+      },
+    ]);
+  });
+
+  it('falls back to analysis-rule questions when SQL pair suggestions are empty', async () => {
+    const resolver = new AskingController();
+    const ctx = createContext({
+      instructionRepository: {
+        findAllByRuntimeIdentity: jest.fn().mockResolvedValue([
+          {
+            id: 1,
+            instruction: 'Use GMV rules',
+            questions: [
+              'How does ROI trend by day?',
+              'How does ROI trend by day?',
+              '  ',
+            ],
+            isDefault: false,
+          },
+          {
+            id: 2,
+            instruction: 'Use retention rules',
+            questions: ['Which cohorts retained best?'],
+            isDefault: false,
+          },
+        ]),
+      },
+    });
+
+    const result = await resolver.getSuggestedQuestions(null, {}, ctx);
+
+    expect(
+      ctx.instructionRepository.findAllByRuntimeIdentity,
+    ).toHaveBeenCalledWith(runtimeIdentity);
+    expect(result.questions).toEqual([
+      { question: 'How does ROI trend by day?', label: '分析规则' },
+      { question: 'Which cohorts retained best?', label: '分析规则' },
+    ]);
   });
 
   it('returns sample suggested questions from knowledge base sample dataset', async () => {
