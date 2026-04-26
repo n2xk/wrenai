@@ -19,6 +19,12 @@ keywords:
   - ES
   - 玩家日汇总
   - VIP日快照
+related_business_terms: []
+related_external_dependencies: []
+runtime_usage:
+  participates_in:
+    - instruction_retrieval
+  priority_hint: medium
 source_documents:
   - 第一期数据报表需求V1.xlsx
   - 数据报表API对应SQL&DSL语句整理.xlsx

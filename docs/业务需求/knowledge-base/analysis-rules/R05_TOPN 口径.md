@@ -21,6 +21,14 @@ keywords:
   - TOP5
   - 非TOP3
   - 非TOP5
+related_business_terms:
+  - topn_segment
+related_external_dependencies: []
+runtime_usage:
+  participates_in:
+    - instruction_retrieval
+    - template_matching
+  priority_hint: high
 source_documents:
   - 第一期数据报表需求V1.xlsx
   - 数据报表API对应SQL&DSL语句整理.xlsx

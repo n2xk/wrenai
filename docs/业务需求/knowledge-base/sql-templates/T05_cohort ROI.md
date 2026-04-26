@@ -21,6 +21,34 @@ runtime_sync:
   question_count: 0
   record_ids: []
   blocked_reason: blocked_missing_source
+business_signature:
+  template_id: T05
+  concepts:
+    - roi
+    - first_deposit
+  features:
+    - cohort
+    - roi
+    - external_dependency
+  metrics:
+    - roi
+    - cumulative_revenue
+    - ad_spend
+  dimensions:
+    - first_deposit_date
+    - relative_day_no
+  parameter_slots: []
+  external_dependencies:
+    - ad_spend
+  positive_cues:
+    - ROI
+    - 投放回收
+    - 投入产出比
+    - cohort ROI
+  negative_cues:
+    - PV
+    - UV
+  expected_grain: first_deposit_date + relative_day_no
 source_tables:
   - dwd_order_deposit
   - dwd_bet_order

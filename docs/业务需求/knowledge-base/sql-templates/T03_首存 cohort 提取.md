@@ -26,6 +26,32 @@ runtime_sync:
   source_type: business_import
   template_level: L2
   template_mode: anchored_template
+business_signature:
+  template_id: T03
+  concepts:
+    - first_deposit
+    - new_customer_first_deposit
+  features:
+    - cohort
+    - first_deposit
+  metrics:
+    - first_deposit_user_count
+    - first_deposit_amount
+  dimensions:
+    - first_deposit_date
+    - channel_id
+    - player_id
+  parameter_slots: []
+  external_dependencies: []
+  positive_cues:
+    - 首存cohort
+    - 首存用户
+    - 首次存款用户
+    - 新客首存
+  negative_cues:
+    - 续存
+    - ROI
+  expected_grain: first_deposit_user
 source_tables:
   - dwd_order_deposit
   - dim_player

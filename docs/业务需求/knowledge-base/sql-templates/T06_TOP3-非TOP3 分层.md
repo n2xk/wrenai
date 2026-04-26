@@ -26,6 +26,29 @@ runtime_sync:
   source_type: business_import
   template_level: L2
   template_mode: anchored_template
+business_signature:
+  template_id: T06
+  concepts:
+    - topn_segment
+  features:
+    - topn_segment
+    - game_rank
+  metrics:
+    - valid_bet_amount
+  dimensions:
+    - player_id
+    - topn_segment
+  parameter_slots: []
+  external_dependencies: []
+  positive_cues:
+    - TOP3
+    - 非TOP3
+    - 前3
+    - 游戏分层
+  negative_cues:
+    - ROI
+    - 首存成本
+  expected_grain: player_id
 source_tables:
   - dwd_bet_order
 parameters:

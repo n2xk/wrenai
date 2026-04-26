@@ -25,6 +25,35 @@ runtime_sync:
   source_type: business_import
   template_level: L2
   template_mode: anchored_template
+business_signature:
+  template_id: T08
+  concepts:
+    - first_deposit
+    - retention_deposit
+  features:
+    - cohort
+    - retention
+    - deposit_times
+  metrics:
+    - second_deposit_user_count
+    - second_deposit_rate
+    - second_deposit_avg_amount
+  dimensions:
+    - first_deposit_date
+    - channel_id
+  parameter_slots: []
+  external_dependencies: []
+  positive_cues:
+    - 首存cohort
+    - 2~6存
+    - 二存
+    - 三存
+    - 续存
+    - 复存
+  negative_cues:
+    - ROI
+    - 投放金额
+  expected_grain: first_deposit_date + channel_id
 source_tables:
   - dwd_order_deposit
   - dim_player

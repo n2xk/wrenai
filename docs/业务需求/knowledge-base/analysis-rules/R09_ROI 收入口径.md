@@ -17,6 +17,16 @@ keywords:
   - ROI
   - 渠道收入
   - 累计收入
+related_business_terms:
+  - roi
+related_external_dependencies:
+  - ad_spend
+runtime_usage:
+  participates_in:
+    - instruction_retrieval
+    - template_matching
+    - external_dependency_detection
+  priority_hint: high
 source_documents:
   - 第一期数据报表需求V1.xlsx
   - 数据报表API对应SQL&DSL语句整理.xlsx

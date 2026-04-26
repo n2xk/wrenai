@@ -26,6 +26,30 @@ runtime_sync:
   source_type: business_import
   template_level: L2
   template_mode: anchored_template
+business_signature:
+  template_id: T04
+  concepts:
+    - first_deposit
+  features:
+    - cohort
+    - revenue_accumulation
+  metrics:
+    - cumulative_revenue
+    - relative_day_revenue
+  dimensions:
+    - first_deposit_date
+    - relative_day_no
+  parameter_slots: []
+  external_dependencies: []
+  positive_cues:
+    - cohort累计收入
+    - 首存后收入
+    - N日累计收入
+  negative_cues:
+    - 投放金额
+    - PV
+    - UV
+  expected_grain: first_deposit_date + relative_day_no
 source_tables:
   - dwd_order_deposit
   - dwd_bet_order

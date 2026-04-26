@@ -134,3 +134,88 @@ source_documents:
 - 汇总页（`analysis-rules.md` / `sql-templates.md`）仅做浏览，不作为导入源
 - 系统真正做导入时，规则至少要解析 front matter 中的 `questions` 与 `## 规则内容` 主体
 - SQL 模板导入时，应将 `question_variants` 展开为多条 `sql_pair.question + sql_pair.sql`
+
+## 业务知识配置中心扩展字段（2026-04-26）
+
+为支持业务知识配置中心，导入器需识别以下新增资产与结构化字段。
+
+### 业务词典 `business_dictionary`
+
+- 文件目录：`business-dictionary/`
+- `kb_asset_type`: `business_term`
+- `import_target`: `business_dictionary`
+- 核心字段：`id`, `name`, `category`, `aliases`, `definition`, `canonical_expression`, `source_tables`, `source_fields`, `related_rules`, `related_templates`, `features`, `conflict_terms`, `status`
+
+导入到 UI/API 时字段映射为：
+
+| 文档字段 | API 字段 |
+| --- | --- |
+| `id` | `termId` |
+| `name` | `name` |
+| `category` | `category` |
+| `aliases` | `aliases` |
+| `definition` | `definition` |
+| `canonical_expression` | `canonicalExpression` |
+| `source_tables` | `sourceTables` |
+| `source_fields` | `sourceFields` |
+| `related_rules` | `relatedRules` |
+| `related_templates` | `relatedTemplates` |
+| `features` | `features` |
+| `conflict_terms` | `conflictTerms` |
+| `status` | `status` |
+
+### 外部数据依赖 `external_dependency`
+
+- 文件目录：`external-dependencies/`
+- `kb_asset_type`: `external_dependency`
+- `import_target`: `external_dependency`
+- 核心字段：`id`, `name`, `aliases`, `source_status`, `missing_behavior`, `required_grain`, `required_by_terms`, `required_by_templates`, `related_rules`, `ask_user_prompt`, `validation`, `status`
+
+导入到 UI/API 时字段映射为：
+
+| 文档字段 | API 字段 |
+| --- | --- |
+| `id` | `dependencyId` |
+| `source_status` | `sourceStatus` |
+| `missing_behavior` | `missingBehavior` |
+| `required_grain` | `requiredGrain` |
+| `required_by_terms` | `requiredByTerms` |
+| `required_by_templates` | `requiredByTemplates` |
+| `related_rules` | `relatedRules` |
+| `ask_user_prompt` | `askUserPrompt` |
+| `validation` | `validation` |
+
+### SQL 模板结构化字段 `business_signature`
+
+所有 `sql-templates/T*.md` 可增加：
+
+```yaml
+business_signature:
+  template_id: T08
+  concepts: []
+  features: []
+  metrics: []
+  dimensions: []
+  parameter_slots: []
+  external_dependencies: []
+  positive_cues: []
+  negative_cues: []
+  expected_grain: first_deposit_date + channel_id
+```
+
+导入到 UI/API 时可直接保存到 SQL pair 的 `businessSignature` JSON 字段；runtime 同时兼容 snake_case 与 camelCase key。
+
+### 分析规则结构化字段
+
+所有 `analysis-rules/R*.md` 可增加：
+
+```yaml
+related_business_terms: []
+related_external_dependencies: []
+runtime_usage:
+  participates_in:
+    - instruction_retrieval
+  priority_hint: high
+```
+
+导入到 UI/API 时字段映射为 `relatedBusinessTerms`、`relatedExternalDependencies`、`runtimeUsage`。
