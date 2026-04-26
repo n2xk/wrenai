@@ -277,7 +277,7 @@ export default function KnowledgeBusinessTermsStage({
         pagination={{ pageSize: 10 }}
       />
       <Drawer
-        width={640}
+        size="large"
         title={editingTerm ? '编辑业务词典' : '新建业务词典'}
         open={drawerOpen}
         onClose={closeDrawer}

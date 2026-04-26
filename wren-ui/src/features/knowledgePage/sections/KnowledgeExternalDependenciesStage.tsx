@@ -298,7 +298,7 @@ export default function KnowledgeExternalDependenciesStage({
         pagination={{ pageSize: 10 }}
       />
       <Drawer
-        width={640}
+        size="large"
         title={editingDependency ? '编辑外部数据依赖' : '新建外部数据依赖'}
         open={drawerOpen}
         onClose={closeDrawer}
