@@ -169,6 +169,7 @@ export type AskTemplateDecision = {
   dialectCompatible?: boolean | null;
   dryRunCompatible?: boolean | null;
   fallbackReason?: string | null;
+  historyBackedTemplateContinuity?: boolean | null;
   instructionCount?: number | null;
   margin?: number | null;
   missingParameters?: string[] | null;
@@ -185,6 +186,7 @@ export type AskTemplateDecision = {
   templateMode?: string | null;
   templateTitle?: string | null;
   validationError?: string | null;
+  requiredExternalDependencies?: string[] | null;
 };
 
 export type AskingTask = {
@@ -348,6 +350,8 @@ export type ThreadResponseChartDetail = {
   status: ChartTaskStatus;
   thinking?: ThinkingTrace | null;
   validationErrors?: string[] | null;
+  fallbackUsed?: boolean | null;
+  fallbackReason?: string | null;
 };
 
 export type ThreadResponse = {

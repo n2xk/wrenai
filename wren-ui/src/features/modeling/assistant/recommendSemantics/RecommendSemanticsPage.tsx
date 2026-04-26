@@ -9,6 +9,7 @@ import useModelingAssistantLeaveGuard from '../useModelingAssistantLeaveGuard';
 import useModelingAssistantReadonly from '../useModelingAssistantReadonly';
 import useRecommendSemanticsWizard from './useRecommendSemanticsWizard';
 import GeneratedSemanticsReview from './GeneratedSemanticsReview';
+import ModelingAssistantTaskStatusPanel from '../ModelingAssistantTaskStatusPanel';
 import { Path } from '@/utils/enum';
 import {
   AssistantColumn,
@@ -216,6 +217,13 @@ export default function RecommendSemanticsPage() {
           </AssistantPill>
         </AssistantPillRow>
       </AssistantIntroCard>
+      <ModelingAssistantTaskStatusPanel
+        task={semanticsWizard.task}
+        resultCount={semanticsWizard.generatedModels.length}
+        resultLabel="语义描述"
+        saved={semanticsWizard.saved}
+        testId="semantics-assistant-task-status"
+      />
       <AssistantMetricGrid>
         <AssistantMetricCard>
           <Text type="secondary">已选模型</Text>

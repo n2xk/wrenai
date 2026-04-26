@@ -187,6 +187,12 @@ const transformAskTemplateDecision = (body: any) => {
         : null,
     decisionReason: body.decision_reason ?? body.decisionReason ?? null,
     fallbackReason: body.fallback_reason ?? body.fallbackReason ?? null,
+    historyBackedTemplateContinuity:
+      typeof body.history_backed_template_continuity === 'boolean'
+        ? body.history_backed_template_continuity
+        : typeof body.historyBackedTemplateContinuity === 'boolean'
+          ? body.historyBackedTemplateContinuity
+          : null,
     sqlSource: body.sql_source ?? body.sqlSource ?? null,
     sourceType: body.source_type ?? body.sourceType ?? null,
     templateLevel: body.template_level ?? body.templateLevel ?? null,
@@ -234,6 +240,13 @@ const transformAskTemplateDecision = (body: any) => {
           ? body.dryRunCompatible
           : null,
     validationError: body.validation_error ?? body.validationError ?? null,
+    requiredExternalDependencies: Array.isArray(
+      body.required_external_dependencies,
+    )
+      ? body.required_external_dependencies
+      : Array.isArray(body.requiredExternalDependencies)
+        ? body.requiredExternalDependencies
+        : null,
   };
 };
 

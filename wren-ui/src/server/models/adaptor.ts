@@ -263,6 +263,7 @@ export interface AskTemplateDecision {
   missingParameters?: string[] | null;
   decisionReason?: string | null;
   fallbackReason?: string | null;
+  historyBackedTemplateContinuity?: boolean | null;
   sqlSource?: string | null;
   sourceType?: string | null;
   templateLevel?: string | null;
@@ -275,6 +276,7 @@ export interface AskTemplateDecision {
   dialectCompatible?: boolean | null;
   dryRunCompatible?: boolean | null;
   validationError?: string | null;
+  requiredExternalDependencies?: string[] | null;
 }
 
 export interface AskDiagnostics {

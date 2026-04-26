@@ -103,9 +103,15 @@ export type ThreadWorkbenchMessages = {
       trustedReference: string;
     };
     labels: {
+      fallbackReason: string;
+      historyContinuity: string;
       missingParameters: string;
+      mode: string;
+      parameters: string;
+      requiredExternalDependencies: string;
       sqlSource: string;
       template: string;
+      templateId: string;
     };
     reasons: {
       explicitBusinessTemplateSelected: string;
@@ -187,8 +193,14 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       },
       labels: {
         template: '模板：',
+        templateId: '模板 ID：',
+        mode: '模式：',
         sqlSource: 'SQL 来源：',
+        fallbackReason: '降级原因：',
         missingParameters: '缺少参数：',
+        parameters: '参数：',
+        requiredExternalDependencies: '外部依赖：',
+        historyContinuity: '追问连续性：已匹配上一轮模板上下文',
       },
       reasons: {
         explicitBusinessTemplateSelected: '已命中业务口径模板',
@@ -321,8 +333,15 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       },
       labels: {
         template: 'Template: ',
+        templateId: 'Template ID: ',
+        mode: 'Mode: ',
         sqlSource: 'SQL source: ',
+        fallbackReason: 'Fallback reason: ',
         missingParameters: 'Missing parameters: ',
+        parameters: 'Parameters: ',
+        requiredExternalDependencies: 'External dependencies: ',
+        historyContinuity:
+          'Follow-up continuity: matched previous template context',
       },
       reasons: {
         explicitBusinessTemplateSelected:

@@ -240,6 +240,28 @@ export default function ChartAnswer(props: AnswerResultProps) {
       ),
     [chartDetail?.validationErrors],
   );
+  const chartFallbackUsed =
+    Boolean(chartDetail?.fallbackUsed) || validationErrors.length > 0;
+  const chartFallbackDiagnostics = useMemo(() => {
+    if (!chartDetail) return [] as string[];
+    const diagnostics = chartDetail.diagnostics || {};
+    const items = [
+      ...validationErrors,
+      chartDetail.fallbackReason
+        ? `兜底原因：${chartDetail.fallbackReason}`
+        : null,
+      diagnostics.lastErrorCode
+        ? `最后错误码：${diagnostics.lastErrorCode}`
+        : null,
+      diagnostics.lastErrorMessage
+        ? `最后错误：${diagnostics.lastErrorMessage}`
+        : null,
+      chartDetail.canonicalizationVersion
+        ? `规范化版本：${chartDetail.canonicalizationVersion}`
+        : null,
+    ].filter((item): item is string => Boolean(item));
+    return Array.from(new Set(items));
+  }, [chartDetail, validationErrors]);
 
   const previewChartDataProfile = useMemo(
     () =>
@@ -492,16 +514,16 @@ export default function ChartAnswer(props: AnswerResultProps) {
     >
       <div className="text-md gray-10 p-6">
         {localizedChartDescription}
-        {validationErrors.length > 0 ? (
+        {chartFallbackUsed && chartFallbackDiagnostics.length > 0 ? (
           <Alert
             className="mt-4"
             type="warning"
             showIcon
-            title="图表已按兼容模式渲染"
+            message="图表已自动修复/兜底"
             description={
               <ul className="mb-0 pl-4">
-                {validationErrors.map((error) => (
-                  <li key={error}>{error}</li>
+                {chartFallbackDiagnostics.map((diagnostic) => (
+                  <li key={diagnostic}>{diagnostic}</li>
                 ))}
               </ul>
             }

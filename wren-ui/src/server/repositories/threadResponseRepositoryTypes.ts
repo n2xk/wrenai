@@ -58,6 +58,8 @@ export interface ThreadResponseChartDetail {
   renderHints?: Record<string, any>;
   chartDataProfile?: Record<string, any>;
   validationErrors?: string[];
+  fallbackUsed?: boolean | null;
+  fallbackReason?: string | null;
   adjustment?: boolean;
   retryCount?: number;
   nextRetryAt?: string | null;

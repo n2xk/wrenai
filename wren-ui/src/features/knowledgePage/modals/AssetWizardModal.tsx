@@ -1,4 +1,5 @@
 import { ArrowRightOutlined, CloseOutlined } from '@ant-design/icons';
+import styled from 'styled-components';
 import { Input, List, Space, Spin, Tag, Typography } from 'antd';
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -51,6 +52,29 @@ import {
 } from './assetWizardModelingAssistantSupport';
 
 const { Text } = Typography;
+
+const ImportSummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+`;
+
+const ImportSummaryCard = styled.div`
+  border: 1px solid rgba(109, 74, 255, 0.12);
+  border-radius: 16px;
+  background: #fbfaff;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const ImportSummaryValue = styled.div`
+  color: #30354a;
+  font-size: 20px;
+  font-weight: 800;
+`;
+
 type AssetWizardModalProps = {
   visible: boolean;
   assetWizardStep: number;
@@ -219,6 +243,44 @@ function AssetWizardModal({
     closeAssetModal();
     void onFinalizePersistedRuntimeScope?.();
   };
+
+  const importResultSummary = useMemo(() => {
+    const modelCount = assetDraftPreviewList.filter(
+      (asset) => asset.kind === 'model',
+    ).length;
+    const viewCount = assetDraftPreviewList.filter(
+      (asset) => asset.kind === 'view',
+    ).length;
+    const fieldCount = assetDraftPreviewList.reduce(
+      (total, asset) => total + (asset.fieldCount || 0),
+      0,
+    );
+    const recommendationValues = assetDraftPreviewList.map((asset) => {
+      const recommendation =
+        recommendationStates[asset.id] || getAssetRecommendationState(asset);
+      return asset.kind === 'view' && isDemoSource
+        ? 'FINISHED'
+        : recommendation.status;
+    });
+    const finishedCount = recommendationValues.filter(
+      (status) => status === 'FINISHED',
+    ).length;
+    const failedCount = recommendationValues.filter(
+      (status) => status === 'FAILED',
+    ).length;
+    const generatingCount = recommendationValues.filter(
+      (status) => status === 'GENERATING',
+    ).length;
+
+    return {
+      modelCount,
+      viewCount,
+      fieldCount,
+      finishedCount,
+      failedCount,
+      generatingCount,
+    };
+  }, [assetDraftPreviewList, isDemoSource, recommendationStates]);
 
   useEffect(() => {
     if (assetWizardStep !== 3) {
@@ -512,13 +574,52 @@ function AssetWizardModal({
         {assetWizardStep === 3 && (
           <WizardBody>
             <WizardNote>
-              <strong style={{ color: '#30354a' }}>建议问题</strong>
+              <strong style={{ color: '#30354a' }}>导入结果与建议问题</strong>
               <div style={{ marginTop: 6 }}>
                 {isDemoSource
                   ? '样例资产已经写入当前知识库，下面展示的是可直接使用的预置问法。'
                   : '资产已经保存，系统正在按模型语义生成建议问题。你可以留在这里查看结果，也可以先去建模，生成完成后会同步回资产详情。'}
               </div>
             </WizardNote>
+
+            <ImportSummaryGrid data-testid="asset-import-result-summary">
+              <ImportSummaryCard>
+                <Text type="secondary">导入资产</Text>
+                <ImportSummaryValue>
+                  {assetDraftPreviewList.length}
+                </ImportSummaryValue>
+                <Text type="secondary">
+                  模型 {importResultSummary.modelCount} / 视图{' '}
+                  {importResultSummary.viewCount}
+                </Text>
+              </ImportSummaryCard>
+              <ImportSummaryCard>
+                <Text type="secondary">字段覆盖</Text>
+                <ImportSummaryValue>
+                  {importResultSummary.fieldCount}
+                </ImportSummaryValue>
+                <Text type="secondary">用于语义检索与问数上下文</Text>
+              </ImportSummaryCard>
+              <ImportSummaryCard>
+                <Text type="secondary">建议问题</Text>
+                <ImportSummaryValue>
+                  {importResultSummary.finishedCount} /{' '}
+                  {assetDraftPreviewList.length}
+                </ImportSummaryValue>
+                <Text type="secondary">
+                  生成中 {importResultSummary.generatingCount}，失败{' '}
+                  {importResultSummary.failedCount}
+                </Text>
+              </ImportSummaryCard>
+              <ImportSummaryCard>
+                <Text type="secondary">参与能力</Text>
+                <Space size={[6, 6]} wrap>
+                  <Tag color="processing">retrieval</Tag>
+                  <Tag color="purple">modeling AI</Tag>
+                  <Tag color="geekblue">suggested questions</Tag>
+                </Space>
+              </ImportSummaryCard>
+            </ImportSummaryGrid>
 
             <List
               bordered

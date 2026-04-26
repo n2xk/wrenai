@@ -38,8 +38,8 @@ jest.mock('antd', () => {
   (FormComponent as any).useWatch = () => 'LINE';
 
   return {
-    Alert: ({ message, description }: any) =>
-      React.createElement('div', null, message, description),
+    Alert: ({ message, title, description }: any) =>
+      React.createElement('div', null, message || title, description),
     Form: FormComponent,
     Button: ({ children, onClick }: any) =>
       React.createElement('button', { onClick }, children),
@@ -374,6 +374,39 @@ describe('ChartAnswer', () => {
     );
 
     expect(capturedChartProps?.preferredRenderer).toBe('canvas');
+  });
+
+  it('surfaces chart fallback diagnostics when canonicalization repaired the chart', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 98,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            fallbackUsed: true,
+            fallbackReason: 'Encoding channel y is missing type',
+            canonicalizationVersion: 'chart-canonical-v1',
+            diagnostics: {
+              lastErrorCode: 'CHART_SCHEMA_REPAIRED',
+              lastErrorMessage: 'Vega-Lite schema warning',
+            },
+            validationErrors: ['Encoding channel y is missing type'],
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(markup).toContain('图表已自动修复/兜底');
+    expect(markup).toContain('chart-canonical-v1');
+    expect(markup).toContain('Vega-Lite schema warning');
   });
 
   it('uses the dashboard pin text button while hiding inline chart edit actions', () => {

@@ -1425,6 +1425,7 @@ def _build_template_decision_payload(
     sample: Any,
     score: Optional[float],
     sql_source: str,
+    history_backed_template_continuity: bool = False,
 ) -> dict[str, Any]:
     return {
         "mode": mode,
@@ -1436,6 +1437,7 @@ def _build_template_decision_payload(
         "missing_parameters": missing_parameters,
         "decision_reason": decision_reason,
         "fallback_reason": fallback_reason,
+        "history_backed_template_continuity": history_backed_template_continuity,
         "sql_source": sql_source,
         "source_type": _get_sample_value(sample, "source_type"),
         "template_level": _get_sample_value(sample, "template_level", "L0"),
@@ -1548,23 +1550,48 @@ def detect_missing_external_source_requirement(
         if not required_metrics:
             return None
 
+        required_grain_label = ""
+        example_columns: list[str] = []
         if granularity_hint is None:
             if required_grain_values:
+                required_grain_label = "、".join(required_grain_values)
                 granularity_hint = "请按以下统计粒度提供：" + "、".join(required_grain_values) + "。"
             elif re.search(r"cohort|ROI|回收|首存成本", query, flags=re.IGNORECASE):
+                required_grain_label = "对应统计周期"
                 granularity_hint = "请按对应统计周期提供这些外部指标。"
             elif re.search(r"日报|趋势|按天|日期|渠道", query, flags=re.IGNORECASE):
+                required_grain_label = "日期、渠道"
                 granularity_hint = "请按每个日期、每个渠道提供这些外部指标。"
             else:
+                required_grain_label = "当前问题对应统计粒度"
                 granularity_hint = "请按当前问题对应的统计粒度提供这些外部指标。"
+        elif required_grain_values:
+            required_grain_label = "、".join(required_grain_values)
+        elif re.search(r"cohort|ROI|回收|首存成本", query, flags=re.IGNORECASE):
+            required_grain_label = "对应统计周期"
+        elif re.search(r"日报|趋势|按天|日期|渠道", query, flags=re.IGNORECASE):
+            required_grain_label = "日期、渠道"
+        else:
+            required_grain_label = "当前问题对应统计粒度"
+
+        if required_grain_values:
+            example_columns = [*required_grain_values, *required_metrics]
+        elif "日期" in required_grain_label and "渠道" in required_grain_label:
+            example_columns = ["日期", "渠道ID", *required_metrics]
+        elif "周期" in required_grain_label:
+            example_columns = ["统计周期", *required_metrics]
+        else:
+            example_columns = ["统计粒度", *required_metrics]
 
         missing_metrics = "、".join(required_metrics)
         prompt_suffix = "" if not prompts else " " + " ".join(prompts)
         content = (
-            "当前知识库还缺少以下外部指标："
-            f"{missing_metrics}。所以现在不能直接输出或并表这些结果，也不能编造。"
-            f"{granularity_hint}"
-            "请先把这些指标补充给我后，我再和现有 SQL 可查询的内部指标一起输出。"
+            "当前知识库还缺少外部数据，不能直接输出或并表这些结果，也不能编造。\n"
+            f"- 缺失指标：{missing_metrics}\n"
+            f"- 需要粒度：{required_grain_label}\n"
+            f"- 示例表头：{', '.join(example_columns)}\n"
+            "- 下一步：请在外部数据依赖/业务知识中补充以上指标，或在对话中按示例表头提供数据；"
+            f"补充后我再和现有 SQL 可查询的内部指标一起输出。{granularity_hint}"
             f"{prompt_suffix}"
         )
         return {
@@ -1583,6 +1610,9 @@ def detect_missing_external_source_requirement(
                 "source": source,
                 "required_metrics": required_metrics,
                 "required_external_dependencies": required_dependency_ids,
+                "required_grain": required_grain_values,
+                "required_grain_hint": required_grain_label,
+                "example_columns": example_columns,
             },
             "required_external_dependencies": required_dependency_ids,
         }
@@ -1911,6 +1941,7 @@ def build_template_decision(
             fallback_reason=(
                 "missing_template_parameters" if missing_parameters else None
             ),
+            history_backed_template_continuity=has_history_backed_template_continuity,
             margin=margin,
             missing_parameters=missing_parameters,
             mode=(

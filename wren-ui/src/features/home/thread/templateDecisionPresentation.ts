@@ -14,6 +14,35 @@ export type TemplateDecisionPresentation = {
 const joinParts = (parts: Array<string | null | undefined>) =>
   parts.filter((part): part is string => Boolean(part)).join(' · ');
 
+const formatParameterValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return `[${value.map(formatParameterValue).join(', ')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  if (value === null || value === undefined) {
+    return 'null';
+  }
+  return String(value);
+};
+
+const formatTemplateDecisionParameters = (
+  parameters?: Record<string, any> | null,
+) => {
+  const entries = Object.entries(parameters || {}).filter(
+    ([, value]) => value !== undefined,
+  );
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return entries
+    .slice(0, 6)
+    .map(([key, value]) => `${key}=${formatParameterValue(value)}`)
+    .join(', ');
+};
+
 const resolveDecisionReasonText = (
   templateDecision: AskTemplateDecision,
   messages: TemplateMessages,
@@ -141,6 +170,12 @@ export const resolveTemplateDecisionPresentation = (
   );
   const missingParameters =
     templateDecision.missingParameters?.filter(Boolean).join(', ') || null;
+  const parametersText = formatTemplateDecisionParameters(
+    templateDecision.parameters,
+  );
+  const requiredExternalDependencies =
+    templateDecision.requiredExternalDependencies?.filter(Boolean).join(', ') ||
+    null;
 
   return {
     badge: resolveTemplateDecisionBadge(templateDecision, messages),
@@ -149,9 +184,24 @@ export const resolveTemplateDecisionPresentation = (
         templateDecision.templateTitle
           ? `${messages.labels.template}${templateDecision.templateTitle}`
           : null,
-        reasonText,
+        templateDecision.templateId != null
+          ? `${messages.labels.templateId}${templateDecision.templateId}`
+          : null,
+        templateDecision.mode
+          ? `${messages.labels.mode}${templateDecision.mode}`
+          : null,
+        reasonText ? `${messages.labels.fallbackReason}${reasonText}` : null,
         missingParameters
           ? `${messages.labels.missingParameters}${missingParameters}`
+          : null,
+        parametersText
+          ? `${messages.labels.parameters}${parametersText}`
+          : null,
+        requiredExternalDependencies
+          ? `${messages.labels.requiredExternalDependencies}${requiredExternalDependencies}`
+          : null,
+        templateDecision.historyBackedTemplateContinuity
+          ? messages.labels.historyContinuity
           : null,
         sqlSourceText ? `${messages.labels.sqlSource}${sqlSourceText}` : null,
       ]) || null,

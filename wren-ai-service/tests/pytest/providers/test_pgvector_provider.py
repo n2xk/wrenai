@@ -262,6 +262,14 @@ def test_pgvector_provider_raises_clear_error_when_runtime_is_incompatible(
         provider.get_store()
 
 
+def test_pgvector_provider_preflights_missing_connection_string(monkeypatch):
+    monkeypatch.delenv("PG_CONN_STR", raising=False)
+    provider = PgvectorProvider(connection_string=None, embedding_dimension=1536)
+
+    with pytest.raises(RuntimeError, match="requires a PostgreSQL connection string"):
+        provider._connection_secret()
+
+
 def test_pgvector_provider_shims_missing_haystack_filter_convert(monkeypatch):
     fake_filters_module = SimpleNamespace()
 

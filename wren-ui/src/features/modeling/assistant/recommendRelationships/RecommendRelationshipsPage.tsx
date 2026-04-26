@@ -25,6 +25,7 @@ import { buildModelingAssistantBackParams } from '../modelingAssistantRoutes';
 import useModelingAssistantLeaveGuard from '../useModelingAssistantLeaveGuard';
 import useModelingAssistantReadonly from '../useModelingAssistantReadonly';
 import useRecommendRelationshipsTask from './useRecommendRelationshipsTask';
+import ModelingAssistantTaskStatusPanel from '../ModelingAssistantTaskStatusPanel';
 import { Path } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
 import {
@@ -326,6 +327,12 @@ export default function RecommendRelationshipsPage() {
               <AssistantPill>没有可保存的变更</AssistantPill>
             </AssistantPillRow>
           </AssistantIntroCard>
+          <ModelingAssistantTaskStatusPanel
+            task={relationshipsTask.task}
+            resultCount={0}
+            resultLabel="关联关系"
+            testId="relationship-assistant-task-status"
+          />
           <AssistantStateCard $align="center">
             <Empty
               description={
@@ -356,10 +363,18 @@ export default function RecommendRelationshipsPage() {
     const recommendationCount = Object.values(
       relationshipsTask.editedRelations,
     ).flat().length;
+    const rawRecommendationCount =
+      relationshipsTask.task?.response?.relationships?.length || 0;
     const modelCount = Object.keys(relationshipsTask.editedRelations).length;
 
     return (
       <AssistantColumn>
+        <ModelingAssistantTaskStatusPanel
+          task={relationshipsTask.task}
+          resultCount={recommendationCount || rawRecommendationCount}
+          resultLabel="关联关系"
+          testId="relationship-assistant-task-status"
+        />
         <AssistantIntroCard>
           <AssistantSectionHeader>
             <div>

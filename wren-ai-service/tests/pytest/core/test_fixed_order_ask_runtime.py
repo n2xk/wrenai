@@ -247,6 +247,7 @@ def test_build_template_decision_keeps_followup_history_template_anchor():
     assert result["parameters"]["channel_id"] == 990011
     assert result["parameters"]["cohort_start_date"] == "2026-04-02"
     assert result["parameters"]["cohort_end_date"] == "2026-04-02"
+    assert result["history_backed_template_continuity"] is True
 
 
 def test_build_template_decision_keeps_history_backed_anchor_for_low_margin_followup():
@@ -730,6 +731,16 @@ def test_detect_missing_external_source_requirement_lists_all_requested_traffic_
     assert "访问PV" in result["content"]
     assert "访问UV" in result["content"]
     assert "下载点击UV" in result["content"]
+    assert "缺失指标" in result["content"]
+    assert "需要粒度" in result["content"]
+    assert "示例表头：日期, 渠道ID" in result["content"]
+    assert result["instruction"]["example_columns"] == [
+        "日期",
+        "渠道ID",
+        "下载点击UV",
+        "访问PV",
+        "访问UV",
+    ]
 
 
 def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv():
@@ -745,6 +756,31 @@ def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv()
     assert "访问PV" in result["content"]
     assert "访问UV" in result["content"]
     assert "下载点击UV" in result["content"]
+    assert "缺失指标" in result["content"]
+    assert "需要粒度：日期、渠道" in result["content"]
+    assert "示例表头" in result["content"]
+
+
+def test_detect_missing_external_source_requirement_uses_configured_grain():
+    result = detect_missing_external_source_requirement(
+        "按投放计划计算首存成本",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["日期", "渠道ID", "计划ID"],
+                "metadata": {"required_by_terms": ["首存成本"]},
+            }
+        ],
+    )
+
+    assert result is not None
+    assert "需要粒度：日期、渠道ID、计划ID" in result["content"]
+    assert "示例表头：日期, 渠道ID, 计划ID, 投放金额" in result["content"]
+    assert result["instruction"]["required_grain"] == ["日期", "渠道ID", "计划ID"]
 
 
 def test_build_reusable_template_sql_nulls_optional_placeholders():

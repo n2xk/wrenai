@@ -243,6 +243,11 @@ abstract class BaseChartBackgroundTracker {
                     },
                   )
                 : undefined;
+            const fallbackReason =
+              validationErrors[0] ||
+              normalizedError?.message ||
+              result.error?.message ||
+              null;
             const updatedChartDetail = {
               ...trackedChartDetail,
               diagnostics: {
@@ -282,6 +287,8 @@ abstract class BaseChartBackgroundTracker {
               canonicalizationVersion,
               renderHints: renderHints || undefined,
               validationErrors,
+              fallbackUsed: validationErrors.length > 0,
+              fallbackReason,
               adjustment: this.isAdjustmentTracker(),
               pollingLeaseOwner: null,
               pollingLeaseExpiresAt: null,

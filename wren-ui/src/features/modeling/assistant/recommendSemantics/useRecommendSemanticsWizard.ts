@@ -39,6 +39,7 @@ export default function useRecommendSemanticsWizard({
     null,
   );
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -99,6 +100,7 @@ export default function useRecommendSemanticsWizard({
     try {
       setRequestError(null);
       setSaveError(null);
+      setSaved(false);
       const nextTask = await createSemanticsDescriptionTask(selector, {
         selectedModels,
         userPrompt: prompt,
@@ -136,6 +138,7 @@ export default function useRecommendSemanticsWizard({
           updateModelMetadata(selector, item.modelId, item.data),
         ),
       );
+      setSaved(true);
       message.success('语义描述保存成功。');
       await onSaveSuccess();
     } catch (error) {
@@ -164,6 +167,7 @@ export default function useRecommendSemanticsWizard({
     modelList,
     polling,
     saving,
+    saved,
     task,
     generatedModels,
     completed,

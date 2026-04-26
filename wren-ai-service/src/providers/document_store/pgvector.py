@@ -24,6 +24,12 @@ _PGVECTOR_COMPATIBILITY_HINT = (
     "Ensure `pgvector-haystack` is compatible with the installed `haystack-ai` "
     "and PostgreSQL driver versions."
 )
+_PGVECTOR_CONNECTION_HINT = (
+    "Provider `pgvector` requires a PostgreSQL connection string before startup. "
+    "Set `{env_name}` or pass `connection_string` in config. "
+    "For local TiDB regression, use for example: "
+    "`PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai`."
+)
 _PGVECTOR_NATIVE_COLUMNS = {
     "id",
     "content",
@@ -455,6 +461,10 @@ class PgvectorProvider(DocumentStoreProvider):
     def _connection_secret(self) -> Secret:
         if self._connection_string:
             return Secret.from_token(self._connection_string)
+        if not os.getenv(self._connection_string_env):
+            raise RuntimeError(
+                _PGVECTOR_CONNECTION_HINT.format(env_name=self._connection_string_env)
+            )
         return Secret.from_env_var(self._connection_string_env)
 
     def get_store(
