@@ -2,6 +2,28 @@
 
 这套目录用于提前沉淀后续要导入系统知识库的内容。
 
+## 当前环境快照
+
+如果要看“当前 TiDB 回归环境**实际上已经落库了什么**”，请同时参考：
+
+- [`../当前TiDB workspace知识资产快照-2026-04-26.md`](../当前TiDB%20workspace知识资产快照-2026-04-26.md)
+
+如果要看“如何把当前规则/模板产品化为业务知识配置中心”，请参考：
+
+- [`../业务知识配置中心方案-2026-04-26.md`](../业务知识配置中心方案-2026-04-26.md)
+
+截至 2026-04-26 的最新环境快照显示：当前 TiDB 回归 workspace 中 `R01 ~ R14` 已全部落库，`T01/T02/T03/T04/T06/T08/T09/T10/T11/T12/T13` 的 21 条问题变体也都已经升级为 `L2 anchored_template`。
+
+注意区分两类文档：
+
+- `knowledge-base/` 下单文件：**导入权威来源**
+- `当前TiDB workspace知识资产快照-2026-04-26.md`：**实际运行环境落库快照**
+
+从 2026-04-26 开始，`sql-templates/*.md` 单文件还会额外回写 `runtime_sync` 字段块，用来记录当前 TiDB 回归 workspace 的实际落库状态；其中：
+
+- `status` 仍表示源文档的准备状态（例如 `draft_sql` / `blocked_missing_source`）
+- `runtime_sync.import_status` 表示该模板在当前回归环境中是否已实际导入
+
 ## 为什么这里建议用 Markdown
 
 建议，**用 Markdown + YAML Front Matter** 最合适，原因是：

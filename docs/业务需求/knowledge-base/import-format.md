@@ -38,6 +38,42 @@ source_documents:
 - `result_grain`：结果粒度描述，便于后续导入时做展示/缓存策略
 - `status`：当前推荐值：`spec_only` / `draft_sql` / `blocked_missing_source` / `blocked_missing_sql_model`
 
+### 可选运行态回写字段
+
+如果已经完成一次真实 workspace 导入并验证，可在 SQL 模板 front matter 中追加只读的 `runtime_sync` 字段块，用来记录“当前环境实际落库状态”。
+
+示例：
+
+```yaml
+runtime_sync:
+  last_verified_at: 2026-04-26
+  sync_source: 当前TiDB workspace知识资产快照-2026-04-26
+  workspace_id: e4fd1d67-59a5-42de-adf2-1777698b5f21
+  knowledge_base_id: 27ea94ff-415f-4a28-af88-0b0dc226e598
+  kb_snapshot_id: 27fa6535-b932-4cfc-a231-35bd15d13329
+  deploy_hash: 5f88d9c5a3d8c23d2280c6f3b9fdf759543f46d0
+  import_status: imported
+  question_count: 3
+  record_ids:
+    - 75
+    - 76
+    - 77
+  asset_kind: sql_template
+  source_type: business_import
+  template_level: L2
+  template_mode: anchored_template
+```
+
+说明：
+
+- `runtime_sync` 是**运行态事实回写**，不是新的导入源字段
+- 导入脚本应忽略 `runtime_sync`，只把它当作审计/对账信息
+- `status` 仍表示源文档编写/准备状态；`runtime_sync.import_status` 表示某个实际环境是否已导入
+- 如果模板未导入，可写为：
+  - `import_status: blocked`
+  - `blocked_reason: blocked_missing_source`
+  - `record_ids: []`
+
 ## 2. 分析规则（`import_target = instruction`）
 
 建议字段顺序：
