@@ -49,6 +49,69 @@ const getQuantitativeField = (encoding?: EncodingSpec) => {
   return quantitativeAxis ? encoding?.[quantitativeAxis]?.field || null : null;
 };
 
+const NUMERIC_VALUE_PATTERN = /^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
+
+const toNumericValue = (value: unknown) => {
+  if (isNumber(value)) {
+    return Number.isFinite(value) ? value : value;
+  }
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const normalized = value.trim().replaceAll(',', '');
+  if (!normalized || !NUMERIC_VALUE_PATTERN.test(normalized)) {
+    return value;
+  }
+
+  const numericValue = Number(normalized);
+  return Number.isFinite(numericValue) ? numericValue : value;
+};
+
+const getFoldSourceFields = (spec?: ChartRenderSpec | null) => {
+  const specTransform = spec?.transform;
+  const transforms = Array.isArray(specTransform) ? specTransform : [];
+  if (!transforms.length) {
+    return [] as string[];
+  }
+
+  return uniq(
+    transforms
+      .flatMap((transform) =>
+        Array.isArray((transform as { fold?: unknown[] })?.fold)
+          ? ((transform as { fold: unknown[] }).fold.filter(
+              (field): field is string =>
+                typeof field === 'string' && Boolean(field),
+            ) as string[])
+          : [],
+      )
+      .filter(Boolean),
+  );
+};
+
+const transformQuantitativeRows = (
+  values: Record<string, unknown>[],
+  spec?: ChartRenderSpec | null,
+) => {
+  const quantitativeFields = uniq(
+    [getQuantitativeField(spec?.encoding), ...getFoldSourceFields(spec)].filter(
+      (field): field is string => Boolean(field),
+    ),
+  );
+
+  if (!quantitativeFields.length) {
+    return values;
+  }
+
+  return values.map((row) => {
+    const next = { ...row };
+    quantitativeFields.forEach((field) => {
+      next[field] = toNumericValue(next[field]);
+    });
+    return next;
+  });
+};
+
 const countUniqueCategories = (
   values: Record<string, unknown>[],
   encoding?: EncodingSpec,
@@ -125,7 +188,10 @@ export const prepareChartSpecForRender = ({
       : values;
 
   clonedSpec.data = {
-    values: transformTemporalRows(filteredValues, clonedSpec.encoding),
+    values: transformTemporalRows(
+      transformQuantitativeRows(filteredValues, clonedSpec),
+      clonedSpec.encoding,
+    ),
   };
   clonedSpec.width = renderOptions.width;
   clonedSpec.height = renderOptions.height;

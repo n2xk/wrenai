@@ -36,4 +36,25 @@ describe('evaluateChartability', () => {
       message: '当前查询结果为空，暂时无法生成图表。',
     });
   });
+
+  it('treats numeric-like string measures as chartable fields', () => {
+    expect(
+      evaluateChartability({
+        columns: [
+          { name: 'user_segment', type: 'string' },
+          { name: 'deposit_amount', type: 'string' },
+          { name: 'withdrawal_amount', type: 'string' },
+        ],
+        data: [
+          ['ALL', '3248.0000', '160.0000'],
+          ['TOP3', '1160.0000', '60.0000'],
+          ['NON_TOP3', '2088.0000', '100.0000'],
+        ],
+      } as any),
+    ).toEqual({
+      chartable: true,
+      reasonCode: null,
+      message: null,
+    });
+  });
 });

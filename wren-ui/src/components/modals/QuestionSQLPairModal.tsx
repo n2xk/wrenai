@@ -11,6 +11,7 @@ import ImportConnectionSQLModal, {
 } from '@/components/modals/ImportConnectionSQLModal';
 import SQLEditor from '@/components/editor/SQLEditor';
 import PreviewData from '@/components/dataPreview/PreviewData';
+import useAuthSession from '@/hooks/useAuthSession';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import useModalAction, { ModalAction } from '@/hooks/useModalAction';
 import { DataSource, DataSourceName } from '@/types/dataSource';
@@ -32,6 +33,7 @@ import {
   type SqlPreviewDataResponse,
 } from '@/utils/sqlPreviewRest';
 import { createSQLPairQuestionValidator } from '@/utils/validator';
+import { isWorkspaceOwnerEquivalentRole } from '@/utils/workspaceGovernance';
 
 type Props = ModalAction<SqlPair> & {
   loading?: boolean;
@@ -148,6 +150,7 @@ export default function QuestionSQLPairModal(props: Props) {
   const isCreateMode = formMode === FORM_MODE.CREATE || payload?.isCreateMode;
   const importConnectionSQLModal = useModalAction();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const { data: authSession } = useAuthSession({ includeWorkspaceQuery: true });
   const [settings, setSettings] = useState<Awaited<
     ReturnType<typeof fetchSettings>
   > | null>(null);
@@ -182,6 +185,21 @@ export default function QuestionSQLPairModal(props: Props) {
   const [showPreview, setShowPreview] = useState<boolean>(false);
 
   const sqlValue = Form.useWatch('sql', form);
+  const canManageBusinessTemplate = useMemo(
+    () =>
+      Boolean(
+        authSession?.user?.isPlatformAdmin ||
+        (authSession?.authorization?.actor?.workspaceRoleKeys || []).some(
+          (roleKey) => isWorkspaceOwnerEquivalentRole(roleKey),
+        ) ||
+        isWorkspaceOwnerEquivalentRole(authSession?.membership?.roleKey),
+      ),
+    [
+      authSession?.authorization?.actor?.workspaceRoleKeys,
+      authSession?.membership?.roleKey,
+      authSession?.user?.isPlatformAdmin,
+    ],
+  );
 
   const resolveSaveMode = (sqlPair?: SqlPair | null) =>
     sqlPair?.templateMode === 'anchored_template' ||
@@ -189,6 +207,8 @@ export default function QuestionSQLPairModal(props: Props) {
     sqlPair?.assetKind === 'sql_template'
       ? 'business'
       : 'reference';
+  const preserveExistingBusinessSaveMode =
+    resolveSaveMode(defaultValue) === 'business';
 
   useEffect(() => {
     if (visible) {
@@ -212,10 +232,20 @@ export default function QuestionSQLPairModal(props: Props) {
       form.setFieldsValue({
         question: defaultValue?.question,
         sql: defaultValue?.sql,
-        saveMode: resolveSaveMode(defaultValue),
+        saveMode:
+          !canManageBusinessTemplate && !preserveExistingBusinessSaveMode
+            ? 'reference'
+            : resolveSaveMode(defaultValue),
       });
     }
-  }, [defaultValue, form, runtimeScopeNavigation.selector, visible]);
+  }, [
+    canManageBusinessTemplate,
+    defaultValue,
+    form,
+    preserveExistingBusinessSaveMode,
+    runtimeScopeNavigation.selector,
+    visible,
+  ]);
 
   const handleReset = () => {
     setPreviewData(undefined);
@@ -409,6 +439,11 @@ export default function QuestionSQLPairModal(props: Props) {
             name="saveMode"
             initialValue="reference"
             tooltip="业务口径会作为 L2 锚定模板使用，系统会尽量保持 SQL 骨架不被改写。"
+            extra={
+              canManageBusinessTemplate
+                ? null
+                : '仅工作空间所有者或管理员可以标记为业务口径，普通成员默认保存为参考样例。'
+            }
           >
             <Radio.Group
               options={[
@@ -419,6 +454,9 @@ export default function QuestionSQLPairModal(props: Props) {
                 {
                   label: '业务口径',
                   value: 'business',
+                  disabled:
+                    !canManageBusinessTemplate &&
+                    !preserveExistingBusinessSaveMode,
                 },
               ]}
               optionType="button"

@@ -12,6 +12,7 @@ type InternalPreviewRequest = {
   limit?: number;
   dryRun?: boolean;
   runtimeScopeId?: string;
+  sqlMode?: 'wren' | 'dialect';
 };
 
 const isInternalAiServiceRequest = (req: NextApiRequest) => {
@@ -62,7 +63,7 @@ export default async function handler(
       throw new ApiError('Internal AI-service access required', 403);
     }
 
-    const { sql, limit, dryRun, runtimeScopeId } = (req.body ||
+    const { sql, limit, dryRun, runtimeScopeId, sqlMode } = (req.body ||
       {}) as InternalPreviewRequest;
     if (!sql || !runtimeScopeId) {
       throw new ApiError('SQL and runtimeScopeId are required', 400);
@@ -79,6 +80,7 @@ export default async function handler(
         limit,
         dryRun,
         runtimeScopeId,
+        sqlMode,
       },
       ctx,
     });

@@ -310,6 +310,17 @@ describe('AskingController', () => {
   it('validates task scope before creating a thread from an asking task', async () => {
     const resolver = new AskingController();
     const ctx = createContext();
+    const taskRuntimeIdentity = {
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-2',
+      kbSnapshotId: 'snapshot-2',
+      deployHash: 'deploy-2',
+      actorUserId: 'user-1',
+    };
+    ctx.askingService.assertAskingTaskScope.mockResolvedValue(
+      taskRuntimeIdentity,
+    );
 
     await resolver.createThread(null, { data: { taskId: 'task-1' } }, ctx);
 
@@ -325,7 +336,7 @@ describe('AskingController', () => {
           queryId: 'task-1',
         }),
       },
-      runtimeIdentity,
+      taskRuntimeIdentity,
     );
   });
 

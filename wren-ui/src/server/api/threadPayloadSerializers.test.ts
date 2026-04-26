@@ -39,6 +39,14 @@ describe('threadPayloadSerializers thinking contract', () => {
             question: '各部门平均薪资是多少？',
             type: AskResultType.TEXT_TO_SQL,
             status: AskResultStatus.FINISHED,
+            traceId: 'trace-ask-1',
+            askPath: 'sql_pairs',
+            templateDecision: {
+              mode: 'anchored_template',
+              templateId: 'template-1',
+              sqlSource: 'anchored_template',
+              missingParameters: [],
+            },
             error: null,
             response: [{ type: 'LLM', sql: 'select * from salaries' }],
             retrievedTables: ['departments', 'salaries'],
@@ -123,6 +131,16 @@ describe('threadPayloadSerializers thinking contract', () => {
       key: 'ask.answer_instructions_retrieved',
       status: 'finished',
       messageParams: { count: 0 },
+    });
+    expect(payload.askingTask?.diagnostics).toMatchObject({
+      traceId: 'trace-ask-1',
+      askPath: 'sql_pairs',
+      templateDecision: {
+        mode: 'anchored_template',
+        templateId: 'template-1',
+        sqlSource: 'anchored_template',
+        missingParameters: [],
+      },
     });
     expect(payload.resolvedIntent).toMatchObject({
       kind: 'ASK',
@@ -388,6 +406,44 @@ describe('threadPayloadSerializers thinking contract', () => {
     expect(payload.artifactLineage).toEqual({
       sourceResponseId: 11,
       inheritedWorkbenchArtifacts: ['preview', 'sql'],
+    });
+  });
+
+  it('falls back to GENERAL answer content when persisted answer detail is empty', async () => {
+    const payload = await serializeThreadResponsePayload({
+      response: {
+        id: 16,
+        threadId: 7,
+        question: '计算 ROI',
+        askingTaskId: 31,
+        answerDetail: {},
+      } as any,
+      runtimeIdentity,
+      services: {
+        askingService: {
+          getAskingTaskById: jest.fn().mockResolvedValue({
+            queryId: 'ask-general-1',
+            question: '计算 ROI',
+            type: AskResultType.GENERAL,
+            status: AskResultStatus.FINISHED,
+            content: '首存定义为成功存款且 times = 1。',
+            intentReasoning:
+              '当前知识库缺少投放金额，请先补充该指标后再计算 ROI。',
+            error: null,
+            response: [],
+          }),
+          getAdjustmentTaskById: jest.fn().mockResolvedValue(null),
+        },
+      },
+    });
+
+    expect(payload.answerDetail).toEqual({
+      status: ThreadResponseAnswerStatus.FINISHED,
+      content: '首存定义为成功存款且 times = 1。',
+    });
+    expect(payload.resolvedIntent).toMatchObject({
+      kind: 'GENERAL_HELP',
+      mode: 'NEW',
     });
   });
 });

@@ -175,6 +175,44 @@ describe('resolvePreparationTimelineModel', () => {
     });
   });
 
+  it('uses sql-source aware template decision labels in ask thinking', () => {
+    const model = resolvePreparationTimelineModel({
+      data: buildThreadResponse({
+        answerDetail: {
+          content: '好的',
+          numRowsUsedInLLM: 9,
+          queryId: 'answer-1',
+          status: ThreadResponseAnswerStatus.FINISHED,
+        },
+      }),
+      preparedTask: buildPreparedTask({
+        thinking: {
+          steps: [
+            {
+              key: 'ask.template_decision',
+              messageKey: 'ask.template_decision',
+              messageParams: {
+                mode: 'anchored_template',
+                sqlSource: 'anchored_generated',
+                fallbackReason: 'missing_template_parameters',
+                missingParameters: 'start_date',
+                templateTitle: '首存用户日龄趋势',
+              },
+              status: 'finished',
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(model?.steps[0]).toMatchObject({
+      key: 'ask.template_decision',
+      title: '已按业务口径约束生成',
+    });
+    expect(model?.steps[0].description).toContain('模板：首存用户日龄趋势');
+    expect(model?.steps[0].description).toContain('缺少参数：start_date');
+  });
+
   it('builds chart follow-up thinking steps from chart diagnostics', () => {
     const model = resolvePreparationTimelineModel({
       data: buildThreadResponse({

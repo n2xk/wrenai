@@ -5,6 +5,7 @@ import {
   TextBasedAnswerStatus,
 } from '../models/adaptor';
 import {
+  IAskingTaskRepository,
   IKnowledgeBaseRepository,
   IThreadRepository,
   ThreadResponse,
@@ -26,6 +27,7 @@ import {
 } from '@server/utils/persistedRuntimeIdentity';
 import { resolveProjectLanguage } from '@server/utils/runtimeExecutionContext';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import { getPreviewSqlModeForTemplateCarrier } from '@server/utils/templateSqlExecution';
 
 const logger = getLogger('TextBasedAnswerBackgroundTracker');
 logger.level = 'debug';
@@ -70,6 +72,25 @@ const resolveErrorPayload = (error: unknown): Record<string, unknown> => {
 const buildMissingSqlError = (threadResponseId: number) =>
   new Error(`SQL is missing for response ${threadResponseId}`);
 
+const ANSWER_RESULT_RETRYABLE_ERROR_PATTERNS = [
+  /(?:read\s+)?ECONNRESET/i,
+  /socket hang up/i,
+  /Connection reset by peer/i,
+];
+
+const TRANSIENT_ANSWER_RESULT_MAX_RETRIES = 3;
+const TRANSIENT_ANSWER_RESULT_RETRY_DELAY_MS = 300;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableAnswerResultError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  return ANSWER_RESULT_RETRYABLE_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(message),
+  );
+};
+
 export class TextBasedAnswerBackgroundTracker {
   // tasks is a kv pair of task id and thread response
   private tasks: Record<number, ThreadResponse> = {};
@@ -81,6 +102,7 @@ export class TextBasedAnswerBackgroundTracker {
   private deployService: IDeployService;
   private queryService: IQueryService;
   private knowledgeBaseRepository?: Pick<IKnowledgeBaseRepository, 'findOneBy'>;
+  private askingTaskRepository?: Pick<IAskingTaskRepository, 'findOneBy'>;
   private runningJobs = new Set<number>();
   private pollingIntervalId: ReturnType<typeof setInterval> | null = null;
   private unregisterShutdown?: () => void;
@@ -93,6 +115,7 @@ export class TextBasedAnswerBackgroundTracker {
     deployService,
     queryService,
     knowledgeBaseRepository,
+    askingTaskRepository,
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     threadResponseRepository: IThreadResponseRepository;
@@ -101,6 +124,7 @@ export class TextBasedAnswerBackgroundTracker {
     deployService: IDeployService;
     queryService: IQueryService;
     knowledgeBaseRepository?: Pick<IKnowledgeBaseRepository, 'findOneBy'>;
+    askingTaskRepository?: Pick<IAskingTaskRepository, 'findOneBy'>;
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.threadResponseRepository = threadResponseRepository;
@@ -109,6 +133,7 @@ export class TextBasedAnswerBackgroundTracker {
     this.deployService = deployService;
     this.queryService = queryService;
     this.knowledgeBaseRepository = knowledgeBaseRepository;
+    this.askingTaskRepository = askingTaskRepository;
     this.intervalTime = 1000;
     this.start();
   }
@@ -130,6 +155,23 @@ export class TextBasedAnswerBackgroundTracker {
           try {
             if (
               threadResponse.answerDetail?.status ===
+                ThreadResponseAnswerStatus.PREPROCESSING &&
+              threadResponse.answerDetail.queryId
+            ) {
+              const responseRuntimeIdentity =
+                await this.getResponseRuntimeIdentity(threadResponse);
+              await this.continueAnswerFromQuery({
+                threadResponse,
+                runtimeIdentity: responseRuntimeIdentity,
+                queryId: threadResponse.answerDetail.queryId,
+                instructionCount: threadResponse.answerDetail.instructionCount,
+              });
+              delete this.tasks[threadResponse.id];
+              return;
+            }
+
+            if (
+              threadResponse.answerDetail?.status ===
                 ThreadResponseAnswerStatus.STREAMING &&
               threadResponse.answerDetail.queryId
             ) {
@@ -145,11 +187,9 @@ export class TextBasedAnswerBackgroundTracker {
             }
 
             // update the status to fetching data
-            await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: {
-                ...threadResponse.answerDetail,
-                status: ThreadResponseAnswerStatus.FETCHING_DATA,
-              },
+            threadResponse = await this.persistAnswerDetail(threadResponse, {
+              ...threadResponse.answerDetail,
+              status: ThreadResponseAnswerStatus.FETCHING_DATA,
             });
 
             // get sql data
@@ -178,11 +218,20 @@ export class TextBasedAnswerBackgroundTracker {
             }
             let data: PreviewDataResponse;
             try {
+              const askingTask =
+                threadResponse.askingTaskId && this.askingTaskRepository
+                  ? await this.askingTaskRepository.findOneBy({
+                      id: threadResponse.askingTaskId,
+                    })
+                  : null;
+              const previewSqlMode =
+                getPreviewSqlModeForTemplateCarrier(askingTask);
               data = (await this.queryService.preview(responseSql, {
                 project,
                 manifest: mdl,
                 modelingOnly: false,
                 limit: 500,
+                ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
               })) as PreviewDataResponse;
             } catch (error) {
               logger.error(`Error when query sql data: ${error}`);
@@ -214,52 +263,19 @@ export class TextBasedAnswerBackgroundTracker {
             }
             const instructionCount = response.instructionCount ?? 0;
 
-            // update the status to preprocessing
-            await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: {
-                ...threadResponse.answerDetail,
-                instructionCount,
-                status: ThreadResponseAnswerStatus.PREPROCESSING,
-              },
-            });
-
-            // polling query id to check the status
-            let result: TextBasedAnswerResult;
-            do {
-              result =
-                await this.wrenAIAdaptor.getTextBasedAnswerResult(
-                  responseQueryId,
-                );
-              if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              }
-            } while (result.status === TextBasedAnswerStatus.PREPROCESSING);
-
-            // update the status to final
-            const updatedAnswerDetail = {
+            threadResponse = await this.persistAnswerDetail(threadResponse, {
+              ...threadResponse.answerDetail,
               queryId: responseQueryId,
-              instructionCount: result.instructionCount ?? instructionCount,
-              status:
-                result.status === TextBasedAnswerStatus.SUCCEEDED
-                  ? ThreadResponseAnswerStatus.STREAMING
-                  : ThreadResponseAnswerStatus.FAILED,
-              numRowsUsedInLLM: result.numRowsUsedInLLM,
-              error: result.error,
-            };
-            await this.threadResponseRepository.updateOne(threadResponse.id, {
-              answerDetail: updatedAnswerDetail,
+              instructionCount,
+              status: ThreadResponseAnswerStatus.PREPROCESSING,
             });
 
-            if (result.status === TextBasedAnswerStatus.SUCCEEDED) {
-              await this.persistStreamingAnswer({
-                threadResponse: {
-                  ...threadResponse,
-                  answerDetail: updatedAnswerDetail,
-                },
-                runtimeIdentity: responseRuntimeIdentity,
-                queryId: responseQueryId,
-              });
-            }
+            await this.continueAnswerFromQuery({
+              threadResponse,
+              runtimeIdentity: responseRuntimeIdentity,
+              queryId: responseQueryId,
+              instructionCount,
+            });
 
             delete this.tasks[threadResponse.id];
           } finally {
@@ -298,14 +314,34 @@ export class TextBasedAnswerBackgroundTracker {
     return this.tasks;
   }
 
+  private getTrackedThreadResponse(threadResponse: ThreadResponse) {
+    return this.tasks[threadResponse.id] || threadResponse;
+  }
+
+  private async persistAnswerDetail(
+    threadResponse: ThreadResponse,
+    answerDetail: NonNullable<ThreadResponse['answerDetail']>,
+  ) {
+    await this.threadResponseRepository.updateOne(threadResponse.id, {
+      answerDetail,
+    });
+    const updatedThreadResponse = {
+      ...threadResponse,
+      answerDetail,
+    };
+    this.tasks[threadResponse.id] = updatedThreadResponse;
+    return updatedThreadResponse;
+  }
+
   private async failTask(
     threadResponse: ThreadResponse,
     error: unknown,
     options: { queryId?: string } = {},
   ) {
+    const trackedThreadResponse = this.getTrackedThreadResponse(threadResponse);
     await this.threadResponseRepository.updateOne(threadResponse.id, {
       answerDetail: {
-        ...threadResponse.answerDetail,
+        ...trackedThreadResponse.answerDetail,
         ...(options.queryId ? { queryId: options.queryId } : {}),
         status: ThreadResponseAnswerStatus.FAILED,
         error: resolveErrorPayload(error),
@@ -325,13 +361,11 @@ export class TextBasedAnswerBackgroundTracker {
   }) {
     try {
       const content = await this.waitForFinalAnswerContent(queryId);
-      await this.threadResponseRepository.updateOne(threadResponse.id, {
-        answerDetail: {
-          ...threadResponse.answerDetail,
-          queryId,
-          status: ThreadResponseAnswerStatus.FINISHED,
-          content,
-        },
+      await this.persistAnswerDetail(threadResponse, {
+        ...this.getTrackedThreadResponse(threadResponse).answerDetail,
+        queryId,
+        status: ThreadResponseAnswerStatus.FINISHED,
+        content,
       });
     } catch (error) {
       logger.error(
@@ -341,9 +375,89 @@ export class TextBasedAnswerBackgroundTracker {
     }
   }
 
+  private async getTextBasedAnswerResultWithRetry(queryId: string) {
+    let lastError: unknown;
+    for (
+      let attempt = 0;
+      attempt <= TRANSIENT_ANSWER_RESULT_MAX_RETRIES;
+      attempt += 1
+    ) {
+      try {
+        return await this.wrenAIAdaptor.getTextBasedAnswerResult(queryId);
+      } catch (error) {
+        lastError = error;
+        if (
+          !isRetryableAnswerResultError(error) ||
+          attempt === TRANSIENT_ANSWER_RESULT_MAX_RETRIES
+        ) {
+          throw error;
+        }
+
+        logger.warn(
+          `Text answer result ${queryId} hit a transient upstream reset; retrying (${attempt + 1}/${TRANSIENT_ANSWER_RESULT_MAX_RETRIES}): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        await sleep(TRANSIENT_ANSWER_RESULT_RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+
+    throw lastError;
+  }
+
+  private async waitForAnswerResult(queryId: string) {
+    let result: TextBasedAnswerResult;
+    do {
+      result = await this.getTextBasedAnswerResultWithRetry(queryId);
+      if (result.status === TextBasedAnswerStatus.PREPROCESSING) {
+        await sleep(500);
+      }
+    } while (result.status === TextBasedAnswerStatus.PREPROCESSING);
+
+    return result;
+  }
+
+  private async continueAnswerFromQuery({
+    threadResponse,
+    runtimeIdentity,
+    queryId,
+    instructionCount,
+  }: {
+    threadResponse: ThreadResponse;
+    runtimeIdentity: PersistedRuntimeIdentity;
+    queryId: string;
+    instructionCount?: number;
+  }) {
+    const result = await this.waitForAnswerResult(queryId);
+    const updatedAnswerDetail = {
+      queryId,
+      instructionCount: result.instructionCount ?? instructionCount ?? 0,
+      status:
+        result.status === TextBasedAnswerStatus.SUCCEEDED
+          ? ThreadResponseAnswerStatus.STREAMING
+          : ThreadResponseAnswerStatus.FAILED,
+      numRowsUsedInLLM: result.numRowsUsedInLLM,
+      error: result.error,
+    };
+    const updatedThreadResponse = await this.persistAnswerDetail(
+      threadResponse,
+      updatedAnswerDetail,
+    );
+
+    if (result.status === TextBasedAnswerStatus.SUCCEEDED) {
+      await this.persistStreamingAnswer({
+        threadResponse: updatedThreadResponse,
+        runtimeIdentity,
+        queryId,
+      });
+    } else {
+      delete this.tasks[threadResponse.id];
+    }
+  }
+
   private async waitForFinalAnswerContent(queryId: string) {
     for (let attempt = 0; attempt < 240; attempt += 1) {
-      const result = await this.wrenAIAdaptor.getTextBasedAnswerResult(queryId);
+      const result = await this.getTextBasedAnswerResultWithRetry(queryId);
 
       if (result.status === TextBasedAnswerStatus.FAILED) {
         throw new Error(
@@ -355,7 +469,7 @@ export class TextBasedAnswerBackgroundTracker {
         return result.content;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sleep(500);
     }
 
     throw new Error(

@@ -81,6 +81,7 @@ describe('ModelController scope guards', () => {
         sql: 'select 1',
         limit: 5,
         runtimeScopeId: 'deploy-explicit',
+        sqlMode: 'dialect',
       },
       ctx,
     });
@@ -94,6 +95,7 @@ describe('ModelController scope guards', () => {
       modelingOnly: false,
       manifest: { models: [] },
       dryRun: undefined,
+      sqlMode: 'dialect',
     });
   });
 

@@ -22,6 +22,7 @@ describe('knowledgeWorkbenchEditor', () => {
     ).toEqual({
       scope: 'all',
       description: '订单明细里最近 30 天的订单趋势',
+      templateMode: 'reference',
       sql: expect.stringContaining('FROM fact_orders'),
     });
   });

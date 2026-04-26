@@ -1,5 +1,6 @@
 import { IContext } from '@server/types';
 import { ChartAdjustmentOption } from '@server/models/adaptor';
+import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
 import { Thread } from '../repositories/threadRepository';
 import { ThreadResponse } from '../repositories/threadResponseRepository';
 import { AskingDetailTaskInput } from '../services/askingService';
@@ -17,6 +18,10 @@ import {
   toDetailedThread,
 } from './askingControllerScopeSupport';
 
+type ResolvedThreadInput = AskingDetailTaskInput & {
+  taskRuntimeIdentity?: PersistedRuntimeIdentity;
+};
+
 const resolveThreadInput = async (
   data: {
     question?: string;
@@ -26,12 +31,12 @@ const resolveThreadInput = async (
     selectedSkillIds?: string[];
   },
   ctx: IContext,
-): Promise<AskingDetailTaskInput> => {
+): Promise<ResolvedThreadInput> => {
   if (!data.taskId) {
     return data;
   }
 
-  await ensureAskingTaskScope(ctx, data.taskId);
+  const taskRuntimeIdentity = await ensureAskingTaskScope(ctx, data.taskId);
   const askingTask = await ctx.askingService.getAskingTask(data.taskId);
   if (!askingTask) {
     throw new Error(`Asking task ${data.taskId} not found`);
@@ -42,6 +47,7 @@ const resolveThreadInput = async (
     trackedAskingResult: askingTask,
     knowledgeBaseIds: data.knowledgeBaseIds,
     selectedSkillIds: data.selectedSkillIds,
+    taskRuntimeIdentity,
   };
 };
 
@@ -87,12 +93,13 @@ export const createThreadAction = async (
 ): Promise<Thread> => {
   await assertKnowledgeBaseReadAccess(ctx);
   const threadInput = await resolveThreadInput(args.data, ctx);
+  const { taskRuntimeIdentity, ...threadPayload } = threadInput;
   const eventName = TelemetryEvent.HOME_CREATE_THREAD;
 
   try {
     const thread = await ctx.askingService.createThread(
-      threadInput,
-      getCurrentPersistedRuntimeIdentity(ctx),
+      threadPayload,
+      taskRuntimeIdentity || getCurrentPersistedRuntimeIdentity(ctx),
     );
     ctx.telemetry.sendEvent(eventName, {});
     return {

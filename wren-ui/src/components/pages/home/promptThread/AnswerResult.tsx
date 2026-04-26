@@ -43,6 +43,7 @@ import {
 } from '@/features/home/thread/threadWorkbenchState';
 import { resolveConversationAidOwnerResponseId } from '@/features/home/thread/conversationAidVisibility';
 import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
+import { resolveTemplateDecisionPresentation } from '@/features/home/thread/templateDecisionPresentation';
 
 const adjustmentType = {
   [ThreadResponseAdjustmentType.APPLY_SQL]: '已应用手动 SQL',
@@ -124,6 +125,34 @@ const ArtifactTeaserMeta = styled.div`
 const ArtifactTeaserAction = styled.div`
   flex-shrink: 0;
   margin-left: auto;
+`;
+
+const TemplateDecisionBanner = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(111, 71, 255, 0.08);
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgba(250, 247, 255, 0.82) 0%,
+    rgba(255, 255, 255, 0.96) 100%
+  );
+`;
+
+const TemplateDecisionBannerHeader = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`;
+
+const TemplateDecisionBannerText = styled.div`
+  font-size: 12px;
+  line-height: 1.5;
+  color: #667085;
+  overflow-wrap: anywhere;
 `;
 
 const ResponseCardFooter = styled.div`
@@ -469,6 +498,14 @@ export default function AnswerResult(props: Props) {
 
   const rephrasedQuestion =
     threadResponse?.askingTask?.rephrasedQuestion || question;
+  const templateDecisionPresentation = useMemo(
+    () =>
+      resolveTemplateDecisionPresentation(
+        askingTask?.diagnostics?.templateDecision,
+        messages.template,
+      ),
+    [askingTask?.diagnostics?.templateDecision, messages.template],
+  );
   const normalizedView: ViewInfo | undefined = view || undefined;
   const sqlText = sql || '';
   const hasPreviewArtifact = hasResponsePreviewArtifact(threadResponse);
@@ -994,6 +1031,31 @@ export default function AnswerResult(props: Props) {
     );
   };
 
+  const renderTemplateDecisionBanner = () => {
+    if (
+      isChartFollowUp ||
+      isRecommendationFollowUp ||
+      !templateDecisionPresentation
+    ) {
+      return null;
+    }
+
+    return (
+      <TemplateDecisionBanner onClick={(event) => event.stopPropagation()}>
+        <TemplateDecisionBannerHeader>
+          <Tag color={templateDecisionPresentation.tagColor}>
+            {templateDecisionPresentation.badge}
+          </Tag>
+        </TemplateDecisionBannerHeader>
+        {templateDecisionPresentation.description ? (
+          <TemplateDecisionBannerText>
+            {templateDecisionPresentation.description}
+          </TemplateDecisionBannerText>
+        ) : null}
+      </TemplateDecisionBanner>
+    );
+  };
+
   return (
     <div data-jsid="answerResult">
       <ResponseCard $selected={isSelected} onClick={selectCurrentResponse}>
@@ -1031,6 +1093,7 @@ export default function AnswerResult(props: Props) {
                   minimized={shouldMinimizePreparation}
                 />
               ) : null}
+              {renderTemplateDecisionBanner()}
               {previewTeaser}
               {showAnswerBody ? <TextBasedAnswer {...props} /> : null}
 

@@ -299,6 +299,7 @@ export class AskingService implements IAskingService {
         deployService,
         queryService,
         knowledgeBaseRepository,
+        askingTaskRepository,
       });
     this.chartBackgroundTracker = new ChartBackgroundTracker({
       telemetry,

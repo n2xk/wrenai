@@ -272,7 +272,7 @@ describe('modeling workspace', () => {
     expect(markup).not.toContain(
       '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
     );
-    expect(markup).toContain('Modeling AI Assistant');
+    expect(markup).toContain('建模 AI 助手');
     expect(markup).toContain('SidebarWritable');
     expect(markup).toContain('DiagramWritable');
 

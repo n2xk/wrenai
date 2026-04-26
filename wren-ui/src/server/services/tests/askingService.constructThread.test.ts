@@ -162,6 +162,21 @@ describe('AskingService', () => {
         'query-9',
         101,
         202,
+        {
+          question: 'what happened yesterday',
+          result: {
+            taskId: 9,
+            queryId: 'query-9',
+          },
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+            actorUserId: 'user-1',
+          },
+        },
       );
     });
   });
@@ -221,6 +236,14 @@ describe('AskingService', () => {
         'query-9',
         101,
         202,
+        {
+          question: 'follow up',
+          result: {
+            taskId: 9,
+            queryId: 'query-9',
+          },
+          runtimeIdentity: undefined,
+        },
       );
       expect(service.threadResponseRepository.findOneBy).toHaveBeenCalledWith({
         id: 202,
@@ -307,6 +330,124 @@ describe('AskingService', () => {
           }),
         }),
       );
+    });
+
+    it('uses dialect preview mode for anchored template SQL responses', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'kb-1-snap',
+        deployHash: 'deploy-1',
+      };
+      service.getResponse = jest.fn().mockResolvedValue({
+        id: 56,
+        askingTaskId: 88,
+        sql: 'SELECT * FROM raw_tidb_template_sql',
+      });
+      service.getAskingTaskById = jest.fn().mockResolvedValue({
+        templateDecision: {
+          mode: 'anchored_template',
+          sqlSource: 'anchored_template',
+          missingParameters: [],
+        },
+      });
+      service.getThreadResponseRuntimeIdentity = jest
+        .fn()
+        .mockResolvedValue(runtimeIdentity);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 1, type: 'postgres' },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [],
+          data: [],
+        }),
+      };
+      service.threadResponseRepository = {
+        updateOneByIdWithRuntimeScope: jest.fn(),
+      };
+      service.telemetry = {
+        sendEvent: jest.fn(),
+      };
+
+      await service.previewData(56, 20, runtimeIdentity);
+
+      expect(service.queryService.preview).toHaveBeenCalledWith(
+        'SELECT * FROM raw_tidb_template_sql',
+        expect.objectContaining({
+          project: { id: 1, type: 'postgres' },
+          manifest: { models: [] },
+          limit: 20,
+          sqlMode: 'dialect',
+        }),
+      );
+    });
+
+    it('inherits dialect preview mode from the source response for chart follow-ups', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'kb-1-snap',
+        deployHash: 'deploy-1',
+      };
+      service.getResponse = jest
+        .fn()
+        .mockResolvedValueOnce({
+          id: 78,
+          askingTaskId: null,
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 77,
+          sql: 'SELECT * FROM raw_tidb_template_sql',
+        })
+        .mockResolvedValueOnce({
+          id: 77,
+          askingTaskId: 88,
+          sql: 'SELECT * FROM raw_tidb_template_sql',
+        });
+      service.getAskingTaskById = jest.fn().mockResolvedValue({
+        templateDecision: {
+          mode: 'anchored_template',
+          sqlSource: 'anchored_template',
+          missingParameters: [],
+        },
+      });
+      service.getThreadResponseRuntimeIdentity = jest
+        .fn()
+        .mockResolvedValue(runtimeIdentity);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 1, type: 'postgres' },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [],
+          data: [],
+        }),
+      };
+      service.threadResponseRepository = {
+        updateOneByIdWithRuntimeScope: jest.fn(),
+      };
+      service.telemetry = {
+        sendEvent: jest.fn(),
+      };
+
+      await service.previewData(78, 20, runtimeIdentity);
+
+      expect(service.queryService.preview).toHaveBeenCalledWith(
+        'SELECT * FROM raw_tidb_template_sql',
+        expect.objectContaining({
+          project: { id: 1, type: 'postgres' },
+          manifest: { models: [] },
+          limit: 20,
+          sqlMode: 'dialect',
+        }),
+      );
+      expect(service.getAskingTaskById).toHaveBeenCalledWith(88);
     });
   });
 });

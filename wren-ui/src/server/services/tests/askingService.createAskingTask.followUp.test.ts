@@ -121,6 +121,83 @@ describe('AskingService', () => {
       );
     });
 
+    it('includes compatible broader SQL history when scoped follow-up history is empty', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 107,
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-5',
+          actorUserId: 'user-1',
+        }),
+      };
+      service.threadResponseRepository = {
+        getResponsesWithThreadByScope: jest.fn().mockResolvedValue([]),
+        getResponsesWithThread: jest.fn().mockResolvedValue([
+          {
+            id: 153,
+            threadId: 107,
+            question:
+              '统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort从D1到D7的累计收入',
+            sql: 'SELECT 42 AS cumulative_revenue',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: null,
+            kbSnapshotId: null,
+            deployHash: 'deploy-5',
+            actorUserId: 'user-1',
+          },
+        ]),
+      };
+      service.askingTaskTracker = {
+        createAskingTask: jest.fn().mockResolvedValue({ queryId: 'query-5' }),
+      };
+      service.getAskingHistory =
+        AskingService.prototype['getAskingHistory'].bind(service);
+      service.getDeployId =
+        AskingService.prototype['getDeployId'].bind(service);
+      service.deployService = {
+        getLastDeploymentByRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue({ hash: 'deploy-5' }),
+      };
+
+      await service.createAskingTask(
+        { question: '那只看 2026-04-02 的首存 cohort 呢？' },
+        {
+          threadId: 107,
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-5',
+            actorUserId: 'user-1',
+          },
+          language: 'en',
+        },
+      );
+
+      expect(
+        service.threadResponseRepository.getResponsesWithThread,
+      ).toHaveBeenCalledWith(107, 10);
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          histories: [
+            expect.objectContaining({
+              id: 153,
+              sql: 'SELECT 42 AS cumulative_revenue',
+              question:
+                '统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort从D1到D7的累计收入',
+            }),
+          ],
+        }),
+      );
+    });
+
     it('falls back to payload runtime identity when follow-up thread uses legacy-null project bridge', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.threadRepository = {

@@ -2,13 +2,15 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import APIHistory from '../../../pages/api-management/history';
+import SettingsDiagnosticsPage from '../../../pages/settings/diagnostics';
 import { ApiType } from '@/types/apiHistory';
 
 import { API_HISTORY_FILTER_TYPES } from '@/components/pages/apiManagement/apiTypeLabels';
 
 const mockUseRouter = jest.fn();
 const mockUseProtectedRuntimeScopePage = jest.fn();
+const mockUseRuntimeScopeNavigation = jest.fn();
+const mockUseAuthSession = jest.fn();
 const mockUseDrawerAction = jest.fn();
 const mockUseApiHistoryList = jest.fn();
 
@@ -50,6 +52,11 @@ jest.mock('antd', () => {
     Tag: ({ children }: any) => React.createElement('span', null, children),
     Typography: {
       Text: ({ children }: any) => React.createElement('span', null, children),
+      Paragraph: ({ children }: any) =>
+        React.createElement('p', null, children),
+    },
+    message: {
+      error: jest.fn(),
     },
   };
 });
@@ -65,6 +72,16 @@ jest.mock('@/utils/time', () => ({
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
   __esModule: true,
   default: () => mockUseProtectedRuntimeScopePage(),
+}));
+
+jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeScopeNavigation(),
+}));
+
+jest.mock('@/hooks/useAuthSession', () => ({
+  __esModule: true,
+  default: () => mockUseAuthSession(),
 }));
 
 jest.mock('@/hooks/useDrawerAction', () => ({
@@ -126,6 +143,24 @@ jest.mock('@/components/pages/apiManagement/AskDiagnosticsSummary', () => ({
   },
 }));
 
+jest.mock('@/features/settings/diagnostics/DiagnosticsDetailsDrawer', () => ({
+  __esModule: true,
+  default: () => {
+    const React = jest.requireActual('react');
+    return React.createElement('div', { 'data-kind': 'details-drawer' });
+  },
+}));
+
+jest.mock('@/features/settings/diagnostics/DiagnosticsSummaryCell', () => ({
+  __esModule: true,
+  default: () => {
+    const React = jest.requireActual('react');
+    return React.createElement('div', {
+      'data-kind': 'diagnostics-summary-cell',
+    });
+  },
+}));
+
 jest.mock('@ant-design/icons/ApiOutlined', () => () => 'api-icon');
 jest.mock('@ant-design/icons/EyeOutlined', () => () => 'eye-icon');
 jest.mock('@ant-design/icons/CheckCircleOutlined', () => () => 'check-icon');
@@ -156,7 +191,8 @@ const readQueryFromUrl = (url: string) =>
 
 dayjs.extend(customParseFormat);
 
-const renderPage = () => renderToStaticMarkup(React.createElement(APIHistory));
+const renderPage = () =>
+  renderToStaticMarkup(React.createElement(SettingsDiagnosticsPage));
 
 describe('APIHistory page URL sync', () => {
   beforeEach(() => {
@@ -167,6 +203,24 @@ describe('APIHistory page URL sync', () => {
     mockUseProtectedRuntimeScopePage.mockReturnValue({
       guarding: false,
       hasRuntimeScope: true,
+    });
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: jest.fn(),
+      replace: jest.fn(),
+      pushWorkspace: jest.fn(),
+      hasRuntimeScope: true,
+    });
+    mockUseAuthSession.mockReturnValue({
+      authenticated: true,
+      loading: false,
+      data: {
+        authorization: {
+          actor: {
+            platformRoleKeys: [],
+            isPlatformAdmin: false,
+          },
+        },
+      },
     });
     mockUseDrawerAction.mockReturnValue({
       state: { visible: false, defaultValue: null },

@@ -9,6 +9,8 @@ import {
   ThreadResponseAnswerStatus,
   type ThreadResponseChartDetail,
 } from '@/types/home';
+import { getThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
+import { resolveTemplateDecisionPresentation } from '@/features/home/thread/templateDecisionPresentation';
 import type { PreparedTask } from './index';
 
 export type PreparationTimelineStepStatus =
@@ -45,6 +47,8 @@ export type PreparationTimelineModel =
     };
 
 const PREPARATION_TITLE = '思考步骤';
+const PREPARATION_TEMPLATE_MESSAGES =
+  getThreadWorkbenchMessages('zh-CN').template;
 
 const formatChartType = (chartType?: ChartType | string | null) => {
   if (!chartType) {
@@ -149,23 +153,38 @@ const toPreparationStepFromThinking = (
         description: '系统直接复用了已有的问数模板结果',
         status: normalizedStatus,
       });
-    case 'ask.template_decision':
+    case 'ask.template_decision': {
+      const missingParametersValue = step.messageParams?.missingParameters;
+      const templateDecisionPresentation = resolveTemplateDecisionPresentation(
+        {
+          decisionReason:
+            (step.messageParams?.decisionReason as string | undefined) || null,
+          fallbackReason:
+            (step.messageParams?.fallbackReason as string | undefined) || null,
+          missingParameters:
+            typeof missingParametersValue === 'string'
+              ? missingParametersValue
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean)
+              : null,
+          mode: (step.messageParams?.mode as string | undefined) || null,
+          sqlSource:
+            (step.messageParams?.sqlSource as string | undefined) || null,
+          templateTitle:
+            (step.messageParams?.templateTitle as string | undefined) || null,
+        },
+        PREPARATION_TEMPLATE_MESSAGES,
+      );
       return buildStep({
         key: step.key,
         title:
-          step.messageParams?.mode === 'anchored_template'
-            ? '已按业务口径模板生成'
-            : step.messageParams?.mode === 'executable_template'
-              ? '已执行参数化模板'
-              : step.messageParams?.mode === 'trusted_reference'
-                ? '已采用可信 SQL 参考'
-                : '已按 SQL 参考生成',
-        description:
-          (step.messageParams?.fallbackReason as string | undefined) ||
-          (step.messageParams?.decisionReason as string | undefined) ||
-          null,
+          templateDecisionPresentation?.badge ||
+          PREPARATION_TEMPLATE_MESSAGES.badges.reference,
+        description: templateDecisionPresentation?.description || null,
         status: normalizedStatus,
       });
+    }
     case 'ask.sql_corrected':
       return buildStep({
         key: step.key,

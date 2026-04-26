@@ -161,11 +161,11 @@ export interface IAskingService {
   assertAskingTaskScope(
     queryId: string,
     runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void>;
+  ): Promise<PersistedRuntimeIdentity>;
   assertAskingTaskScopeById(
     taskId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
-  ): Promise<void>;
+  ): Promise<PersistedRuntimeIdentity>;
   assertResponseScope(
     responseId: number,
     runtimeIdentity: PersistedRuntimeIdentity,

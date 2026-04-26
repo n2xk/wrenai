@@ -192,7 +192,11 @@ export class IbisAdaptor implements IIbisAdaptor {
           body,
         );
 
-        return this.transformDescriptionToProperties(res.data);
+        return this.filterTablesToConnectionScope(
+          dataSource,
+          ibisConnectionInfo,
+          this.transformDescriptionToProperties(res.data),
+        );
       };
 
       connectionInfo = this.updateConnectionInfo(connectionInfo);
@@ -385,6 +389,134 @@ export class IbisAdaptor implements IIbisAdaptor {
         return table;
       }
     });
+  }
+
+  private filterTablesToConnectionScope(
+    dataSource: DataSourceName,
+    connectionInfo: Record<string, unknown>,
+    tables: CompactTable[],
+  ): CompactTable[] {
+    const scopeFilters = this.resolveTableScopeFilters(
+      dataSource,
+      connectionInfo,
+    );
+    if (!scopeFilters || !tables.length) {
+      return tables;
+    }
+
+    const filteredTables = tables.filter((table) =>
+      this.matchesTableScope(table, scopeFilters),
+    );
+
+    if (filteredTables.length === 0) {
+      logger.debug(
+        `No tables matched the requested ${dataSource} scope filter, returning unfiltered metadata result`,
+      );
+      return tables;
+    }
+
+    logger.debug(
+      `Filtered ${tables.length - filteredTables.length} tables outside the requested ${dataSource} scope`,
+    );
+    return filteredTables;
+  }
+
+  private resolveTableScopeFilters(
+    dataSource: DataSourceName,
+    connectionInfo: Record<string, unknown>,
+  ): { databaseNames?: string[]; schemaNames?: string[] } | null {
+    const readString = (value: unknown) =>
+      typeof value === 'string' && value.trim() ? value.trim() : null;
+
+    switch (dataSource) {
+      case DataSourceName.ATHENA: {
+        const database = readString(connectionInfo.database);
+        const schema = readString(connectionInfo.schema_name);
+        return database || schema
+          ? {
+              databaseNames: database ? [database] : undefined,
+              schemaNames: schema ? [schema] : undefined,
+            }
+          : null;
+      }
+      case DataSourceName.BIG_QUERY: {
+        const dataset = readString(connectionInfo.dataset_id);
+        return dataset ? { schemaNames: [dataset] } : null;
+      }
+      case DataSourceName.CLICK_HOUSE:
+      case DataSourceName.MYSQL: {
+        const database = readString(connectionInfo.database);
+        return database
+          ? {
+              databaseNames: [database],
+              schemaNames: [database],
+            }
+          : null;
+      }
+      case DataSourceName.MSSQL:
+      case DataSourceName.POSTGRES:
+      case DataSourceName.REDSHIFT: {
+        const database = readString(connectionInfo.database);
+        return database ? { databaseNames: [database] } : null;
+      }
+      case DataSourceName.SNOWFLAKE: {
+        const database = readString(connectionInfo.database);
+        const schema = readString(connectionInfo.schema);
+        return database || schema
+          ? {
+              databaseNames: database ? [database] : undefined,
+              schemaNames: schema ? [schema] : undefined,
+            }
+          : null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  private matchesTableScope(
+    table: CompactTable,
+    scopeFilters: { databaseNames?: string[]; schemaNames?: string[] },
+  ) {
+    const normalize = (value: unknown) =>
+      typeof value === 'string' && value.trim()
+        ? value.trim().replace(/[`"]/g, '').toLowerCase()
+        : null;
+
+    const properties =
+      table.properties && typeof table.properties === 'object'
+        ? (table.properties as Record<string, unknown>)
+        : {};
+    const nameSegments = String(table.name || '')
+      .split('.')
+      .map((segment) => normalize(segment))
+      .filter((segment): segment is string => Boolean(segment));
+    const candidateValues = new Set<string>(
+      [
+        normalize((table as any).catalog),
+        normalize((table as any).schema),
+        normalize((table as any).database),
+        normalize(properties.catalog),
+        normalize(properties.schema),
+        normalize(properties.database),
+        ...nameSegments,
+      ].filter((value): value is string => Boolean(value)),
+    );
+
+    const matchesDimension = (expectedValues?: string[]) => {
+      if (!expectedValues?.length) {
+        return true;
+      }
+      return expectedValues
+        .map((value) => normalize(value))
+        .filter((value): value is string => Boolean(value))
+        .some((value) => candidateValues.has(value));
+    };
+
+    return (
+      matchesDimension(scopeFilters.databaseNames) &&
+      matchesDimension(scopeFilters.schemaNames)
+    );
   }
 
   private getIbisApiVersion(apiType: IBIS_API_TYPE) {

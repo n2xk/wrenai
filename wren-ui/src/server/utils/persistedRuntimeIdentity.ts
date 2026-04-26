@@ -182,6 +182,34 @@ export const isPersistedRuntimeIdentityMatch = (
   );
 };
 
+export const isPersistedRuntimeIdentityCompatible = (
+  left: PersistedRuntimeIdentitySource,
+  right: PersistedRuntimeIdentitySource,
+) => {
+  if (
+    left.projectId != null &&
+    right.projectId != null &&
+    left.projectId !== right.projectId
+  ) {
+    return false;
+  }
+
+  return (
+    (left.workspaceId == null ||
+      right.workspaceId == null ||
+      left.workspaceId === right.workspaceId) &&
+    (left.knowledgeBaseId == null ||
+      right.knowledgeBaseId == null ||
+      left.knowledgeBaseId === right.knowledgeBaseId) &&
+    (left.kbSnapshotId == null ||
+      right.kbSnapshotId == null ||
+      left.kbSnapshotId === right.kbSnapshotId) &&
+    (left.deployHash == null ||
+      right.deployHash == null ||
+      left.deployHash === right.deployHash)
+  );
+};
+
 export const requirePersistedProjectBridgeId = (
   runtimeIdentity: { projectId?: number | null },
   action: string,

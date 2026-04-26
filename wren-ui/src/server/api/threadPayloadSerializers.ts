@@ -12,6 +12,7 @@ import type {
 import type { View } from '@server/repositories/viewRepository';
 import { ThreadResponseAnswerStatus } from '@server/services/askingServiceShared';
 import { deriveChartThinkingTrace } from '@server/services/chartThinking';
+import { buildAskDiagnostics } from '@server/utils/apiUtils';
 import {
   resolveResponseArtifactLineage,
   resolveResponseHomeIntent,
@@ -143,7 +144,7 @@ const toSqlPairShape = (
 };
 
 const toFormattedAnswerDetail = (
-  answerDetail: RepositoryThreadResponse['answerDetail'],
+  answerDetail: RepositoryThreadResponse['answerDetail'] | null,
 ) => {
   if (!answerDetail) {
     return null;
@@ -157,6 +158,45 @@ const toFormattedAnswerDetail = (
   return {
     ...rest,
     content: content.replace(/\\n/g, '\n').replace(/\\"/g, '"'),
+  };
+};
+
+const buildFallbackAnswerDetail = ({
+  response,
+  askingTask,
+}: {
+  response: RepositoryThreadResponse;
+  askingTask: TrackedAskingResult | null;
+}) => {
+  const existingAnswerDetail = response.answerDetail;
+  const existingContent = existingAnswerDetail?.content?.trim();
+  if (existingAnswerDetail?.status && existingContent) {
+    return existingAnswerDetail;
+  }
+
+  if (
+    !askingTask ||
+    (askingTask.type !== AskResultType.GENERAL &&
+      askingTask.type !== AskResultType.MISLEADING_QUERY)
+  ) {
+    return existingAnswerDetail ?? null;
+  }
+
+  const content =
+    askingTask?.content?.trim() ||
+    existingContent ||
+    askingTask.intentReasoning?.trim() ||
+    askingTask.error?.message?.trim() ||
+    null;
+
+  if (!content) {
+    return existingAnswerDetail ?? null;
+  }
+
+  return {
+    ...existingAnswerDetail,
+    status: existingAnswerDetail?.status || ThreadResponseAnswerStatus.FINISHED,
+    content,
   };
 };
 
@@ -583,6 +623,7 @@ const toAskingTaskShape = async ({
     invalidSql: askingTask.invalidSql
       ? safeFormatSQL(askingTask.invalidSql)
       : undefined,
+    diagnostics: buildAskDiagnostics(askingTask),
     traceId: askingTask.traceId,
   };
 };
@@ -638,7 +679,11 @@ export const serializeThreadResponsePayload = async ({
     runtimeIdentity,
     services,
   });
-  const answerDetail = toFormattedAnswerDetail(response.answerDetail);
+  const effectiveAnswerDetail = buildFallbackAnswerDetail({
+    response,
+    askingTask,
+  });
+  const answerDetail = toFormattedAnswerDetail(effectiveAnswerDetail);
   const recommendationDetail = toRecommendationDetail(
     response.recommendationDetail,
   );
@@ -664,7 +709,7 @@ export const serializeThreadResponsePayload = async ({
           type: askingTaskShape.type ?? null,
         }
       : null,
-    answerDetail: response.answerDetail ?? null,
+    answerDetail: effectiveAnswerDetail,
     breakdownDetail: response.breakdownDetail ?? null,
     chartDetail,
     recommendationDetail,
@@ -681,7 +726,7 @@ export const serializeThreadResponsePayload = async ({
           type: askingTaskShape.type ?? null,
         }
       : null,
-    answerDetail: response.answerDetail ?? null,
+    answerDetail: effectiveAnswerDetail,
     breakdownDetail: response.breakdownDetail ?? null,
     chartDetail,
     recommendationDetail,

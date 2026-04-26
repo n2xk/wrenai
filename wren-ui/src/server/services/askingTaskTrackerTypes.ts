@@ -40,6 +40,11 @@ export interface IAskingTaskTracker {
     queryId: string,
     threadId: number,
     threadResponseId: number,
+    fallbackTask?: {
+      question?: string;
+      result?: AskResult;
+      runtimeIdentity?: PersistedRuntimeIdentity;
+    },
   ): Promise<void>;
   rehydrateTrackedTask?(taskRecord: AskingTask): void;
 }

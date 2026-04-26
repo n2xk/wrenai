@@ -29,13 +29,15 @@ describe('SqlPairRepository runtime scope query', () => {
       deployHash: 'deploy-1',
     });
 
-    expect(builder.andWhere).toHaveBeenCalledTimes(4);
+    expect(builder.andWhere).toHaveBeenCalledTimes(2);
     expect(builder.whereNull).not.toHaveBeenCalledWith('project_id');
     expect(builder.andWhere).toHaveBeenCalledWith(
       'workspace_id',
       'workspace-1',
     );
     expect(builder.andWhere).toHaveBeenCalledWith('knowledge_base_id', 'kb-1');
+    expect(builder.whereNull).not.toHaveBeenCalledWith('kb_snapshot_id');
+    expect(builder.whereNull).not.toHaveBeenCalledWith('deploy_hash');
   });
 
   it('pins legacy runtimeScopeId queries to the exact project bridge', async () => {

@@ -215,7 +215,7 @@ describe('knowledge index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain('模型');
+    expect(markup).toContain('建模');
     expect(markup).not.toContain('查看资产');
     expect(markup).toContain('EmbeddedModelingWorkspace');
   });

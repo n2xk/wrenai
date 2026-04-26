@@ -34,6 +34,7 @@ describe('pages/api/v1/internal/sql/preview route', () => {
         runtimeScopeId: 'runtime-1',
         dryRun: true,
         limit: 1,
+        sqlMode: 'dialect',
       },
       ...overrides,
     }) as any;
@@ -84,6 +85,7 @@ describe('pages/api/v1/internal/sql/preview route', () => {
         runtimeScopeId: 'runtime-1',
         dryRun: true,
         limit: 1,
+        sqlMode: 'dialect',
       },
       ctx: { ctx: true },
     });

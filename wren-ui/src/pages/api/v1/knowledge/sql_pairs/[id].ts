@@ -29,7 +29,10 @@ import {
   MAX_SQL_PAIR_QUESTION_LENGTH,
   MAX_SQL_PAIR_SQL_LENGTH,
 } from './limits';
-import { normalizeSqlPairTemplateMetadata } from '@server/utils/sqlPairTemplateMetadata';
+import {
+  finalizeSqlPairTemplateMetadata,
+  normalizeSqlPairTemplateMetadata,
+} from '@server/utils/sqlPairTemplateMetadata';
 
 const logger = getLogger('API_SQL_PAIR_BY_ID');
 logger.level = 'debug';
@@ -89,15 +92,48 @@ interface UpdateSqlPairRequest {
   question?: string;
   skipSqlValidation?: boolean;
   assetKind?: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   templateLevel?: string;
   templateMode?: string;
   sourceType?: string;
   scopeType?: string;
   parameterSchema?: Record<string, any> | null;
   businessSignature?: Record<string, any> | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   templateVersion?: number;
   status?: string;
 }
+
+const resolveSqlPairTemplateMetadataForWrite = ({
+  actor,
+  currentSqlPair,
+  payload,
+}: {
+  actor: any;
+  currentSqlPair?: Record<string, any> | null;
+  payload: Record<string, any>;
+}) => {
+  try {
+    return finalizeSqlPairTemplateMetadata({
+      actor,
+      currentSqlPair,
+      metadata: normalizeSqlPairTemplateMetadata(payload, {
+        includeDefaults: !currentSqlPair,
+      }),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('workspace owner/admin approval')) {
+      throw new ApiError('只有工作空间所有者或管理员可以标记业务口径模板', 403);
+    }
+    if (message.includes('effectiveFrom')) {
+      throw new ApiError('SQL 模板生效时间范围不合法', 400);
+    }
+    throw error;
+  }
+};
 
 /**
  * Validate SQL pair ID from request query
@@ -181,16 +217,27 @@ const handleUpdateSqlPair = async (
     }
   }
 
+  const existingSqlPair = await sqlPairService.getSqlPair(
+    runtimeIdentity,
+    sqlPairId,
+  );
+  if (!existingSqlPair) {
+    throw new ApiError('SQL pair not found', 404);
+  }
+
   // Update the SQL pair
+  const templateMetadata = resolveSqlPairTemplateMetadataForWrite({
+    actor,
+    currentSqlPair: existingSqlPair,
+    payload: req.body || {},
+  });
   const updatedSqlPair = await sqlPairService.updateSqlPair(
     runtimeIdentity,
     sqlPairId,
     {
       sql,
       question,
-      ...normalizeSqlPairTemplateMetadata(req.body || {}, {
-        includeDefaults: false,
-      }),
+      ...templateMetadata,
     },
   );
 

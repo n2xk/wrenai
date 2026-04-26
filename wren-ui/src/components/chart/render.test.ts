@@ -155,6 +155,51 @@ describe('chart render helpers', () => {
     });
   });
 
+  it('coerces folded quantitative source fields from numeric-like strings', () => {
+    const result = prepareChartSpecForRender({
+      spec: {
+        mark: 'bar',
+        transform: [
+          {
+            fold: ['deposit_amount', 'withdrawal_amount'],
+            as: ['Metric', 'Value'],
+          },
+        ],
+        encoding: {
+          x: { field: 'user_segment', type: 'nominal' },
+          y: { field: 'Value', type: 'quantitative' },
+          xOffset: { field: 'Metric', type: 'nominal' },
+          color: { field: 'Metric', type: 'nominal' },
+        },
+      } as any,
+      values: [
+        {
+          user_segment: 'ALL',
+          deposit_amount: '3248.0000',
+          withdrawal_amount: '160.0000',
+        },
+        {
+          user_segment: 'TOP3',
+          deposit_amount: '1160.0000',
+          withdrawal_amount: '60.0000',
+        },
+      ],
+    }) as any;
+
+    expect(result.data.values).toEqual([
+      expect.objectContaining({
+        user_segment: 'ALL',
+        deposit_amount: 3248,
+        withdrawal_amount: 160,
+      }),
+      expect.objectContaining({
+        user_segment: 'TOP3',
+        deposit_amount: 1160,
+        withdrawal_amount: 60,
+      }),
+    ]);
+  });
+
   it('prefers canvas for dense pinned line charts', () => {
     const spec = {
       mark: { type: 'line' },

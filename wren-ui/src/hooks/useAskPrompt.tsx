@@ -239,8 +239,11 @@ export default function useAskPrompt(
       stopAskingTaskPolling();
     }
 
-    if (isNeedPreparing(askingTask)) {
+    if (askingTask) {
       handleUpdateThreadCache(askingTask, updateThreadQuery);
+    }
+
+    if (isNeedPreparing(askingTask)) {
       checkFetchAskingStreamTask(askingTask);
     }
   }, [

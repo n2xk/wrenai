@@ -164,12 +164,19 @@ export type ResultCandidate = {
 };
 
 export type AskTemplateDecision = {
+  correctionRetries?: number | null;
   decisionReason?: string | null;
+  dialectCompatible?: boolean | null;
+  dryRunCompatible?: boolean | null;
   fallbackReason?: string | null;
+  instructionCount?: number | null;
   margin?: number | null;
   missingParameters?: string[] | null;
   mode?: string | null;
   parameters?: Record<string, any> | null;
+  retrievedDdlCount?: number | null;
+  retrievedTableCount?: number | null;
+  schemaCompatible?: boolean | null;
   score?: number | null;
   sourceType?: string | null;
   sqlSource?: string | null;
@@ -177,6 +184,7 @@ export type AskTemplateDecision = {
   templateLevel?: string | null;
   templateMode?: string | null;
   templateTitle?: string | null;
+  validationError?: string | null;
 };
 
 export type AskingTask = {

@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { Form, Input, Radio } from 'antd';
 
 import { WorkbenchEditorForm } from '@/features/knowledgePage/index.styles';
+import useAuthSession from '@/hooks/useAuthSession';
+import { isWorkspaceOwnerEquivalentRole } from '@/utils/workspaceGovernance';
 
 type KnowledgeSqlTemplateFormFieldsProps = {
   isReadonly: boolean;
@@ -11,6 +14,23 @@ export default function KnowledgeSqlTemplateFormFields({
   isReadonly,
   sqlTemplateForm,
 }: KnowledgeSqlTemplateFormFieldsProps) {
+  const { data: authSession } = useAuthSession({ includeWorkspaceQuery: true });
+  const canManageBusinessTemplate = useMemo(
+    () =>
+      Boolean(
+        authSession?.user?.isPlatformAdmin ||
+        (authSession?.authorization?.actor?.workspaceRoleKeys || []).some(
+          (roleKey) => isWorkspaceOwnerEquivalentRole(roleKey),
+        ) ||
+        isWorkspaceOwnerEquivalentRole(authSession?.membership?.roleKey),
+      ),
+    [
+      authSession?.authorization?.actor?.workspaceRoleKeys,
+      authSession?.membership?.roleKey,
+      authSession?.user?.isPlatformAdmin,
+    ],
+  );
+
   return (
     <WorkbenchEditorForm form={sqlTemplateForm} layout="vertical">
       <Form.Item
@@ -25,12 +45,21 @@ export default function KnowledgeSqlTemplateFormFields({
         name="templateMode"
         initialValue="reference"
         tooltip="业务口径会作为 L2 锚定模板使用，系统会尽量保持 SQL 骨架不被改写。"
+        extra={
+          canManageBusinessTemplate
+            ? null
+            : '仅工作空间所有者或管理员可以标记为业务口径，普通成员默认保存为参考样例。'
+        }
       >
         <Radio.Group
           disabled={isReadonly}
           options={[
             { label: '参考样例', value: 'reference' },
-            { label: '业务口径', value: 'business' },
+            {
+              label: '业务口径',
+              value: 'business',
+              disabled: !canManageBusinessTemplate,
+            },
           ]}
           optionType="button"
           buttonStyle="solid"

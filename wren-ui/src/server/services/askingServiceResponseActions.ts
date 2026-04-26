@@ -8,6 +8,7 @@ import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback } from '@server/utils/persistedRuntimeIdentity';
 import {
   AskResultStatus,
+  type AskTemplateDecision,
   ChartAdjustmentOption,
   ChartStatus,
   type ThinkingTrace,
@@ -29,6 +30,7 @@ import * as Errors from '@server/utils/error';
 import { logger } from './askingServiceShared';
 import { evaluateChartability } from './chartability';
 import { deriveChartThinkingTrace } from './chartThinking';
+import { getPreviewSqlModeForTemplateCarrier } from '@server/utils/templateSqlExecution';
 
 const toErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -52,6 +54,7 @@ interface AskingServiceResponseLike {
   getResponse(responseId: number): Promise<ThreadResponse | null>;
   getAskingTaskById?(taskId: number): Promise<{
     thinking?: ThinkingTrace | null;
+    templateDecision?: AskTemplateDecision | null;
   } | null>;
   getThreadResponseRuntimeIdentity(
     threadResponse: ThreadResponse,
@@ -167,6 +170,13 @@ export const generateThreadResponseChartAction = async (
     sourceResponse?.askingTaskId && service.getAskingTaskById
       ? await service.getAskingTaskById(sourceResponse.askingTaskId)
       : null;
+  const currentAskingTask =
+    threadResponse.askingTaskId && service.getAskingTaskById
+      ? await service.getAskingTaskById(threadResponse.askingTaskId)
+      : null;
+  const previewSqlMode = getPreviewSqlModeForTemplateCarrier(
+    currentAskingTask || sourceAskingTask,
+  );
   const sourceThinking = sourceAskingTask?.thinking || null;
   const sqlPairsCount = getThinkingCount(sourceThinking, [
     'ask.sql_pairs_retrieved',
@@ -200,6 +210,7 @@ export const generateThreadResponseChartAction = async (
         manifest,
         limit: CHART_GENERATION_SAMPLE_LIMIT,
         modelingOnly: false,
+        ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
       },
     )) as PreviewDataResponse;
     chartDiagnostics = {
@@ -357,6 +368,20 @@ export const previewDataAction = async (
     response,
     fallbackRuntimeIdentity,
   );
+  const sourceResponse = response.sourceResponseId
+    ? await service.getResponse(response.sourceResponseId)
+    : null;
+  const sourceAskingTask =
+    sourceResponse?.askingTaskId && service.getAskingTaskById
+      ? await service.getAskingTaskById(sourceResponse.askingTaskId)
+      : null;
+  const askingTask =
+    response.askingTaskId && service.getAskingTaskById
+      ? await service.getAskingTaskById(response.askingTaskId)
+      : null;
+  const previewSqlMode = getPreviewSqlModeForTemplateCarrier(
+    askingTask || sourceAskingTask,
+  );
   const { project, manifest } =
     await service.getExecutionResources(runtimeIdentity);
   const eventName = TelemetryEvent.HOME_PREVIEW_ANSWER;
@@ -365,6 +390,7 @@ export const previewDataAction = async (
       project,
       manifest,
       limit,
+      ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
     })) as PreviewDataResponse;
     const shapedChartPreview = shapeChartPreviewData({
       chartDetail: response.chartDetail,

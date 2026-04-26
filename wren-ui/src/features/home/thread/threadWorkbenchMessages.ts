@@ -93,6 +93,40 @@ export type ThreadWorkbenchMessages = {
     copyFailed: string;
     view: string;
   };
+  template: {
+    badges: {
+      anchored: string;
+      anchoredGenerated: string;
+      correctedTemplate: string;
+      executable: string;
+      reference: string;
+      trustedReference: string;
+    };
+    labels: {
+      missingParameters: string;
+      sqlSource: string;
+      template: string;
+    };
+    reasons: {
+      explicitBusinessTemplateSelected: string;
+      inactiveTemplate: string;
+      missingTemplateParameters: string;
+      referenceSqlPairSelected: string;
+      templateConfidenceBelowThreshold: string;
+      templateConflictLowMargin: string;
+      templateCoreProtectionRejectedCorrection: string;
+      templateDryRunFailed: string;
+      templateSchemaRetrievalInsufficient: string;
+      trustedReferenceSelected: string;
+    };
+    sqlSources: {
+      anchoredGenerated: string;
+      anchoredTemplate: string;
+      corrected: string;
+      generated: string;
+      renderedTemplate: string;
+    };
+  };
   tabs: Record<WorkbenchArtifactKind, string>;
   titleLabel: string;
 };
@@ -141,6 +175,42 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       copied: '已复制当前显示的 SQL。',
       copyFailed: '复制 SQL 失败，请稍后重试。',
       view: '查看 SQL',
+    },
+    template: {
+      badges: {
+        anchored: '已按业务口径模板生成',
+        anchoredGenerated: '已按业务口径约束生成',
+        correctedTemplate: '已在模板保护下修正 SQL',
+        executable: '已执行参数化模板',
+        reference: '已按 SQL 参考生成',
+        trustedReference: '已采用可信 SQL 参考',
+      },
+      labels: {
+        template: '模板：',
+        sqlSource: 'SQL 来源：',
+        missingParameters: '缺少参数：',
+      },
+      reasons: {
+        explicitBusinessTemplateSelected: '已命中业务口径模板',
+        inactiveTemplate: '模板已停用，未直接采用',
+        missingTemplateParameters: '模板必填参数不完整，已降级处理',
+        referenceSqlPairSelected: '已命中相关 SQL 参考样例',
+        templateConfidenceBelowThreshold: '模板置信度不足，已降级为参考生成',
+        templateConflictLowMargin: '候选模板差距不足，未自动套用',
+        templateCoreProtectionRejectedCorrection:
+          '修正会破坏模板核心骨架，已拒绝套用',
+        templateDryRunFailed: '模板直执行未通过 dry-run 校验，已降级为约束生成',
+        templateSchemaRetrievalInsufficient:
+          '模板缺少足够的 schema 召回支撑，未直接套用',
+        trustedReferenceSelected: '已命中可信 SQL 参考',
+      },
+      sqlSources: {
+        generated: 'LLM 参考生成',
+        anchoredGenerated: '按业务口径约束生成',
+        anchoredTemplate: '直接复用业务口径模板',
+        renderedTemplate: '直接渲染参数化模板',
+        corrected: '修正后的 SQL',
+      },
     },
     chart: {
       badge: '图表追问',
@@ -239,6 +309,47 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       copied: 'Copied the current SQL.',
       copyFailed: "Couldn't copy SQL. Please try again.",
       view: 'View SQL',
+    },
+    template: {
+      badges: {
+        anchored: 'Anchored business template used',
+        anchoredGenerated: 'Generated under business-template constraints',
+        correctedTemplate: 'Template SQL corrected with core protection',
+        executable: 'Parameterized template executed',
+        reference: 'Generated from SQL reference',
+        trustedReference: 'Trusted SQL reference applied',
+      },
+      labels: {
+        template: 'Template: ',
+        sqlSource: 'SQL source: ',
+        missingParameters: 'Missing parameters: ',
+      },
+      reasons: {
+        explicitBusinessTemplateSelected:
+          'Matched an explicit business template',
+        inactiveTemplate: 'Template is inactive and was not applied directly',
+        missingTemplateParameters:
+          'Required template parameters were incomplete, so the flow downgraded',
+        referenceSqlPairSelected: 'Matched a related SQL reference sample',
+        templateConfidenceBelowThreshold:
+          'Template confidence was too low, so the flow downgraded safely',
+        templateConflictLowMargin:
+          'Competing templates were too close to auto-apply safely',
+        templateCoreProtectionRejectedCorrection:
+          'Rejected a correction that would alter the protected template core',
+        templateDryRunFailed:
+          'Direct template execution failed dry-run validation and fell back safely',
+        templateSchemaRetrievalInsufficient:
+          'Schema retrieval was insufficient, so the template was not applied directly',
+        trustedReferenceSelected: 'Matched a trusted SQL reference',
+      },
+      sqlSources: {
+        generated: 'LLM reference generation',
+        anchoredGenerated: 'Constraint-guided template generation',
+        anchoredTemplate: 'Direct anchored-template reuse',
+        renderedTemplate: 'Direct rendered template execution',
+        corrected: 'Corrected SQL',
+      },
     },
     chart: {
       badge: 'Chart follow-up',

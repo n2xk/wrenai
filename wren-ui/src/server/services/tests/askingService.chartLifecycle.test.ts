@@ -130,6 +130,64 @@ describe('AskingService', () => {
       );
     });
 
+    it('uses dialect preview mode when the source response comes from an anchored template', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42 },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [
+            { name: 'category', type: 'string' },
+            { name: 'value', type: 'number' },
+          ],
+          data: [['A', 1]],
+        }),
+      };
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 12,
+          threadId: 9,
+          askingTaskId: 91,
+          question: 'chart it',
+          sql: 'SELECT * FROM raw_template_sql',
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 12 }),
+      };
+      service.getAskingTaskById = jest.fn().mockResolvedValue({
+        templateDecision: {
+          mode: 'anchored_template',
+          sqlSource: 'anchored_template',
+          missingParameters: [],
+        },
+      });
+      service.wrenAIAdaptor = {
+        generateChart: jest
+          .fn()
+          .mockResolvedValue({ queryId: 'chart-dialect' }),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.generateThreadResponseChartScoped(
+        12,
+        runtimeIdentity,
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(service.queryService.preview).toHaveBeenCalledWith(
+        'SELECT * FROM raw_template_sql',
+        expect.objectContaining({
+          limit: 200,
+          sqlMode: 'dialect',
+        }),
+      );
+    });
+
     it('carries source ask retrieval context into chart follow-up thinking', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.assertResponseScope = jest.fn().mockResolvedValue(undefined);

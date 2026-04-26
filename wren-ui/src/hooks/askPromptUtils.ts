@@ -10,6 +10,8 @@ import {
   AskingTaskType,
   RecommendedQuestionsTask,
   RecommendedQuestionsTaskStatus,
+  ThreadResponseAnswerDetail,
+  ThreadResponseAnswerStatus,
 } from '@/types/home';
 import type { UpdateThreadDetailState } from './useThreadDetail';
 
@@ -81,6 +83,56 @@ export const isNeedRecommendedQuestions = (askingTask: NullableAskingTask) => {
 export const isNeedPreparing = (askingTask: NullableAskingTask) =>
   askingTask?.type === AskingTaskType.TEXT_TO_SQL;
 
+const resolveTextAnswerStatusFromAskingTask = (
+  askingTask: NullableAskingTask,
+): ThreadResponseAnswerStatus | null => {
+  switch (askingTask?.status) {
+    case AskingTaskStatus.FINISHED:
+      return ThreadResponseAnswerStatus.FINISHED;
+    case AskingTaskStatus.FAILED:
+      return ThreadResponseAnswerStatus.FAILED;
+    case AskingTaskStatus.STOPPED:
+      return ThreadResponseAnswerStatus.INTERRUPTED;
+    default:
+      return null;
+  }
+};
+
+const buildTextAnswerFallbackFromAskingTask = ({
+  askingTask,
+  existingAnswerDetail,
+}: {
+  askingTask: NullableAskingTask;
+  existingAnswerDetail?: ThreadResponseAnswerDetail | null;
+}) => {
+  if (
+    askingTask?.type !== AskingTaskType.GENERAL &&
+    askingTask?.type !== AskingTaskType.MISLEADING_QUERY
+  ) {
+    return existingAnswerDetail;
+  }
+
+  const nextStatus =
+    existingAnswerDetail?.status ||
+    resolveTextAnswerStatusFromAskingTask(askingTask);
+  const existingContent = existingAnswerDetail?.content?.trim() || null;
+  const nextContent =
+    existingContent ||
+    askingTask?.intentReasoning?.trim() ||
+    askingTask?.error?.message?.trim() ||
+    null;
+
+  if (!nextStatus && !nextContent) {
+    return existingAnswerDetail;
+  }
+
+  return {
+    ...existingAnswerDetail,
+    status: nextStatus,
+    content: nextContent,
+  };
+};
+
 export const buildRecommendedQuestionHistory = (
   threadQuestions: string[],
   originalQuestion: string,
@@ -109,9 +161,14 @@ export const handleUpdateThreadCache = (
         ...existingData.thread,
         responses: existingData.thread.responses.map((response) => {
           if (response.askingTask?.queryId === askingTask.queryId) {
+            const answerDetail = buildTextAnswerFallbackFromAskingTask({
+              askingTask,
+              existingAnswerDetail: response.answerDetail,
+            });
             return {
               ...response,
               askingTask: cloneDeep(askingTask),
+              answerDetail,
             };
           }
           return response;
@@ -150,7 +207,14 @@ export const handleUpdateRerunAskingTaskCache = ({
         ...existingData.thread,
         responses: existingData.thread.responses.map((response) => {
           if (response.id === threadResponseId) {
-            return { ...response, askingTask: task };
+            return {
+              ...response,
+              askingTask: task,
+              answerDetail: buildTextAnswerFallbackFromAskingTask({
+                askingTask: task,
+                existingAnswerDetail: response.answerDetail,
+              }),
+            };
           }
           return response;
         }),

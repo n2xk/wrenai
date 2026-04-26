@@ -44,6 +44,60 @@ describe('AskingService', () => {
       ).toHaveBeenCalledWith(101, normalizedRuntimeIdentity);
       expect(responses).toEqual([{ id: 201, threadId: 101, sql: 'select 1' }]);
     });
+
+    it('falls back to compatible broader responses when scoped history is empty', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      };
+      service.assertThreadScope = jest.fn().mockResolvedValue({
+        id: 101,
+      });
+      service.threadResponseRepository = {
+        getResponsesWithThreadByScope: jest.fn().mockResolvedValue([]),
+        getResponsesWithThread: jest.fn().mockResolvedValue([
+          {
+            id: 202,
+            threadId: 101,
+            sql: 'select 1',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: null,
+            kbSnapshotId: null,
+            deployHash: 'deploy-1',
+          },
+          {
+            id: 203,
+            threadId: 101,
+            sql: 'select 2',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: null,
+            kbSnapshotId: null,
+            deployHash: 'deploy-2',
+          },
+        ]),
+      };
+      service.getResponsesWithThread =
+        AskingService.prototype['getResponsesWithThread'].bind(service);
+
+      const responses = await service.getResponsesWithThreadScoped(
+        101,
+        runtimeIdentity,
+      );
+
+      expect(
+        service.threadResponseRepository.getResponsesWithThread,
+      ).toHaveBeenCalledWith(101);
+      expect(responses).toEqual([
+        expect.objectContaining({ id: 202, threadId: 101, sql: 'select 1' }),
+      ]);
+    });
   });
 
   describe('instant recommended questions scope tracking', () => {

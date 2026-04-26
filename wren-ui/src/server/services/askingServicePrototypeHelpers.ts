@@ -4,6 +4,10 @@ import { Project } from '../repositories';
 import { Deploy } from '../repositories/deployLogRepository';
 import { AskingPayload } from './askingServiceShared';
 import {
+  isPersistedRuntimeIdentityCompatible,
+  toPersistedRuntimeIdentityFromSource,
+} from '@server/utils/persistedRuntimeIdentity';
+import {
   assertInstantRecommendedQuestionTaskScope as assertInstantRecommendedQuestionTaskScopeSupport,
   buildAskTaskRuntimeIdentity as buildAskTaskRuntimeIdentitySupport,
   buildManifestBackedProject as buildManifestBackedProjectSupport,
@@ -146,6 +150,21 @@ export const applyAskingServiceHelperPrototype = (AskingServiceClass: any) => {
         scopedRuntimeIdentity,
         10,
       );
+    if (responses.length === 0) {
+      const persistedResponses =
+        await this.threadResponseRepository.getResponsesWithThread(
+          threadId,
+          10,
+        );
+      responses = persistedResponses.filter((response: ThreadResponse) =>
+        isPersistedRuntimeIdentityCompatible(
+          scopedRuntimeIdentity,
+          this.normalizeRuntimeScope(
+            toPersistedRuntimeIdentityFromSource(response),
+          ) ?? toPersistedRuntimeIdentityFromSource(response),
+        ),
+      );
+    }
     if (excludeThreadResponseId) {
       responses = responses.filter(
         (response: ThreadResponse) => response.id !== excludeThreadResponseId,

@@ -11,12 +11,16 @@ export interface SqlPair {
   sql: string; // SQL query
   question: string; // Natural language question
   assetKind?: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   templateLevel?: string;
   templateMode?: string;
   sourceType?: string;
   scopeType?: string;
   parameterSchema?: Record<string, any> | null;
   businessSignature?: Record<string, any> | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   templateVersion?: number;
   status?: string;
   createdAt?: string; // Date and time when the SQL pair was created

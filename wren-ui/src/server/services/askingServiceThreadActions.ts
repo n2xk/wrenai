@@ -6,7 +6,7 @@ import {
 } from '../repositories/threadResponseRepository';
 import { Thread } from '../repositories/threadRepository';
 import {
-  isPersistedRuntimeIdentityMatch,
+  isPersistedRuntimeIdentityCompatible,
   toPersistedRuntimeIdentityFromSource,
 } from '@server/utils/persistedRuntimeIdentity';
 import {
@@ -98,6 +98,11 @@ export const createThreadAction = async (
       input.trackedAskingResult.queryId,
       thread.id,
       threadResponse.id,
+      {
+        question: input.trackedAskingResult.question ?? input.question,
+        result: input.trackedAskingResult,
+        runtimeIdentity: persistedRuntimeIdentity,
+      },
     );
   }
 
@@ -131,8 +136,23 @@ export const assertThreadScopeAction = async (
     scopedRuntimeIdentity,
   );
   if (!thread) {
-    if (!(await service.threadRepository.findOneBy({ id: threadId }))) {
+    const persistedThread = await service.threadRepository.findOneBy({
+      id: threadId,
+    });
+    if (!persistedThread) {
       throw new Error(`Thread ${threadId} not found`);
+    }
+    const persistedThreadRuntimeIdentity =
+      normalizeRuntimeScope(
+        toPersistedRuntimeIdentityFromSource(persistedThread),
+      ) ?? toPersistedRuntimeIdentityFromSource(persistedThread);
+    if (
+      isPersistedRuntimeIdentityCompatible(
+        scopedRuntimeIdentity,
+        persistedThreadRuntimeIdentity,
+      )
+    ) {
+      return persistedThread;
     }
     throw new Error(
       `Thread ${threadId} does not belong to the current runtime scope`,
@@ -145,7 +165,7 @@ export const assertAskingTaskScopeAction = async (
   service: any,
   queryId: string,
   runtimeIdentity: PersistedRuntimeIdentity,
-): Promise<void> => {
+): Promise<PersistedRuntimeIdentity> => {
   const scopedRuntimeIdentity =
     normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
   const task = await service.askingTaskRepository.findByQueryIdWithRuntimeScope(
@@ -157,28 +177,51 @@ export const assertAskingTaskScopeAction = async (
       await service.askingTaskTracker?.getTrackedRuntimeIdentity?.(queryId);
     if (
       trackedRuntimeIdentity &&
-      isPersistedRuntimeIdentityMatch(
-        normalizeRuntimeScope(trackedRuntimeIdentity) ?? trackedRuntimeIdentity,
+      isPersistedRuntimeIdentityCompatible(
         scopedRuntimeIdentity,
+        normalizeRuntimeScope(trackedRuntimeIdentity) ?? trackedRuntimeIdentity,
       )
     ) {
-      return;
+      return (
+        normalizeRuntimeScope(trackedRuntimeIdentity) ?? trackedRuntimeIdentity
+      );
     }
 
-    if (!(await service.askingTaskRepository.findByQueryId(queryId))) {
+    const persistedTask =
+      await service.askingTaskRepository.findByQueryId(queryId);
+    if (!persistedTask) {
       throw new Error(`Asking task ${queryId} not found`);
     }
+
+    const persistedTaskRuntimeIdentity =
+      normalizeRuntimeScope(
+        toPersistedRuntimeIdentityFromSource(persistedTask),
+      ) ?? toPersistedRuntimeIdentityFromSource(persistedTask);
+    if (
+      isPersistedRuntimeIdentityCompatible(
+        scopedRuntimeIdentity,
+        persistedTaskRuntimeIdentity,
+      )
+    ) {
+      return persistedTaskRuntimeIdentity;
+    }
+
     throw new Error(
       `Asking task ${queryId} does not belong to the current runtime scope`,
     );
   }
+
+  return (
+    normalizeRuntimeScope(toPersistedRuntimeIdentityFromSource(task)) ??
+    toPersistedRuntimeIdentityFromSource(task)
+  );
 };
 
 export const assertAskingTaskScopeByIdAction = async (
   service: any,
   taskId: number,
   runtimeIdentity: PersistedRuntimeIdentity,
-): Promise<void> => {
+): Promise<PersistedRuntimeIdentity> => {
   const scopedRuntimeIdentity =
     normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
   const task = await service.askingTaskRepository.findOneByIdWithRuntimeScope(
@@ -186,13 +229,35 @@ export const assertAskingTaskScopeByIdAction = async (
     scopedRuntimeIdentity,
   );
   if (!task) {
-    if (!(await service.askingTaskRepository.findOneBy({ id: taskId }))) {
+    const persistedTask = await service.askingTaskRepository.findOneBy({
+      id: taskId,
+    });
+    if (!persistedTask) {
       throw new Error(`Asking task ${taskId} not found`);
     }
+
+    const persistedTaskRuntimeIdentity =
+      normalizeRuntimeScope(
+        toPersistedRuntimeIdentityFromSource(persistedTask),
+      ) ?? toPersistedRuntimeIdentityFromSource(persistedTask);
+    if (
+      isPersistedRuntimeIdentityCompatible(
+        scopedRuntimeIdentity,
+        persistedTaskRuntimeIdentity,
+      )
+    ) {
+      return persistedTaskRuntimeIdentity;
+    }
+
     throw new Error(
       `Asking task ${taskId} does not belong to the current runtime scope`,
     );
   }
+
+  return (
+    normalizeRuntimeScope(toPersistedRuntimeIdentityFromSource(task)) ??
+    toPersistedRuntimeIdentityFromSource(task)
+  );
 };
 
 export const assertResponseScopeAction = async (
@@ -208,8 +273,21 @@ export const assertResponseScopeAction = async (
       scopedRuntimeIdentity,
     );
   if (!response) {
-    if (!(await service.getResponse(responseId))) {
+    const persistedResponse = await service.getResponse(responseId);
+    if (!persistedResponse) {
       throw new Error(`Thread response ${responseId} not found`);
+    }
+    const persistedResponseRuntimeIdentity =
+      normalizeRuntimeScope(
+        toPersistedRuntimeIdentityFromSource(persistedResponse),
+      ) ?? toPersistedRuntimeIdentityFromSource(persistedResponse);
+    if (
+      isPersistedRuntimeIdentityCompatible(
+        scopedRuntimeIdentity,
+        persistedResponseRuntimeIdentity,
+      )
+    ) {
+      return persistedResponse;
     }
     throw new Error(
       `Thread response ${responseId} does not belong to the current runtime scope`,
@@ -291,6 +369,11 @@ export const createThreadResponseAction = async (
       input.trackedAskingResult.queryId,
       thread.id,
       threadResponse.id,
+      {
+        question: input.trackedAskingResult.question ?? input.question,
+        result: input.trackedAskingResult,
+        runtimeIdentity,
+      },
     );
   }
 
@@ -327,10 +410,24 @@ export const getResponsesWithThreadAction = (
   }
   const scopedRuntimeIdentity =
     normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
-  return service.threadResponseRepository.getResponsesWithThreadByScope(
-    threadId,
-    scopedRuntimeIdentity,
-  );
+  return service.threadResponseRepository
+    .getResponsesWithThreadByScope(threadId, scopedRuntimeIdentity)
+    .then(async (responses) => {
+      if (responses.length > 0) {
+        return responses;
+      }
+
+      const persistedResponses =
+        await service.threadResponseRepository.getResponsesWithThread(threadId);
+      return persistedResponses.filter((response) =>
+        isPersistedRuntimeIdentityCompatible(
+          scopedRuntimeIdentity,
+          normalizeRuntimeScope(
+            toPersistedRuntimeIdentityFromSource(response),
+          ) ?? toPersistedRuntimeIdentityFromSource(response),
+        ),
+      );
+    });
 };
 
 export const getResponseAction = (

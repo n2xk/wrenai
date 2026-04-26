@@ -28,8 +28,8 @@ jest.mock('antd', () => {
     );
 
   return {
-    Alert: ({ message, description }: any) =>
-      React.createElement('div', null, message, description),
+    Alert: ({ message, title, description }: any) =>
+      React.createElement('div', null, title || message, description),
     Descriptions,
     Divider: ({ children }: any) => React.createElement('div', null, children),
     Drawer: ({ children, title }: any) =>

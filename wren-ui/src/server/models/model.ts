@@ -95,4 +95,5 @@ export interface PreviewSQLData {
   limit?: number;
   dryRun?: boolean;
   runtimeScopeId?: string;
+  sqlMode?: 'wren' | 'dialect';
 }

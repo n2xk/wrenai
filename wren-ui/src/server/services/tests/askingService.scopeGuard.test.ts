@@ -102,6 +102,39 @@ describe('AskingService', () => {
       expect(service.threadRepository.findOneBy).not.toHaveBeenCalled();
     });
 
+    it('accepts thread access when the current scope is a narrower knowledge-base child', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneByIdWithRuntimeScope: jest.fn().mockResolvedValue(null),
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 101,
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-1',
+        }),
+      };
+
+      await expect(
+        service.assertThreadScope(101, {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      ).resolves.toEqual({
+        id: 101,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-1',
+      });
+    });
+
     it('accepts asking task access when repository matches runtime scope through legacy-null project bridge', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.askingTaskRepository = {
@@ -132,11 +165,69 @@ describe('AskingService', () => {
 
       await expect(
         service.assertAskingTaskScope('query-1', runtimeIdentity),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: null,
+      });
       expect(
         service.askingTaskRepository.findByQueryIdWithRuntimeScope,
       ).toHaveBeenCalledWith('query-1', normalizedRuntimeIdentity);
       expect(service.askingTaskRepository.findByQueryId).not.toHaveBeenCalled();
+    });
+
+    it('accepts asking task access when the current scope is a broader workspace parent', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.askingTaskRepository = {
+        findByQueryIdWithRuntimeScope: jest.fn().mockResolvedValue(null),
+        findByQueryId: jest.fn().mockResolvedValue({
+          id: 303,
+          queryId: 'query-1',
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+        }),
+      };
+      service.askingTaskTracker = {
+        getTrackedRuntimeIdentity: jest.fn().mockResolvedValue(null),
+      };
+
+      await expect(
+        service.assertAskingTaskScope('query-1', {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: null,
+          actorUserId: 'user-1',
+        }),
+      ).resolves.toEqual({
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: null,
+      });
+
+      expect(
+        service.askingTaskRepository.findByQueryIdWithRuntimeScope,
+      ).toHaveBeenCalledWith('query-1', {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        actorUserId: 'user-1',
+      });
+      expect(service.askingTaskRepository.findByQueryId).toHaveBeenCalledWith(
+        'query-1',
+      );
     });
 
     it('accepts asking task access when a newly created task is still only tracked in memory', async () => {
@@ -165,12 +256,56 @@ describe('AskingService', () => {
           deployHash: 'deploy-1',
           actorUserId: 'user-1',
         }),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual({
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      });
 
       expect(
         service.askingTaskTracker.getTrackedRuntimeIdentity,
       ).toHaveBeenCalledWith('query-1');
       expect(service.askingTaskRepository.findByQueryId).not.toHaveBeenCalled();
+    });
+
+    it('accepts asking task access when the current scope is a narrower knowledge-base child', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.askingTaskRepository = {
+        findByQueryIdWithRuntimeScope: jest.fn().mockResolvedValue(null),
+        findByQueryId: jest.fn().mockResolvedValue({
+          id: 303,
+          queryId: 'query-1',
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-1',
+        }),
+      };
+      service.askingTaskTracker = {
+        getTrackedRuntimeIdentity: jest.fn().mockResolvedValue(null),
+      };
+
+      await expect(
+        service.assertAskingTaskScope('query-1', {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      ).resolves.toEqual({
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-1',
+        actorUserId: null,
+      });
     });
 
     it('rejects asking task access outside current runtime scope', async () => {
@@ -266,6 +401,50 @@ describe('AskingService', () => {
         service.threadResponseRepository.findOneByIdWithRuntimeScope,
       ).toHaveBeenCalledWith(202, normalizedRuntimeIdentity);
       expect(service.threadResponseRepository.findOneBy).not.toHaveBeenCalled();
+    });
+
+    it('accepts response access when the current scope is a narrower knowledge-base child', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadResponseRepository = {
+        findOneByIdWithRuntimeScope: jest.fn().mockResolvedValue(null),
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 202,
+          threadId: 101,
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-1',
+        }),
+      };
+      service.getResponse = jest.fn().mockResolvedValue({
+        id: 202,
+        threadId: 101,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-1',
+      });
+
+      await expect(
+        service.assertResponseScope(202, {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      ).resolves.toEqual({
+        id: 202,
+        threadId: 101,
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-1',
+      });
     });
   });
 });

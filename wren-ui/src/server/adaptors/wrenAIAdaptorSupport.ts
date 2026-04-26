@@ -191,6 +191,49 @@ const transformAskTemplateDecision = (body: any) => {
     sourceType: body.source_type ?? body.sourceType ?? null,
     templateLevel: body.template_level ?? body.templateLevel ?? null,
     templateMode: body.template_mode ?? body.templateMode ?? null,
+    instructionCount:
+      typeof body.instruction_count === 'number'
+        ? body.instruction_count
+        : typeof body.instructionCount === 'number'
+          ? body.instructionCount
+          : null,
+    retrievedTableCount:
+      typeof body.retrieved_table_count === 'number'
+        ? body.retrieved_table_count
+        : typeof body.retrievedTableCount === 'number'
+          ? body.retrievedTableCount
+          : null,
+    retrievedDdlCount:
+      typeof body.retrieved_ddl_count === 'number'
+        ? body.retrieved_ddl_count
+        : typeof body.retrievedDdlCount === 'number'
+          ? body.retrievedDdlCount
+          : null,
+    correctionRetries:
+      typeof body.correction_retries === 'number'
+        ? body.correction_retries
+        : typeof body.correctionRetries === 'number'
+          ? body.correctionRetries
+          : null,
+    schemaCompatible:
+      typeof body.schema_compatible === 'boolean'
+        ? body.schema_compatible
+        : typeof body.schemaCompatible === 'boolean'
+          ? body.schemaCompatible
+          : null,
+    dialectCompatible:
+      typeof body.dialect_compatible === 'boolean'
+        ? body.dialect_compatible
+        : typeof body.dialectCompatible === 'boolean'
+          ? body.dialectCompatible
+          : null,
+    dryRunCompatible:
+      typeof body.dry_run_compatible === 'boolean'
+        ? body.dry_run_compatible
+        : typeof body.dryRunCompatible === 'boolean'
+          ? body.dryRunCompatible
+          : null,
+    validationError: body.validation_error ?? body.validationError ?? null,
   };
 };
 
@@ -282,6 +325,7 @@ export const transformAskResult = (body: any): AskResult => {
     response: candidates,
     rephrasedQuestion: body?.rephrased_question,
     intentReasoning: body?.intent_reasoning,
+    content: body?.content,
     sqlGenerationReasoning: body?.sql_generation_reasoning,
     retrievedTables: body?.retrieved_tables,
     askPath: body?.ask_path,

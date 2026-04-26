@@ -203,8 +203,40 @@ export class AskingTaskTracker implements IAskingTaskTracker {
     queryId: string,
     threadId: number,
     threadResponseId: number,
+    fallbackTask?: {
+      question?: string;
+      result?: AskResult;
+      runtimeIdentity?: PersistedRuntimeIdentity;
+    },
   ): Promise<void> {
-    const task = this.trackedTasks.get(queryId);
+    let task = this.trackedTasks.get(queryId);
+    const fallbackResult = fallbackTask?.result;
+    if (!task && fallbackResult) {
+      task = this.buildTrackedTaskFromFallback({
+        id,
+        queryId,
+        question: fallbackTask?.question,
+        result: fallbackResult,
+        runtimeIdentity: fallbackTask?.runtimeIdentity,
+      });
+      if (!task.isFinalized) {
+        this.trackedTasks.set(queryId, task);
+        this.trackedTasksById.set(id, task);
+      }
+    }
+    if (!task) {
+      const taskRecord =
+        (await this.askingTaskRepository.findOneBy({ id })) ||
+        (await this.askingTaskRepository.findByQueryId(queryId));
+      if (taskRecord) {
+        task = this.buildTrackedTask(taskRecord);
+        if (!task.isFinalized && taskRecord.queryId) {
+          this.trackedTasks.set(taskRecord.queryId, task);
+          this.trackedTasksById.set(taskRecord.id, task);
+          logger.info(`Rehydrated asking task ${taskRecord.queryId}`);
+        }
+      }
+    }
     if (!task) {
       throw new Error(`Task ${queryId} not found`);
     }
@@ -227,30 +259,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       return;
     }
 
-    const detail = (taskRecord.detail || {
-      type: null,
-      status: AskResultStatus.UNDERSTANDING,
-      response: [],
-      error: null,
-    }) as AskResult;
-
-    const trackedTask: TrackedTask = {
-      queryId: taskRecord.queryId,
-      taskId: taskRecord.id,
-      lastPolled: Date.now(),
-      question: taskRecord.question || '',
-      result: detail,
-      isFinalized: this.isTaskFinalized(detail.status),
-      threadResponseId: taskRecord.threadResponseId || undefined,
-      runtimeIdentity: toPersistedRuntimeIdentityPatch({
-        projectId: taskRecord.projectId ?? null,
-        workspaceId: taskRecord.workspaceId ?? null,
-        knowledgeBaseId: taskRecord.knowledgeBaseId ?? null,
-        kbSnapshotId: taskRecord.kbSnapshotId ?? null,
-        deployHash: taskRecord.deployHash ?? null,
-        actorUserId: taskRecord.actorUserId ?? null,
-      }),
-    };
+    const trackedTask = this.buildTrackedTask(taskRecord);
 
     if (trackedTask.isFinalized) {
       return;
@@ -321,12 +330,14 @@ export class AskingTaskTracker implements IAskingTaskTracker {
               return;
             }
 
-            // if it's identified as GENERAL or MISLEADING_QUER
-            // we don't need to update the database and finalize the task
-            if (
+            const isGeneralLikeResult =
               result.type === AskResultType.GENERAL ||
-              result.type === AskResultType.MISLEADING_QUERY
-            ) {
+              result.type === AskResultType.MISLEADING_QUERY;
+
+            // General-like responses can now finish asynchronously after the
+            // initial intent classification turn, so only finalize them once
+            // the task status is terminal.
+            if (isGeneralLikeResult && this.isTaskFinalized(result.status)) {
               task.isFinalized = true;
               await this.updateTaskInDatabase(
                 { queryId },
@@ -356,6 +367,9 @@ export class AskingTaskTracker implements IAskingTaskTracker {
                     }
                   : task,
               );
+              if (task.threadResponseId) {
+                await this.updateThreadResponseWhenTaskFinalized(task);
+              }
               // if it's rerun from cancelled, we need to update the task result to failed in db
               this.runningJobs.delete(queryId);
               return;
@@ -417,12 +431,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   private async updateThreadResponseWhenTaskFinalized(
     task: TrackedTask,
   ): Promise<void> {
-    const response = task?.result?.response?.[0];
-    if (!response) {
-      return;
-    }
-
     const updatePayload: Record<string, any> = {};
+    const response = task?.result?.response?.[0];
 
     // if the generated response of asking task is not null, update the thread response
     if (response?.viewId) {
@@ -439,13 +449,86 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       updatePayload.sql = response.sql;
     }
 
+    const resultType = task?.result?.type;
+    const answerContent =
+      task?.result?.content?.trim() ||
+      task?.result?.intentReasoning?.trim() ||
+      task?.result?.error?.message?.trim() ||
+      null;
+    if (
+      (resultType === AskResultType.GENERAL ||
+        resultType === AskResultType.MISLEADING_QUERY) &&
+      answerContent
+    ) {
+      updatePayload.answerDetail = {
+        status: 'FINISHED',
+        content: answerContent,
+      };
+    }
+
     if (!task.threadResponseId) {
+      return;
+    }
+    if (!Object.keys(updatePayload).length) {
       return;
     }
     await this.threadResponseRepository.updateOne(
       task.threadResponseId,
       updatePayload,
     );
+  }
+
+  private buildTrackedTask(taskRecord: AskingTask): TrackedTask {
+    const detail = (taskRecord.detail || {
+      type: null,
+      status: AskResultStatus.UNDERSTANDING,
+      response: [],
+      error: null,
+    }) as AskResult;
+
+    return {
+      queryId: taskRecord.queryId,
+      taskId: taskRecord.id,
+      lastPolled: Date.now(),
+      question: taskRecord.question || '',
+      result: detail,
+      isFinalized: this.isTaskFinalized(detail.status),
+      threadResponseId: taskRecord.threadResponseId || undefined,
+      runtimeIdentity: toPersistedRuntimeIdentityPatch({
+        projectId: taskRecord.projectId ?? null,
+        workspaceId: taskRecord.workspaceId ?? null,
+        knowledgeBaseId: taskRecord.knowledgeBaseId ?? null,
+        kbSnapshotId: taskRecord.kbSnapshotId ?? null,
+        deployHash: taskRecord.deployHash ?? null,
+        actorUserId: taskRecord.actorUserId ?? null,
+      }),
+    };
+  }
+
+  private buildTrackedTaskFromFallback({
+    id,
+    queryId,
+    question,
+    result,
+    runtimeIdentity,
+  }: {
+    id: number;
+    queryId: string;
+    question?: string;
+    result: AskResult;
+    runtimeIdentity?: PersistedRuntimeIdentity;
+  }): TrackedTask {
+    return {
+      queryId,
+      taskId: id,
+      lastPolled: Date.now(),
+      question: question || '',
+      result,
+      isFinalized: this.isTaskFinalized(result.status),
+      runtimeIdentity: runtimeIdentity
+        ? toPersistedRuntimeIdentityPatch(runtimeIdentity)
+        : undefined,
+    };
   }
 
   private async getAskingResultFromDB({

@@ -146,7 +146,7 @@ export const ensureResponseScope = async (
 
 export const ensureAskingTaskScope = async (ctx: IContext, taskId: string) => {
   await assertKnowledgeBaseReadAccess(ctx);
-  await ctx.askingService.assertAskingTaskScope(
+  return ctx.askingService.assertAskingTaskScope(
     taskId,
     getCurrentPersistedRuntimeIdentity(ctx),
   );

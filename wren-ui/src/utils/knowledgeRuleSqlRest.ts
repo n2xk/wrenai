@@ -24,12 +24,16 @@ type SqlPairRestPayload = Partial<
     | 'question'
     | 'sql'
     | 'assetKind'
+    | 'approvedAt'
+    | 'approvedBy'
     | 'templateLevel'
     | 'templateMode'
     | 'sourceType'
     | 'scopeType'
     | 'parameterSchema'
     | 'businessSignature'
+    | 'effectiveFrom'
+    | 'effectiveTo'
     | 'templateVersion'
     | 'status'
     | 'createdAt'
@@ -118,6 +122,10 @@ const normalizeSqlPairItem = (payload: SqlPairRestPayload): SqlPair | null => {
     sql: typeof payload.sql === 'string' ? payload.sql : '',
     assetKind:
       typeof payload.assetKind === 'string' ? payload.assetKind : 'sql_pair',
+    approvedAt:
+      typeof payload.approvedAt === 'string' ? payload.approvedAt : null,
+    approvedBy:
+      typeof payload.approvedBy === 'string' ? payload.approvedBy : null,
     templateLevel:
       typeof payload.templateLevel === 'string' ? payload.templateLevel : 'L0',
     templateMode:
@@ -140,6 +148,10 @@ const normalizeSqlPairItem = (payload: SqlPairRestPayload): SqlPair | null => {
       payload.businessSignature && typeof payload.businessSignature === 'object'
         ? payload.businessSignature
         : null,
+    effectiveFrom:
+      typeof payload.effectiveFrom === 'string' ? payload.effectiveFrom : null,
+    effectiveTo:
+      typeof payload.effectiveTo === 'string' ? payload.effectiveTo : null,
     templateVersion:
       typeof payload.templateVersion === 'number' ? payload.templateVersion : 1,
     status: typeof payload.status === 'string' ? payload.status : 'active',

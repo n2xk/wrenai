@@ -4,7 +4,13 @@ import {
   canGenerateAnswer,
   isReadyToThreadResponse,
 } from './useAskPrompt';
-import { AskingTask, AskingTaskStatus, AskingTaskType } from '@/types/home';
+import { handleUpdateThreadCache } from './askPromptUtils';
+import {
+  AskingTask,
+  AskingTaskStatus,
+  AskingTaskType,
+  ThreadResponseAnswerStatus,
+} from '@/types/home';
 
 describe('useAskPrompt helpers', () => {
   it('only triggers text answer generation for finished text-to-sql tasks', () => {
@@ -46,5 +52,44 @@ describe('useAskPrompt helpers', () => {
     ).toEqual(['问题1', '问题2', '问题3', '当前问题']);
 
     expect(buildRecommendedQuestionHistory([], '')).toEqual([]);
+  });
+
+  it('hydrates finished general answers into the cached thread response', () => {
+    let nextState: any = null;
+
+    handleUpdateThreadCache(
+      {
+        queryId: 'task-general-1',
+        status: AskingTaskStatus.FINISHED,
+        type: AskingTaskType.GENERAL,
+        candidates: [],
+        intentReasoning:
+          '问题依赖当前知识库中缺失的外部指标：投放金额。在用户补充这些指标前，不能直接编造结果。',
+      } as AskingTask,
+      (updater) => {
+        nextState = updater({
+          thread: {
+            responses: [
+              {
+                id: 101,
+                question: 'ROI',
+                askingTask: {
+                  queryId: 'task-general-1',
+                  status: AskingTaskStatus.SEARCHING,
+                  type: AskingTaskType.GENERAL,
+                },
+                answerDetail: null,
+              },
+            ],
+          },
+        } as any);
+      },
+    );
+
+    expect(nextState.thread.responses[0].answerDetail).toEqual({
+      status: ThreadResponseAnswerStatus.FINISHED,
+      content:
+        '问题依赖当前知识库中缺失的外部指标：投放金额。在用户补充这些指标前，不能直接编造结果。',
+    });
   });
 });

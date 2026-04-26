@@ -11,6 +11,7 @@ const mockGetViewByRuntimeIdentity = jest.fn();
 const mockGetSqlPair = jest.fn();
 const mockRespondWithSimple = jest.fn();
 const mockCreateAuditEvent = jest.fn();
+const mockSerializeThreadResponsePayload = jest.fn();
 const mockHandleApiError = jest.fn(
   async ({
     error,
@@ -60,6 +61,11 @@ jest.mock('@/server/utils/apiUtils', () => ({
   handleApiError: mockHandleApiError,
 }));
 
+jest.mock('@/server/api/threadPayloadSerializers', () => ({
+  serializeThreadResponsePayload: (args: any) =>
+    mockSerializeThreadResponsePayload(args),
+}));
+
 jest.mock('@server/utils', () => ({
   getLogger: () => ({
     level: 'debug',
@@ -102,6 +108,27 @@ describe('pages/api/v1/thread-responses/[id] route', () => {
     delete process.env.WREN_AUTHORIZATION_BINDING_MODE;
     jest.clearAllMocks();
     mockResolveRequestScope.mockResolvedValue(buildRuntimeScope());
+    mockSerializeThreadResponsePayload.mockImplementation(
+      async ({ response }) => ({
+        id: response.id,
+        threadId: response.threadId,
+        question: response.question,
+        view:
+          response.viewId != null
+            ? {
+                id: 7,
+                displayName: '销售视图',
+              }
+            : null,
+        askingTask:
+          response.askingTaskId != null
+            ? {
+                queryId: 'ask-1',
+              }
+            : null,
+        answerDetail: response.answerDetail,
+      }),
+    );
     mockGetViewByRuntimeIdentity.mockResolvedValue({
       id: 7,
       name: 'sales_view',
@@ -174,6 +201,16 @@ describe('pages/api/v1/thread-responses/[id] route', () => {
         deployHash: 'deploy-1',
       }),
     );
+    expect(mockSerializeThreadResponsePayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeIdentity: expect.objectContaining({
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        }),
+      }),
+    );
     expect(mockRespondWithSimple).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: 200,
@@ -228,6 +265,16 @@ describe('pages/api/v1/thread-responses/[id] route', () => {
         knowledgeBaseId: 'kb-1',
       }),
       { sql: 'select total from sales' },
+    );
+    expect(mockSerializeThreadResponsePayload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeIdentity: expect.objectContaining({
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        }),
+      }),
     );
     expect(mockRespondWithSimple).toHaveBeenCalledWith(
       expect.objectContaining({

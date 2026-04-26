@@ -203,6 +203,67 @@ describe('IbisAdaptor', () => {
     );
   });
 
+  it('filters mysql tables to the configured database when ibis returns extra schemas', async () => {
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockMySQLConnectionInfo.password }),
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: [
+        {
+          name: 'channel',
+          columns: [],
+          properties: { schema: 'my-database' },
+        },
+        {
+          name: 'other_db.channel',
+          columns: [],
+          properties: { schema: 'other_db' },
+        },
+      ],
+    } as any);
+
+    const result = await ibisAdaptor.getTables(
+      DataSourceName.MYSQL,
+      mockMySQLConnectionInfo,
+    );
+
+    expect(result).toEqual([
+      {
+        name: 'channel',
+        columns: [],
+        properties: { schema: 'my-database' },
+      },
+    ]);
+  });
+
+  it('returns unfiltered tables when scope filtering finds no exact metadata match', async () => {
+    mockedEncryptor.prototype.decrypt.mockReturnValue(
+      JSON.stringify({ password: mockMySQLConnectionInfo.password }),
+    );
+    mockedAxios.post.mockResolvedValue({
+      data: [
+        {
+          name: 'channel',
+          columns: [],
+          properties: {},
+        },
+      ],
+    } as any);
+
+    const result = await ibisAdaptor.getTables(
+      DataSourceName.MYSQL,
+      mockMySQLConnectionInfo,
+    );
+
+    expect(result).toEqual([
+      {
+        name: 'channel',
+        columns: [],
+        properties: {},
+      },
+    ]);
+  });
+
   // check clickhouse connection info
   it.each([
     [

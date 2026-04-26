@@ -267,6 +267,14 @@ export interface AskTemplateDecision {
   sourceType?: string | null;
   templateLevel?: string | null;
   templateMode?: string | null;
+  instructionCount?: number | null;
+  retrievedTableCount?: number | null;
+  retrievedDdlCount?: number | null;
+  correctionRetries?: number | null;
+  schemaCompatible?: boolean | null;
+  dialectCompatible?: boolean | null;
+  dryRunCompatible?: boolean | null;
+  validationError?: string | null;
 }
 
 export interface AskDiagnostics {
@@ -301,6 +309,7 @@ export type AskResult = AskResponse<
 > & {
   rephrasedQuestion?: string;
   intentReasoning?: string;
+  content?: string;
   sqlGenerationReasoning?: string;
   retrievedTables?: string[];
   askPath?: string | null;

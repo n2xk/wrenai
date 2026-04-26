@@ -2,6 +2,7 @@ const mockResolveRequestScope = jest.fn();
 const mockDeriveRuntimeExecutionContextFromRequest = jest.fn();
 const mockValidateSql = jest.fn();
 const mockCreateSqlPair = jest.fn();
+const mockGetSqlPair = jest.fn();
 const mockUpdateSqlPair = jest.fn();
 const mockListSqlPairs = jest.fn();
 const mockDeleteSqlPair = jest.fn();
@@ -39,6 +40,7 @@ jest.mock('@/common', () => ({
     sqlPairService: {
       listSqlPairs: mockListSqlPairs,
       createSqlPair: mockCreateSqlPair,
+      getSqlPair: mockGetSqlPair,
       updateSqlPair: mockUpdateSqlPair,
       deleteSqlPair: mockDeleteSqlPair,
     },
@@ -95,7 +97,11 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     deployHash: 'deploy-1',
     userId: 'user-1',
   };
-  const authActor = { type: 'user', sessionId: 'session-1' };
+  const authActor = {
+    principalId: 'user-1',
+    sessionId: 'session-1',
+    workspaceRoleKeys: ['owner'],
+  };
   const authContext = { requestId: 'request-1' };
   const executionContext = {
     project: { id: 42, language: 'EN' },
@@ -113,12 +119,16 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
   };
   const defaultSqlPairMetadata = {
     assetKind: 'sql_pair',
+    approvedAt: null,
+    approvedBy: null,
     templateLevel: 'L0',
     templateMode: 'reference',
     sourceType: 'user_saved',
     scopeType: 'knowledge_base',
     parameterSchema: null,
     businessSignature: null,
+    effectiveFrom: null,
+    effectiveTo: null,
     templateVersion: 1,
     status: 'active',
   };
@@ -145,6 +155,12 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     mockBuildAuthorizationActorFromRuntimeScope.mockReturnValue(authActor);
     mockBuildAuthorizationContextFromRequest.mockReturnValue(authContext);
     mockAssertAuthorizedWithAudit.mockResolvedValue(undefined);
+    mockGetSqlPair.mockResolvedValue({
+      id: 7,
+      sql: 'select 1',
+      question: 'Existing question',
+      ...defaultSqlPairMetadata,
+    });
   });
 
   it('authorizes knowledge base read before listing sql pairs', async () => {
@@ -310,12 +326,16 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
         sql: req.body.sql,
         question: req.body.question,
         assetKind: 'sql_template',
+        approvedBy: 'user-1',
+        approvedAt: expect.any(String),
         templateLevel: 'L2',
         templateMode: 'anchored_template',
         sourceType: 'business_import',
         scopeType: 'knowledge_base',
         parameterSchema: { required: ['start_date'] },
         businessSignature: { ctes: ['base', 'bucketed'] },
+        effectiveFrom: null,
+        effectiveTo: null,
         templateVersion: 2,
         status: 'active',
       },
@@ -354,10 +374,11 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     expect(mockUpdateSqlPair).toHaveBeenCalledWith(
       executionContext.runtimeIdentity,
       7,
-      {
+      expect.objectContaining({
         sql: 'select 2',
         question: 'Updated question',
-      },
+        ...defaultSqlPairMetadata,
+      }),
     );
     expect(mockCreateAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -421,10 +442,11 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     expect(mockUpdateSqlPair).toHaveBeenCalledWith(
       executionContext.runtimeIdentity,
       13,
-      {
+      expect.objectContaining({
         sql: req.body.sql,
         question: undefined,
-      },
+        ...defaultSqlPairMetadata,
+      }),
     );
   });
 
@@ -444,18 +466,52 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
       id: 15,
       templateMode: 'anchored_template',
     });
+    mockGetSqlPair.mockResolvedValue({
+      id: 15,
+      sql: 'select 1',
+      question: 'Existing question',
+      ...defaultSqlPairMetadata,
+    });
 
     await handler(req, res);
 
     expect(mockUpdateSqlPair).toHaveBeenCalledWith(
       executionContext.runtimeIdentity,
       15,
-      {
-        sql: undefined,
-        question: undefined,
+      expect.objectContaining({
+        ...defaultSqlPairMetadata,
+        assetKind: 'sql_template',
+        approvedBy: 'user-1',
+        approvedAt: expect.any(String),
+        sourceType: 'admin_marked',
+        templateLevel: 'L2',
+        templateMode: 'anchored_template',
+      }),
+    );
+  });
+
+  it('rejects business template promotion for non-manager writers', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select * from deposits',
+        question: '首存金额分桶',
         templateMode: 'anchored_template',
       },
-    );
+    });
+    const res = createRes();
+    mockBuildAuthorizationActorFromRuntimeScope.mockReturnValue({
+      principalId: 'user-2',
+      sessionId: 'session-2',
+      workspaceRoleKeys: ['member'],
+    });
+
+    await handler(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(mockCreateSqlPair).not.toHaveBeenCalled();
   });
 
   it('audits sql pair deletion as knowledge base update', async () => {

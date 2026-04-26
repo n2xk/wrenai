@@ -47,12 +47,16 @@ export interface CreateSqlPair {
   sql: string;
   question: string;
   assetKind?: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   templateLevel?: string;
   templateMode?: string;
   sourceType?: string;
   scopeType?: string;
   parameterSchema?: Record<string, any> | null;
   businessSignature?: Record<string, any> | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   templateVersion?: number;
   status?: string;
 }
@@ -61,12 +65,16 @@ export interface EditSqlPair {
   sql?: string;
   question?: string;
   assetKind?: string;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   templateLevel?: string;
   templateMode?: string;
   sourceType?: string;
   scopeType?: string;
   parameterSchema?: Record<string, any> | null;
   businessSignature?: Record<string, any> | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   templateVersion?: number;
   status?: string;
 }
@@ -306,12 +314,16 @@ export class SqlPairService implements ISqlPairService {
       sql: existingPair.sql,
       question: existingPair.question,
       assetKind: existingPair.assetKind,
+      approvedAt: existingPair.approvedAt,
+      approvedBy: existingPair.approvedBy,
       templateLevel: existingPair.templateLevel,
       templateMode: existingPair.templateMode,
       sourceType: existingPair.sourceType,
       scopeType: existingPair.scopeType,
       parameterSchema: existingPair.parameterSchema,
       businessSignature: existingPair.businessSignature,
+      effectiveFrom: existingPair.effectiveFrom,
+      effectiveTo: existingPair.effectiveTo,
       templateVersion: existingPair.templateVersion,
       status: existingPair.status,
       updatedAt: new Date().toISOString(),
@@ -326,6 +338,12 @@ export class SqlPairService implements ISqlPairService {
     }
     if (sqlPair.assetKind !== undefined) {
       updatedData.assetKind = sqlPair.assetKind;
+    }
+    if (sqlPair.approvedAt !== undefined) {
+      updatedData.approvedAt = sqlPair.approvedAt;
+    }
+    if (sqlPair.approvedBy !== undefined) {
+      updatedData.approvedBy = sqlPair.approvedBy;
     }
     if (sqlPair.templateLevel !== undefined) {
       updatedData.templateLevel = sqlPair.templateLevel;
@@ -344,6 +362,12 @@ export class SqlPairService implements ISqlPairService {
     }
     if (sqlPair.businessSignature !== undefined) {
       updatedData.businessSignature = sqlPair.businessSignature;
+    }
+    if (sqlPair.effectiveFrom !== undefined) {
+      updatedData.effectiveFrom = sqlPair.effectiveFrom;
+    }
+    if (sqlPair.effectiveTo !== undefined) {
+      updatedData.effectiveTo = sqlPair.effectiveTo;
     }
     if (sqlPair.templateVersion !== undefined) {
       updatedData.templateVersion = sqlPair.templateVersion;

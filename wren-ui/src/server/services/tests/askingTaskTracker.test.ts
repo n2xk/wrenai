@@ -278,6 +278,45 @@ describe('AskingTaskTracker', () => {
     });
   });
 
+  it('binds persisted finalized tasks to thread responses after tracker rehydration gaps', async () => {
+    const tracker = createTracker();
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    const threadResponseRepository = ((
+      tracker as any
+    ).threadResponseRepository = {
+      updateOne: jest.fn(),
+    });
+
+    askingTaskRepository.findOneBy.mockResolvedValue({
+      id: 79,
+      queryId: 'query-persisted',
+      question: 'persisted task',
+      detail: {
+        status: AskResultStatus.FINISHED,
+        type: 'TEXT_TO_SQL',
+        response: [{ sql: 'SELECT 42' }],
+      },
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: 'deploy-1',
+      actorUserId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await tracker.bindThreadResponse(79, 'query-persisted', 101, 202);
+
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(79, {
+      threadId: 101,
+      threadResponseId: 202,
+    });
+    expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(202, {
+      sql: 'SELECT 42',
+    });
+  });
+
   it('persists GENERAL asking results to the database instead of leaving them in understanding state', async () => {
     const tracker = createTracker();
     const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
@@ -288,6 +327,7 @@ describe('AskingTaskTracker', () => {
       type: 'GENERAL',
       response: [],
       error: null,
+      intentReasoning: '当前知识库缺少投放金额，请先补充该指标。',
     });
     askingTaskRepository.findByQueryId.mockResolvedValue({ id: 91 });
 
@@ -313,6 +353,76 @@ describe('AskingTaskTracker', () => {
       expect.objectContaining({
         detail: expect.objectContaining({
           status: AskResultStatus.FINISHED,
+          type: 'GENERAL',
+        }),
+      }),
+    );
+  });
+
+  it('persists GENERAL answer content to the thread response when finalized', async () => {
+    const tracker = createTracker();
+    const threadResponseRepository = (tracker as any).threadResponseRepository;
+    threadResponseRepository.updateOne = jest.fn();
+
+    await (tracker as any).updateThreadResponseWhenTaskFinalized({
+      queryId: 'query-general',
+      threadResponseId: 501,
+      result: {
+        status: AskResultStatus.FINISHED,
+        type: 'GENERAL',
+        response: [],
+        error: null,
+        content: '首存定义为成功存款且 times = 1。',
+        intentReasoning: '当前知识库缺少投放金额，请先补充该指标。',
+      },
+    });
+
+    expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(501, {
+      answerDetail: {
+        status: 'FINISHED',
+        content: '首存定义为成功存款且 times = 1。',
+      },
+    });
+  });
+
+  it('keeps polling GENERAL asking results while they are still generating', async () => {
+    const tracker = createTracker();
+    const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+
+    wrenAIAdaptor.getAskResult.mockResolvedValue({
+      status: AskResultStatus.GENERATING,
+      type: 'GENERAL',
+      response: [],
+      error: null,
+      intentReasoning: '业务定义问题',
+    });
+    askingTaskRepository.findByQueryId.mockResolvedValue({ id: 92 });
+
+    const trackedTask = {
+      queryId: 'query-general-generating',
+      taskId: 92,
+      lastPolled: Date.now(),
+      question: '首存人数按什么口径统计？',
+      result: {
+        status: AskResultStatus.UNDERSTANDING,
+        response: [],
+        error: null,
+      },
+      isFinalized: false,
+    };
+    (tracker as any).trackedTasks.set('query-general-generating', trackedTask);
+
+    await (tracker as any).pollTasks();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(trackedTask.isFinalized).toBe(false);
+    expect(askingTaskRepository.updateOne).toHaveBeenCalledWith(
+      92,
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          status: AskResultStatus.GENERATING,
           type: 'GENERAL',
         }),
       }),

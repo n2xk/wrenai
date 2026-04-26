@@ -9,12 +9,16 @@ export type CreateSqlPairInput = {
   sql: string;
   skipSqlValidation?: boolean;
   assetKind?: SqlPairAssetKind;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   templateLevel?: SqlPairTemplateLevel;
   templateMode?: SqlPairTemplateMode;
   sourceType?: SqlPairSourceType;
   scopeType?: SqlPairScopeType;
   parameterSchema?: Record<string, any> | null;
   businessSignature?: Record<string, any> | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   templateVersion?: number;
   status?: SqlPairStatus;
 };
@@ -32,8 +36,12 @@ export type Instruction = {
 export type SqlPair = {
   __typename?: 'SqlPair';
   assetKind?: SqlPairAssetKind | string | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   businessSignature?: Record<string, any> | null;
   createdAt?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
   id: number;
   parameterSchema?: Record<string, any> | null;
   question: string;

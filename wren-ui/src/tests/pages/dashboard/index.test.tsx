@@ -165,6 +165,7 @@ describe('dashboard page shell', () => {
       replace: jest.fn(),
       hasRuntimeScope: true,
       selector,
+      workspaceSelector: selector,
       hrefWorkspace: jest.fn((path: string) => path),
     });
     mockUseDrawerAction.mockReturnValue({

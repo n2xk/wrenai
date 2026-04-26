@@ -4,6 +4,7 @@ import { PreviewDataResponse } from '@server/services';
 import { getPreviewColumnsStr } from '../utils/model';
 import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { resolveRuntimeExecutionContext } from '../utils/runtimeExecutionContext';
+import { getPreviewSqlModeForTemplateCarrier } from '@server/utils/templateSqlExecution';
 
 interface ModelControllerPreviewDeps {
   assertExecutableRuntimeScope: (
@@ -154,7 +155,7 @@ export const previewSqlAction = async ({
     | 'recordKnowledgeBaseReadAudit'
   >;
 }) => {
-  const { sql, limit, dryRun, runtimeScopeId } = data;
+  const { sql, limit, dryRun, runtimeScopeId, sqlMode } = data;
   const runtimeScope = runtimeScopeId
     ? await ctx.runtimeScopeResolver.resolveRuntimeScopeId(runtimeScopeId)
     : ctx.runtimeScope!;
@@ -175,6 +176,7 @@ export const previewSqlAction = async ({
     modelingOnly: false,
     manifest: executionContext.manifest,
     dryRun,
+    ...(sqlMode ? { sqlMode } : {}),
   });
   await deps.recordKnowledgeBaseReadAudit(ctx, {
     runtimeScope,
@@ -211,6 +213,18 @@ export const getNativeSqlAction = async ({
   }
   if (!response.sql) {
     throw new Error(`Thread response ${responseId} has no SQL`);
+  }
+  const askingTask =
+    response.askingTaskId && ctx.askingService.getAskingTaskById
+      ? await ctx.askingService.getAskingTaskById(response.askingTaskId)
+      : null;
+  if (getPreviewSqlModeForTemplateCarrier(askingTask) === 'dialect') {
+    await deps.recordKnowledgeBaseReadAudit(ctx, {
+      resourceType: 'thread_response',
+      resourceId: responseId,
+      payloadJson: { operation: 'get_native_sql' },
+    });
+    return safeFormatSQL(response.sql);
   }
   const { project, manifest } = await deps.getResponseExecutionContext(
     ctx,

@@ -14,9 +14,36 @@ export type ChartabilityResult = {
 
 const NUMERIC_TYPE_PATTERN =
   /(int|integer|bigint|smallint|decimal|numeric|double|float|real|number)/i;
+const NUMERIC_VALUE_PATTERN = /^-?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/;
 
 const isNumericType = (type?: string | null) =>
   typeof type === 'string' && NUMERIC_TYPE_PATTERN.test(type);
+
+const isNumericLikeValue = (value: unknown) => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value);
+  }
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim().replaceAll(',', '');
+  return Boolean(normalized) && NUMERIC_VALUE_PATTERN.test(normalized);
+};
+
+const columnHasNumericValues = (rows: unknown[][], columnIndex: number) => {
+  const sampledValues = rows
+    .map((row) => row?.[columnIndex])
+    .filter((value) => value !== null && value !== undefined && value !== '')
+    .slice(0, 20);
+
+  if (!sampledValues.length) {
+    return false;
+  }
+
+  const numericValues = sampledValues.filter(isNumericLikeValue).length;
+  return numericValues >= Math.max(1, Math.ceil(sampledValues.length * 0.6));
+};
 
 const getUniqueValueCount = (rows: unknown[][], columnIndex: number) =>
   new Set(rows.map((row) => row?.[columnIndex] ?? null)).size;
@@ -36,7 +63,10 @@ export const evaluateChartability = (
     };
   }
 
-  const numericColumns = columns.filter((column) => isNumericType(column.type));
+  const numericColumns = columns.filter(
+    (column, index) =>
+      isNumericType(column.type) || columnHasNumericValues(rows, index),
+  );
   if (numericColumns.length === 0) {
     return {
       chartable: false,
