@@ -341,6 +341,7 @@ export const authorize = ({
       'access_review.read',
       'group.read',
       'audit.read',
+      'feedback.read',
       'role.read',
     ].includes(action)
   ) {
@@ -359,9 +360,11 @@ export const authorize = ({
                   ? 'Directory group read permission required'
                   : action === 'audit.read'
                     ? 'Audit read permission required'
-                    : action === 'role.read'
-                      ? 'Role read permission required'
-                      : 'Automation governance read permission required',
+                    : action === 'feedback.read'
+                      ? 'Feedback read permission required'
+                      : action === 'role.read'
+                        ? 'Role read permission required'
+                        : 'Automation governance read permission required',
         });
   }
 

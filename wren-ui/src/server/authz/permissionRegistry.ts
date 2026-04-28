@@ -199,6 +199,10 @@ export const AUTHORIZATION_ACTIONS = {
     description: 'Read workspace audit events',
     scope: 'workspace',
   },
+  'feedback.read': {
+    description: 'Read workspace question-answer feedback',
+    scope: 'workspace',
+  },
   'role.read': {
     description: 'Read workspace role catalog and bindings',
     scope: 'workspace',

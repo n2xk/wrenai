@@ -8,6 +8,7 @@ import {
   DeployLogRepository,
   ThreadRepository,
   ThreadResponseRepository,
+  ThreadResponseFeedbackRepository,
   ModelRepository,
   ModelColumnRepository,
   RelationRepository,
@@ -16,6 +17,9 @@ import {
   LearningRepository,
   DashboardItemRepository,
   DashboardRepository,
+  SpreadsheetHistoryRepository,
+  SpreadsheetRepository,
+  SpreadsheetSettingRepository,
   SqlPairRepository,
   AskingTaskRepository,
   InstructionRepository,
@@ -65,6 +69,8 @@ import {
   ModelService,
   MDLService,
   DashboardService,
+  SpreadsheetService,
+  ThreadResponseFeedbackService,
   AskingTaskTracker,
   InstructionService,
   BusinessKnowledgeService,
@@ -107,6 +113,9 @@ export const initComponents = () => {
   const deployLogRepository = new DeployLogRepository(knex);
   const threadRepository = new ThreadRepository(knex);
   const threadResponseRepository = new ThreadResponseRepository(knex);
+  const threadResponseFeedbackRepository = new ThreadResponseFeedbackRepository(
+    knex,
+  );
   const viewRepository = new ViewRepository(knex);
   const modelRepository = new ModelRepository(knex);
   const modelColumnRepository = new ModelColumnRepository(knex);
@@ -116,6 +125,9 @@ export const initComponents = () => {
   const learningRepository = new LearningRepository(knex);
   const dashboardRepository = new DashboardRepository(knex);
   const dashboardItemRepository = new DashboardItemRepository(knex);
+  const spreadsheetRepository = new SpreadsheetRepository(knex);
+  const spreadsheetSettingRepository = new SpreadsheetSettingRepository(knex);
+  const spreadsheetHistoryRepository = new SpreadsheetHistoryRepository(knex);
   const sqlPairRepository = new SqlPairRepository(knex);
   const askingTaskRepository = new AskingTaskRepository(knex);
   const instructionRepository = new InstructionRepository(knex);
@@ -227,6 +239,11 @@ export const initComponents = () => {
     dashboardItemRepository,
     dashboardRepository,
     knowledgeBaseRepository,
+  });
+  const spreadsheetService = new SpreadsheetService({
+    spreadsheetRepository,
+    spreadsheetSettingRepository,
+    spreadsheetHistoryRepository,
   });
   const sqlPairService = new SqlPairService({
     sqlPairRepository,
@@ -390,6 +407,10 @@ export const initComponents = () => {
     skillService,
     backgroundTrackerWorkspaceId: serverConfig.backgroundTrackerWorkspaceId,
   });
+  const threadResponseFeedbackService = new ThreadResponseFeedbackService({
+    threadResponseFeedbackRepository,
+    askingService,
+  });
   const runtimeScopeResolver = new RuntimeScopeResolver({
     projectRepository,
     deployService,
@@ -430,6 +451,7 @@ export const initComponents = () => {
     deployLogRepository,
     threadRepository,
     threadResponseRepository,
+    threadResponseFeedbackRepository,
     viewRepository,
     modelRepository,
     modelColumnRepository,
@@ -439,6 +461,9 @@ export const initComponents = () => {
     modelNestedColumnRepository,
     dashboardRepository,
     dashboardItemRepository,
+    spreadsheetRepository,
+    spreadsheetSettingRepository,
+    spreadsheetHistoryRepository,
     sqlPairRepository,
     askingTaskRepository,
     apiHistoryRepository,
@@ -482,9 +507,11 @@ export const initComponents = () => {
     queryService,
     deployService,
     askingService,
+    threadResponseFeedbackService,
     modelService,
     mdlService,
     dashboardService,
+    spreadsheetService,
     sqlPairService,
     instructionService,
     businessKnowledgeService,
@@ -508,7 +535,7 @@ export const initComponents = () => {
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 7;
+const COMPONENTS_RUNTIME_VERSION = 9;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',

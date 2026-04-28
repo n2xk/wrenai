@@ -6,6 +6,8 @@ export * from './projectService';
 export * from './queryService';
 export * from './metadataService';
 export * from './dashboardService';
+export * from './spreadsheetService';
+export * from './threadResponseFeedbackService';
 export * from './askingTaskTracker';
 export * from './instructionService';
 export * from './businessKnowledgeService';

@@ -207,6 +207,14 @@ export const buildWorkspacePermissionActions = ({
         workspaceKind: workspace.kind || null,
       },
     }),
+    'feedback.read': evaluateAction('feedback.read', {
+      resourceType: 'workspace',
+      resourceId: workspace.id,
+      workspaceId: workspace.id,
+      attributes: {
+        workspaceKind: workspace.kind || null,
+      },
+    }),
     'role.read': evaluateAction('role.read', {
       resourceType: 'workspace',
       resourceId: workspace.id,

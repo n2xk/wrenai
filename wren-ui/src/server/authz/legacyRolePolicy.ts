@@ -43,6 +43,7 @@ const OWNER_ACTIONS: AuthorizationAction[] = [
   'group.read',
   'group.manage',
   'audit.read',
+  'feedback.read',
   'role.read',
   'role.manage',
 ];

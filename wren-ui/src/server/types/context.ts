@@ -24,6 +24,10 @@ import {
   IDeployLogRepository,
   IDashboardRepository,
   IDashboardItemRepository,
+  ISpreadsheetHistoryRepository,
+  ISpreadsheetRepository,
+  ISpreadsheetSettingRepository,
+  IThreadResponseFeedbackRepository,
   ISqlPairRepository,
   IInstructionRepository,
   IBusinessTermRepository,
@@ -50,6 +54,8 @@ import {
   IMDLService,
   IProjectService,
   IDashboardService,
+  ISpreadsheetService,
+  IThreadResponseFeedbackService,
   IInstructionService,
   IBusinessKnowledgeService,
   IWorkspaceService,
@@ -82,6 +88,8 @@ export interface IContext {
   askingService: IAskingService;
   queryService: IQueryService;
   dashboardService: IDashboardService;
+  spreadsheetService: ISpreadsheetService;
+  threadResponseFeedbackService: IThreadResponseFeedbackService;
   sqlPairService: ISqlPairService;
   instructionService: IInstructionService;
   businessKnowledgeService: IBusinessKnowledgeService;
@@ -108,6 +116,10 @@ export interface IContext {
   learningRepository: ILearningRepository;
   dashboardRepository: IDashboardRepository;
   dashboardItemRepository: IDashboardItemRepository;
+  spreadsheetRepository: ISpreadsheetRepository;
+  spreadsheetSettingRepository: ISpreadsheetSettingRepository;
+  spreadsheetHistoryRepository: ISpreadsheetHistoryRepository;
+  threadResponseFeedbackRepository: IThreadResponseFeedbackRepository;
   sqlPairRepository: ISqlPairRepository;
   instructionRepository: IInstructionRepository;
   businessTermRepository: IBusinessTermRepository;
