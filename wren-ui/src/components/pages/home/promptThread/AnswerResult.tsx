@@ -18,6 +18,7 @@ import {
 import { captureUserTelemetryEvent } from '@/utils/telemetry';
 import {
   AskingTaskStatus,
+  AskingTaskType,
   ChartTaskStatus,
   ThreadResponse,
   ThreadResponseAdjustment,
@@ -29,6 +30,8 @@ import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import RecommendedQuestions from '@/components/pages/home/RecommendedQuestions';
 import Preparation from '@/components/pages/home/preparation';
+import ResponseFeedbackModal from '@/components/pages/home/promptThread/ResponseFeedbackModal';
+import useThreadResponseFeedback from '@/hooks/useThreadResponseFeedback';
 import {
   scheduleAutoGenerateAnswer,
   shouldAutoGenerateAnswer,
@@ -410,9 +413,7 @@ const AdjustmentInformation = (props: {
 export default function AnswerResult(props: Props) {
   const { threadResponse, isOpeningQuestion } = props;
   const messages = useThreadWorkbenchMessages();
-  const [helpfulFeedback, setHelpfulFeedback] = useState<
-    'positive' | 'negative' | null
-  >(null);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
 
   const {
     onDraftConversationAid,
@@ -448,6 +449,18 @@ export default function AnswerResult(props: Props) {
     normalizedResponseKind === ThreadResponseKind.CHART_FOLLOWUP;
   const isRecommendationFollowUp =
     normalizedResponseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP;
+  const {
+    feedback,
+    loading: feedbackLoading,
+    submitting: feedbackSubmitting,
+    submitPositiveFeedback,
+    submitNegativeFeedback,
+    deleteFeedback,
+  } = useThreadResponseFeedback(id, {
+    disabled: isRecommendationFollowUp,
+  });
+  const helpfulFeedback = feedback?.rating || null;
+  const isFeedbackBusy = feedbackLoading || feedbackSubmitting;
 
   const isAnswerPrepared = !!answerDetail?.queryId || !!answerDetail?.status;
   const isBreakdownOnly = useMemo(() => {
@@ -498,13 +511,20 @@ export default function AnswerResult(props: Props) {
 
   const rephrasedQuestion =
     threadResponse?.askingTask?.rephrasedQuestion || question;
+  const isTemplateDecisionSqlFlow =
+    askingTask?.type === AskingTaskType.TEXT_TO_SQL || Boolean(sql);
   const templateDecisionPresentation = useMemo(
     () =>
       resolveTemplateDecisionPresentation(
         askingTask?.diagnostics?.templateDecision,
         messages.template,
+        { isSqlFlow: isTemplateDecisionSqlFlow },
       ),
-    [askingTask?.diagnostics?.templateDecision, messages.template],
+    [
+      askingTask?.diagnostics?.templateDecision,
+      isTemplateDecisionSqlFlow,
+      messages.template,
+    ],
   );
   const normalizedView: ViewInfo | undefined = view || undefined;
   const sqlText = sql || '';
@@ -565,8 +585,27 @@ export default function AnswerResult(props: Props) {
     });
   };
 
-  const toggleHelpfulFeedback = (value: 'positive' | 'negative') => {
-    setHelpfulFeedback((current) => (current === value ? null : value));
+  const handlePositiveFeedback = () => {
+    void submitPositiveFeedback();
+  };
+
+  const handleNegativeFeedback = () => {
+    if (helpfulFeedback === 'negative') {
+      void deleteFeedback();
+      return;
+    }
+
+    setFeedbackModalOpen(true);
+  };
+
+  const handleSubmitNegativeFeedback = async ({
+    reasonCodes,
+    comment,
+  }: Parameters<typeof submitNegativeFeedback>[0]) => {
+    const result = await submitNegativeFeedback({ reasonCodes, comment });
+    if (result) {
+      setFeedbackModalOpen(false);
+    }
   };
 
   const renderResultFooter = () => {
@@ -584,9 +623,11 @@ export default function AnswerResult(props: Props) {
               aria-label={messages.footer.helpfulPositive}
               $selected={helpfulFeedback === 'positive'}
               icon={<LikeOutlined />}
+              disabled={isFeedbackBusy}
+              loading={feedbackSubmitting && helpfulFeedback === 'positive'}
               size="small"
               type="text"
-              onClick={() => toggleHelpfulFeedback('positive')}
+              onClick={handlePositiveFeedback}
             />
           </Tooltip>
           <Tooltip title={messages.footer.helpfulNegative}>
@@ -594,9 +635,11 @@ export default function AnswerResult(props: Props) {
               aria-label={messages.footer.helpfulNegative}
               $selected={helpfulFeedback === 'negative'}
               icon={<DislikeOutlined />}
+              disabled={isFeedbackBusy}
+              loading={feedbackSubmitting && helpfulFeedback === 'negative'}
               size="small"
               type="text"
-              onClick={() => toggleHelpfulFeedback('negative')}
+              onClick={handleNegativeFeedback}
             />
           </Tooltip>
         </HelpfulBubble>
@@ -1124,6 +1167,13 @@ export default function AnswerResult(props: Props) {
           </AssistantSection>
         </ResponseBodyStack>
       </ResponseCard>
+      <ResponseFeedbackModal
+        feedback={feedback}
+        open={feedbackModalOpen}
+        submitting={feedbackSubmitting}
+        onClose={() => setFeedbackModalOpen(false)}
+        onSubmit={handleSubmitNegativeFeedback}
+      />
     </div>
   );
 }

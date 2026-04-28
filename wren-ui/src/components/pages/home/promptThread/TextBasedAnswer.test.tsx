@@ -1,6 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import TextBasedAnswer from './TextBasedAnswer';
+import TextBasedAnswer, {
+  resolveTextAnswerErrorPresentation,
+} from './TextBasedAnswer';
 import { ThreadResponseAnswerStatus } from '@/types/home';
 
 const mockUseTextBasedAnswerStreamTask = jest.fn();
@@ -85,6 +87,51 @@ describe('TextBasedAnswer', () => {
       knowledgeBaseId: 'kb-response',
       kbSnapshotId: 'snap-response',
       deployHash: 'deploy-response',
+    });
+  });
+
+  it('renders a friendly retry state for transient text answer failures', () => {
+    const markup = renderToStaticMarkup(
+      <TextBasedAnswer
+        motion={false}
+        mode="timeline"
+        isLastThreadResponse={false}
+        isOpeningQuestion={false}
+        onInitPreviewDone={() => undefined}
+        shouldAutoPreview={false}
+        threadResponse={
+          {
+            id: 22,
+            threadId: 9,
+            question: '查询每日登录用户数',
+            workspaceId: 'ws-response',
+            knowledgeBaseId: 'kb-response',
+            answerDetail: {
+              status: ThreadResponseAnswerStatus.FAILED,
+              error: {
+                message: 'socket hang up',
+              },
+            },
+          } as any
+        }
+      />,
+    );
+
+    expect(markup).toContain('文字解读生成失败');
+    expect(markup).toContain('数据结果已生成');
+    expect(markup).toContain('重新生成解读');
+    expect(markup).not.toContain('socket hang up');
+  });
+
+  it('keeps non-transient text answer errors specific', () => {
+    expect(
+      resolveTextAnswerErrorPresentation({
+        shortMessage: '回答生成失败',
+        message: '模型返回为空',
+      }),
+    ).toEqual({
+      message: '回答生成失败',
+      description: '模型返回为空',
     });
   });
 });

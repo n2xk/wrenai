@@ -99,16 +99,26 @@ export type ThreadWorkbenchMessages = {
       anchoredGenerated: string;
       correctedTemplate: string;
       executable: string;
+      knowledgeAnswer: string;
+      llmGenerated: string;
+      missingExternalData: string;
       reference: string;
       trustedReference: string;
     };
     labels: {
+      analysisRulesMatched: string;
+      analysisRulesMatchedSuffix: string;
+      analysisRulesNotMatched: string;
+      decisionReason: string;
       fallbackReason: string;
       historyContinuity: string;
       missingParameters: string;
       mode: string;
+      noSqlFlow: string;
+      notMatched: string;
       parameters: string;
       requiredExternalDependencies: string;
+      sqlTemplateReference: string;
       sqlSource: string;
       template: string;
       templateId: string;
@@ -117,6 +127,8 @@ export type ThreadWorkbenchMessages = {
       explicitBusinessTemplateSelected: string;
       inactiveTemplate: string;
       missingTemplateParameters: string;
+      missingExternalData: string;
+      noSqlPairCandidates: string;
       referenceSqlPairSelected: string;
       templateConfidenceBelowThreshold: string;
       templateConflictLowMargin: string;
@@ -129,6 +141,7 @@ export type ThreadWorkbenchMessages = {
       anchoredGenerated: string;
       anchoredTemplate: string;
       corrected: string;
+      directGenerated: string;
       generated: string;
       renderedTemplate: string;
     };
@@ -188,16 +201,26 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         anchoredGenerated: '已按业务口径约束生成',
         correctedTemplate: '已在模板保护下修正 SQL',
         executable: '已执行参数化模板',
+        knowledgeAnswer: '已按业务知识回答',
+        llmGenerated: '未命中模板，直接生成 SQL',
+        missingExternalData: '需要补充外部数据',
         reference: '已按 SQL 参考生成',
         trustedReference: '已采用可信 SQL 参考',
       },
       labels: {
+        analysisRulesMatched: '分析规则：已命中 ',
+        analysisRulesMatchedSuffix: ' 条',
+        analysisRulesNotMatched: '分析规则：未命中',
         template: '模板：',
         templateId: '模板 ID：',
         mode: '模式：',
+        noSqlFlow: '未进入 SQL 生成',
+        sqlTemplateReference: 'SQL 模板/参考：',
         sqlSource: 'SQL 来源：',
+        decisionReason: '决策依据：',
         fallbackReason: '降级原因：',
         missingParameters: '缺少参数：',
+        notMatched: '未命中',
         parameters: '参数：',
         requiredExternalDependencies: '外部依赖：',
         historyContinuity: '追问连续性：已匹配上一轮模板上下文',
@@ -206,6 +229,8 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         explicitBusinessTemplateSelected: '已命中业务口径模板',
         inactiveTemplate: '模板已停用，未直接采用',
         missingTemplateParameters: '模板必填参数不完整，已降级处理',
+        missingExternalData: '当前问题依赖外部数据，已转为补充数据提示',
+        noSqlPairCandidates: '未命中 SQL 模板/参考样例',
         referenceSqlPairSelected: '已命中相关 SQL 参考样例',
         templateConfidenceBelowThreshold: '模板置信度不足，已降级为参考生成',
         templateConflictLowMargin: '候选模板差距不足，未自动套用',
@@ -218,6 +243,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       },
       sqlSources: {
         generated: 'LLM 参考生成',
+        directGenerated: 'LLM 直接生成',
         anchoredGenerated: '按业务口径约束生成',
         anchoredTemplate: '直接复用业务口径模板',
         renderedTemplate: '直接渲染参数化模板',
@@ -328,16 +354,26 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         anchoredGenerated: 'Generated under business-template constraints',
         correctedTemplate: 'Template SQL corrected with core protection',
         executable: 'Parameterized template executed',
+        knowledgeAnswer: 'Answered from business knowledge',
+        llmGenerated: 'No template matched; SQL generated directly',
+        missingExternalData: 'External data required',
         reference: 'Generated from SQL reference',
         trustedReference: 'Trusted SQL reference applied',
       },
       labels: {
+        analysisRulesMatched: 'Analysis rules: matched ',
+        analysisRulesMatchedSuffix: ' rule(s)',
+        analysisRulesNotMatched: 'Analysis rules: not matched',
         template: 'Template: ',
         templateId: 'Template ID: ',
         mode: 'Mode: ',
+        noSqlFlow: 'SQL generation was not entered',
+        sqlTemplateReference: 'SQL template/reference: ',
         sqlSource: 'SQL source: ',
+        decisionReason: 'Decision: ',
         fallbackReason: 'Fallback reason: ',
         missingParameters: 'Missing parameters: ',
+        notMatched: 'not matched',
         parameters: 'Parameters: ',
         requiredExternalDependencies: 'External dependencies: ',
         historyContinuity:
@@ -349,6 +385,9 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         inactiveTemplate: 'Template is inactive and was not applied directly',
         missingTemplateParameters:
           'Required template parameters were incomplete, so the flow downgraded',
+        missingExternalData:
+          'The question depends on external data, so the answer asks for more data',
+        noSqlPairCandidates: 'No SQL template/reference candidates matched',
         referenceSqlPairSelected: 'Matched a related SQL reference sample',
         templateConfidenceBelowThreshold:
           'Template confidence was too low, so the flow downgraded safely',
@@ -364,6 +403,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
       },
       sqlSources: {
         generated: 'LLM reference generation',
+        directGenerated: 'Direct LLM generation',
         anchoredGenerated: 'Constraint-guided template generation',
         anchoredTemplate: 'Direct anchored-template reuse',
         renderedTemplate: 'Direct rendered template execution',

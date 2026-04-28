@@ -91,4 +91,73 @@ describe('templateDecisionPresentation', () => {
       '模板缺少足够的 schema 召回支撑，未直接套用',
     );
   });
+
+  it('uses business-knowledge wording for GENERAL answers without implying SQL generation', () => {
+    const presentation = resolveTemplateDecisionPresentation(
+      {
+        decisionReason: 'no_sql_pair_candidates',
+        instructionCount: 11,
+        mode: 'reference',
+        sqlSource: 'generated',
+      },
+      messages,
+      { isSqlFlow: false },
+    );
+
+    expect(presentation).toMatchObject({
+      badge: '已按业务知识回答',
+      tagColor: 'default',
+    });
+    expect(presentation?.description).toContain('未命中 SQL 模板/参考样例');
+    expect(presentation?.description).toContain('分析规则：已命中 11 条');
+    expect(presentation?.description).toContain('未进入 SQL 生成');
+    expect(presentation?.description).not.toContain('SQL 来源：');
+    expect(presentation?.description).not.toContain('LLM 参考生成');
+  });
+
+  it('highlights missing external data for GENERAL answers that cannot enter SQL generation', () => {
+    const presentation = resolveTemplateDecisionPresentation(
+      {
+        decisionReason: 'explicit_business_template_selected',
+        instructionCount: 1,
+        mode: 'anchored_template',
+        requiredExternalDependencies: ['ad_spend'],
+        sqlSource: 'anchored_template',
+        templateTitle: '渠道 ROI',
+      },
+      messages,
+      { isSqlFlow: false },
+    );
+
+    expect(presentation).toMatchObject({
+      badge: '需要补充外部数据',
+      tagColor: 'warning',
+    });
+    expect(presentation?.description).toContain('模板：渠道 ROI');
+    expect(presentation?.description).toContain(
+      '当前问题依赖外部数据，已转为补充数据提示',
+    );
+    expect(presentation?.description).toContain('外部依赖：ad_spend');
+    expect(presentation?.description).toContain('未进入 SQL 生成');
+    expect(presentation?.description).not.toContain('SQL 来源：');
+  });
+
+  it('does not call no-sql-candidate SQL flows SQL-reference generation', () => {
+    const presentation = resolveTemplateDecisionPresentation(
+      {
+        decisionReason: 'no_sql_pair_candidates',
+        instructionCount: 0,
+        mode: 'reference',
+        sqlSource: 'generated',
+      },
+      messages,
+      { isSqlFlow: true },
+    );
+
+    expect(presentation?.badge).toBe('未命中模板，直接生成 SQL');
+    expect(presentation?.description).toContain('SQL 模板/参考：未命中');
+    expect(presentation?.description).toContain('分析规则：未命中');
+    expect(presentation?.description).toContain('SQL 来源：LLM 直接生成');
+    expect(presentation?.description).not.toContain('降级原因：');
+  });
 });

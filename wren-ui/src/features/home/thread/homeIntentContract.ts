@@ -27,8 +27,12 @@ type HomeIntentResponseLike = {
   } | null;
   chartDetail?: {
     status?: string | null;
+    chartability?: {
+      recommendedDisplay?: string | null;
+    } | null;
     chartSchema?: unknown;
     chartType?: string | null;
+    renderHints?: Record<string, unknown> | null;
   } | null;
   recommendationDetail?: {
     status?: string | null;
@@ -86,7 +90,14 @@ const hasNonEmptySql = (sql?: string | null) =>
 
 const hasRenderableChart = (
   chartDetail?: HomeIntentResponseLike['chartDetail'],
-) => Boolean(chartDetail?.status === 'FINISHED' && chartDetail.chartSchema);
+) =>
+  Boolean(
+    chartDetail?.status === 'FINISHED' &&
+    (chartDetail.chartSchema ||
+      String(chartDetail.chartType || '').toUpperCase() === 'NUMBER' ||
+      chartDetail.chartability?.recommendedDisplay === 'NUMBER_CARD' ||
+      chartDetail.renderHints?.displayType === 'number_card'),
+  );
 
 const resolveKindFromAskingTaskType = (
   type?: string | null,
@@ -102,6 +113,22 @@ const resolveKindFromAskingTaskType = (
       return null;
   }
 };
+
+const deriveResponseHomeIntentKind = (
+  response: HomeIntentResponseLike,
+): HomeIntentKind =>
+  response.responseKind === 'CHART_FOLLOWUP'
+    ? 'CHART'
+    : response.responseKind === 'RECOMMENDATION_FOLLOWUP'
+      ? 'RECOMMEND_QUESTIONS'
+      : resolveKindFromAskingTaskType(response.askingTask?.type) ||
+        (response.askingTask ||
+        response.answerDetail ||
+        response.breakdownDetail ||
+        response.chartDetail ||
+        hasNonEmptySql(response.sql)
+          ? 'ASK'
+          : 'GENERAL_HELP');
 
 const resolveMode = (
   response: HomeIntentResponseLike,
@@ -282,17 +309,47 @@ export const resolveDefaultArtifactPlanForIntent = (
   }
 };
 
-export const resolveResponseArtifactPlan = (
-  response?: HomeIntentResponseLike | null,
+const mergeArtifactPlan = (
+  base: ResponseArtifactPlan,
+  fallback: ResponseArtifactPlan,
 ): ResponseArtifactPlan => {
-  if (!response) {
-    return { ...EMPTY_RESPONSE_ARTIFACT_PLAN };
-  }
+  const teaserArtifacts = [...base.teaserArtifacts];
+  const workbenchArtifacts = [...base.workbenchArtifacts];
 
-  if (response.resolvedIntent?.artifactPlan) {
-    return response.resolvedIntent.artifactPlan;
-  }
+  fallback.teaserArtifacts.forEach((artifact) =>
+    pushUnique(teaserArtifacts, artifact),
+  );
+  fallback.workbenchArtifacts.forEach((artifact) =>
+    pushUnique(workbenchArtifacts, artifact),
+  );
 
+  const primaryTeaser =
+    base.primaryTeaser && teaserArtifacts.includes(base.primaryTeaser)
+      ? base.primaryTeaser
+      : fallback.primaryTeaser &&
+          teaserArtifacts.includes(fallback.primaryTeaser)
+        ? fallback.primaryTeaser
+        : teaserArtifacts[0] || null;
+  const primaryWorkbenchArtifact =
+    base.primaryWorkbenchArtifact &&
+    workbenchArtifacts.includes(base.primaryWorkbenchArtifact)
+      ? base.primaryWorkbenchArtifact
+      : fallback.primaryWorkbenchArtifact &&
+          workbenchArtifacts.includes(fallback.primaryWorkbenchArtifact)
+        ? fallback.primaryWorkbenchArtifact
+        : workbenchArtifacts[0] || null;
+
+  return {
+    teaserArtifacts,
+    workbenchArtifacts,
+    primaryTeaser,
+    primaryWorkbenchArtifact,
+  };
+};
+
+const deriveResponseArtifactPlan = (
+  response: HomeIntentResponseLike,
+): ResponseArtifactPlan => {
   const teaserArtifacts: ResponseArtifactPlan['teaserArtifacts'] = [];
   const workbenchArtifacts: WorkbenchArtifactKind[] = [];
   const isChartFollowUp = response.responseKind === 'CHART_FOLLOWUP';
@@ -338,6 +395,25 @@ export const resolveResponseArtifactPlan = (
     primaryTeaser: teaserArtifacts[0] || null,
     primaryWorkbenchArtifact: workbenchArtifacts[0] || null,
   };
+};
+
+export const resolveResponseArtifactPlan = (
+  response?: HomeIntentResponseLike | null,
+): ResponseArtifactPlan => {
+  if (!response) {
+    return { ...EMPTY_RESPONSE_ARTIFACT_PLAN };
+  }
+
+  const derivedArtifactPlan = deriveResponseArtifactPlan(response);
+
+  if (response.resolvedIntent?.artifactPlan) {
+    return mergeArtifactPlan(
+      response.resolvedIntent.artifactPlan,
+      derivedArtifactPlan,
+    );
+  }
+
+  return derivedArtifactPlan;
 };
 
 export const resolveResponseArtifactLineage = (
@@ -389,22 +465,23 @@ export const resolveResponseHomeIntent = (
   }
 
   if (response.resolvedIntent) {
-    return response.resolvedIntent;
+    const derivedKind = deriveResponseHomeIntentKind(response);
+    const shouldRepairKind =
+      response.resolvedIntent.kind === 'GENERAL_HELP' &&
+      derivedKind !== 'GENERAL_HELP';
+    const kind = shouldRepairKind ? derivedKind : response.resolvedIntent.kind;
+
+    return {
+      ...response.resolvedIntent,
+      kind,
+      artifactPlan: resolveResponseArtifactPlan(response),
+      conversationAidPlan:
+        response.resolvedIntent.conversationAidPlan ??
+        resolveDefaultConversationAidPlanForIntent(kind, response),
+    };
   }
 
-  const kind =
-    response.responseKind === 'CHART_FOLLOWUP'
-      ? 'CHART'
-      : response.responseKind === 'RECOMMENDATION_FOLLOWUP'
-        ? 'RECOMMEND_QUESTIONS'
-        : resolveKindFromAskingTaskType(response.askingTask?.type) ||
-          (response.askingTask ||
-          response.answerDetail ||
-          response.breakdownDetail ||
-          response.chartDetail ||
-          hasNonEmptySql(response.sql)
-            ? 'ASK'
-            : 'GENERAL_HELP');
+  const kind = deriveResponseHomeIntentKind(response);
 
   return {
     kind,

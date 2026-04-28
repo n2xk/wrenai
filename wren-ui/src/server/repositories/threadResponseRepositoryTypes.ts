@@ -35,6 +35,7 @@ export interface ThreadResponseChartDetail {
   thinking?: ThinkingTrace | null;
   chartability?: {
     chartable: boolean;
+    recommendedDisplay?: 'CHART' | 'NUMBER_CARD' | string | null;
     reasonCode?: string | null;
     message?: string | null;
   } | null;

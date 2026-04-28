@@ -11,8 +11,15 @@ export type TemplateDecisionPresentation = {
   templateTitle?: string | null;
 };
 
+export type TemplateDecisionPresentationOptions = {
+  isSqlFlow?: boolean;
+};
+
 const joinParts = (parts: Array<string | null | undefined>) =>
   parts.filter((part): part is string => Boolean(part)).join(' · ');
+
+const isDirectLlmSqlGeneration = (templateDecision: AskTemplateDecision) =>
+  templateDecision.decisionReason === 'no_sql_pair_candidates';
 
 const formatParameterValue = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -62,6 +69,7 @@ const resolveDecisionReasonText = (
   const decisionReasonMap: Record<string, string> = {
     explicit_business_template_selected:
       messages.reasons.explicitBusinessTemplateSelected,
+    no_sql_pair_candidates: messages.reasons.noSqlPairCandidates,
     reference_sql_pair_selected: messages.reasons.referenceSqlPairSelected,
     trusted_reference_selected: messages.reasons.trustedReferenceSelected,
   };
@@ -83,6 +91,9 @@ export const resolveTemplateDecisionBadge = (
   templateDecision: AskTemplateDecision,
   messages: TemplateMessages,
 ) => {
+  if (templateDecision.decisionReason === 'no_sql_pair_candidates') {
+    return messages.badges.llmGenerated;
+  }
   if (templateDecision.sqlSource === 'rendered_template') {
     return messages.badges.executable;
   }
@@ -127,6 +138,10 @@ const resolveTemplateDecisionSqlSourceText = (
     return null;
   }
 
+  if (isDirectLlmSqlGeneration(templateDecision)) {
+    return messages.sqlSources.directGenerated;
+  }
+
   return sqlSourceMap[templateDecision.sqlSource] || templateDecision.sqlSource;
 };
 
@@ -155,12 +170,78 @@ const resolveTemplateDecisionTagColor = (
   return 'default';
 };
 
+const formatInstructionCount = (
+  instructionCount: number | null | undefined,
+  messages: TemplateMessages,
+) =>
+  typeof instructionCount === 'number'
+    ? instructionCount > 0
+      ? `${messages.labels.analysisRulesMatched}${instructionCount}${messages.labels.analysisRulesMatchedSuffix}`
+      : messages.labels.analysisRulesNotMatched
+    : null;
+
+const resolveReasonLabel = (
+  templateDecision: AskTemplateDecision,
+  messages: TemplateMessages,
+) =>
+  templateDecision.fallbackReason
+    ? messages.labels.fallbackReason
+    : messages.labels.decisionReason;
+
+const resolveGeneralTemplateDecisionPresentation = (
+  templateDecision: AskTemplateDecision,
+  messages: TemplateMessages,
+): TemplateDecisionPresentation => {
+  const reasonText = resolveDecisionReasonText(templateDecision, messages);
+  const requiredExternalDependencies =
+    templateDecision.requiredExternalDependencies?.filter(Boolean).join(', ') ||
+    null;
+  const hasExternalDependencyGap = Boolean(requiredExternalDependencies);
+  const instructionCountText = formatInstructionCount(
+    templateDecision.instructionCount,
+    messages,
+  );
+
+  return {
+    badge: hasExternalDependencyGap
+      ? messages.badges.missingExternalData
+      : messages.badges.knowledgeAnswer,
+    description:
+      joinParts([
+        templateDecision.templateTitle
+          ? `${messages.labels.template}${templateDecision.templateTitle}`
+          : null,
+        templateDecision.templateId != null
+          ? `${messages.labels.templateId}${templateDecision.templateId}`
+          : null,
+        hasExternalDependencyGap
+          ? messages.reasons.missingExternalData
+          : reasonText,
+        requiredExternalDependencies
+          ? `${messages.labels.requiredExternalDependencies}${requiredExternalDependencies}`
+          : null,
+        instructionCountText,
+        messages.labels.noSqlFlow,
+      ]) || null,
+    tagColor: hasExternalDependencyGap ? 'warning' : 'default',
+    templateTitle: templateDecision.templateTitle || null,
+  };
+};
+
 export const resolveTemplateDecisionPresentation = (
   templateDecision: AskTemplateDecision | null | undefined,
   messages: TemplateMessages,
+  options: TemplateDecisionPresentationOptions = {},
 ): TemplateDecisionPresentation | null => {
   if (!templateDecision) {
     return null;
+  }
+
+  if (options.isSqlFlow === false) {
+    return resolveGeneralTemplateDecisionPresentation(
+      templateDecision,
+      messages,
+    );
   }
 
   const reasonText = resolveDecisionReasonText(templateDecision, messages);
@@ -168,14 +249,26 @@ export const resolveTemplateDecisionPresentation = (
     templateDecision,
     messages,
   );
+  const directLlmSqlGeneration = isDirectLlmSqlGeneration(templateDecision);
   const missingParameters =
     templateDecision.missingParameters?.filter(Boolean).join(', ') || null;
   const parametersText = formatTemplateDecisionParameters(
     templateDecision.parameters,
   );
+  const instructionCountText = formatInstructionCount(
+    templateDecision.instructionCount,
+    messages,
+  );
   const requiredExternalDependencies =
     templateDecision.requiredExternalDependencies?.filter(Boolean).join(', ') ||
     null;
+  const sqlTemplateReferenceStatus = directLlmSqlGeneration
+    ? `${messages.labels.sqlTemplateReference}${messages.labels.notMatched}`
+    : null;
+  const reasonDescription =
+    reasonText && !directLlmSqlGeneration
+      ? `${resolveReasonLabel(templateDecision, messages)}${reasonText}`
+      : null;
 
   return {
     badge: resolveTemplateDecisionBadge(templateDecision, messages),
@@ -190,13 +283,15 @@ export const resolveTemplateDecisionPresentation = (
         templateDecision.mode
           ? `${messages.labels.mode}${templateDecision.mode}`
           : null,
-        reasonText ? `${messages.labels.fallbackReason}${reasonText}` : null,
+        sqlTemplateReferenceStatus,
+        reasonDescription,
         missingParameters
           ? `${messages.labels.missingParameters}${missingParameters}`
           : null,
         parametersText
           ? `${messages.labels.parameters}${parametersText}`
           : null,
+        instructionCountText,
         requiredExternalDependencies
           ? `${messages.labels.requiredExternalDependencies}${requiredExternalDependencies}`
           : null,

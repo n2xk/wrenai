@@ -17,6 +17,7 @@ import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { getAnswerIsFinished } from './answerGeneration';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
+import ResponseSpreadsheetSaveButton from './ResponseSpreadsheetSaveButton';
 
 const { Text } = Typography;
 
@@ -53,6 +54,47 @@ const AnswerMarkdownBody = styled.div`
 const getIsLoadingFinished = (status?: ThreadResponseAnswerStatus | null) =>
   getAnswerIsFinished(status) ||
   status === ThreadResponseAnswerStatus.STREAMING;
+
+const TRANSIENT_TEXT_ANSWER_ERROR_PATTERNS = [
+  /(?:read\s+)?ECONNRESET/i,
+  /socket hang up/i,
+  /Connection reset by peer/i,
+];
+
+type TextAnswerErrorLike = {
+  message?: string | null;
+  shortMessage?: string | null;
+} | null;
+
+export const resolveTextAnswerErrorPresentation = (
+  error?: TextAnswerErrorLike,
+) => {
+  const rawMessage = resolveAbortSafeErrorMessage(error?.message, '');
+  const rawShortMessage = resolveAbortSafeErrorMessage(error?.shortMessage, '');
+  if (!rawMessage && !rawShortMessage) {
+    return null;
+  }
+
+  const combinedRawMessage = [rawShortMessage, rawMessage]
+    .filter(Boolean)
+    .join(' ');
+  const isTransientUpstreamError = TRANSIENT_TEXT_ANSWER_ERROR_PATTERNS.some(
+    (pattern) => pattern.test(combinedRawMessage),
+  );
+
+  if (isTransientUpstreamError) {
+    return {
+      message: '文字解读生成失败',
+      description:
+        '数据结果已生成，但文字解读生成失败，可能是上游服务连接中断。你可以继续查看数据，或只重新生成文字解读。',
+    };
+  }
+
+  return {
+    message: rawShortMessage || '文字解读生成失败',
+    description: rawMessage || '文字解读生成失败，请稍后重试。',
+  };
+};
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
   const { onGenerateTextBasedAnswer } = usePromptThreadActionsStore();
@@ -168,26 +210,29 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     onGenerateTextBasedAnswer(id);
   };
 
-  const answerErrorMessage = resolveAbortSafeErrorMessage(
-    error?.message,
-    '回答生成失败，请稍后重试。',
-  );
-  const answerShortMessage =
-    resolveAbortSafeErrorMessage(
-      error?.shortMessage,
-      answerErrorMessage || '',
-    ) || '回答生成失败';
+  const answerErrorPresentation = resolveTextAnswerErrorPresentation(error);
 
-  if (error && answerErrorMessage) {
+  if (error && answerErrorPresentation) {
     return (
       <>
         <div className="pt-0 pb-2">
           <Alert
             className="mt-2 mb-2"
-            message={answerShortMessage}
-            description={answerErrorMessage}
+            title={answerErrorPresentation.message}
+            description={answerErrorPresentation.description}
             type="error"
             showIcon
+            action={
+              <ResultActionButton
+                icon={<ReloadOutlined />}
+                size="small"
+                type="link"
+                title="重新生成解读"
+                onClick={onRegenerateAnswer}
+              >
+                重新生成解读
+              </ResultActionButton>
+            }
           />
         </div>
       </>
@@ -212,10 +257,10 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
               icon={<ReloadOutlined />}
               size="small"
               type="link"
-              title="重新生成回答"
+              title="重新生成解读"
               onClick={onRegenerateAnswer}
             >
-              重新生成
+              重新生成解读
             </ResultActionButton>
           </div>
         )}
@@ -253,6 +298,16 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
                   error={previewDataResult.error}
                   loading={previewDataResult.loading}
                   previewData={previewDataResult?.data?.previewData}
+                  exportFileName={`thread-response-${id}-result`}
+                  extraActions={
+                    hasPreviewData ? (
+                      <>
+                        <ResponseSpreadsheetSaveButton
+                          response={threadResponse}
+                        />
+                      </>
+                    ) : null
+                  }
                 />
               </div>
             )}

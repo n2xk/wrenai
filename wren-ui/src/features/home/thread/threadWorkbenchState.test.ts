@@ -1,9 +1,40 @@
 import {
+  hasResponsePreviewArtifact,
+  hasResponseSqlArtifact,
   resolvePrimaryWorkbenchArtifact,
   resolveWorkbenchArtifactOwnerResponse,
 } from './threadWorkbenchState';
 
 describe('threadWorkbenchState', () => {
+  it('surfaces preview and SQL tabs for SQL responses with stale empty intent artifacts', () => {
+    const response = {
+      id: 31,
+      threadId: 8,
+      question: '查询充值金额',
+      sql: 'select sum(amount) from deposits',
+      resolvedIntent: {
+        kind: 'GENERAL_HELP',
+        mode: 'NEW',
+        target: 'THREAD_RESPONSE',
+        source: 'derived',
+        sourceThreadId: 8,
+        sourceResponseId: null,
+        confidence: null,
+        artifactPlan: {
+          teaserArtifacts: [],
+          workbenchArtifacts: [],
+          primaryTeaser: null,
+          primaryWorkbenchArtifact: null,
+        },
+        conversationAidPlan: null,
+      },
+    } as any;
+
+    expect(hasResponsePreviewArtifact(response)).toBe(true);
+    expect(hasResponseSqlArtifact(response)).toBe(true);
+    expect(resolvePrimaryWorkbenchArtifact(response)).toBe('preview');
+  });
+
   it('keeps chart follow-up chart artifact on the chart response itself', () => {
     const sourceResponse = {
       id: 11,

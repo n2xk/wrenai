@@ -54,6 +54,32 @@ describe('homeIntentContract', () => {
     });
   });
 
+  it('treats finished number-card responses as chart artifacts', () => {
+    const response = {
+      id: 19,
+      threadId: 3,
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 8,
+      sql: 'select 5 as bet_user_count',
+      chartDetail: {
+        status: 'FINISHED',
+        chartType: 'NUMBER',
+        chartability: {
+          recommendedDisplay: 'NUMBER_CARD',
+        },
+        renderHints: {
+          displayType: 'number_card',
+        },
+      },
+    };
+
+    expect(resolveResponseArtifactPlan(response)).toMatchObject({
+      teaserArtifacts: ['chart_teaser'],
+      workbenchArtifacts: ['chart', 'preview', 'sql'],
+      primaryWorkbenchArtifact: 'chart',
+    });
+  });
+
   it('maps general ask results to general-help intent without workbench artifacts', () => {
     const response = {
       threadId: 4,
@@ -76,6 +102,51 @@ describe('homeIntentContract', () => {
       mode: 'NEW',
       source: 'classifier',
       conversationAidPlan: null,
+    });
+  });
+
+  it('repairs stale persisted intent metadata when a response has SQL', () => {
+    const response: any = {
+      id: 31,
+      threadId: 8,
+      question: '查询充值金额',
+      sql: 'select sum(amount) from deposits',
+      resolvedIntent: {
+        kind: 'GENERAL_HELP',
+        mode: 'NEW',
+        target: 'THREAD_RESPONSE',
+        source: 'derived',
+        sourceThreadId: 8,
+        sourceResponseId: null,
+        confidence: null,
+        artifactPlan: {
+          teaserArtifacts: [],
+          workbenchArtifacts: [],
+          primaryTeaser: null,
+          primaryWorkbenchArtifact: null,
+        },
+        conversationAidPlan: null,
+      },
+    };
+
+    expect(resolveResponseArtifactPlan(response)).toEqual({
+      teaserArtifacts: ['preview_teaser'],
+      workbenchArtifacts: ['preview', 'sql'],
+      primaryTeaser: 'preview_teaser',
+      primaryWorkbenchArtifact: 'preview',
+    });
+    expect(resolveResponseHomeIntent(response)).toMatchObject({
+      kind: 'ASK',
+      artifactPlan: {
+        workbenchArtifacts: ['preview', 'sql'],
+        primaryWorkbenchArtifact: 'preview',
+      },
+      conversationAidPlan: {
+        responseAids: [
+          { kind: 'TRIGGER_CHART_FOLLOWUP', sourceResponseId: 31 },
+          { kind: 'TRIGGER_RECOMMEND_QUESTIONS', sourceResponseId: 31 },
+        ],
+      },
     });
   });
 

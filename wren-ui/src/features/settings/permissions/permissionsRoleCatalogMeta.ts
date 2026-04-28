@@ -42,6 +42,11 @@ export const MODULE_DEFINITIONS = [
       name.startsWith('api_token.'),
   },
   {
+    key: 'quality',
+    label: '质量治理',
+    match: (name: string) => name.startsWith('feedback.'),
+  },
+  {
     key: 'security',
     label: '身份与审计',
     match: (name: string) =>
@@ -115,6 +120,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   api_token: 'API Token',
   identity_provider: '身份目录',
   audit: '审计日志',
+  feedback: '问数反馈',
   group: '目录组',
   role: '角色与权限',
 };
@@ -200,6 +206,7 @@ const PERMISSION_HEADLINE_OVERRIDES: Record<string, string> = {
   'group.read': '查看目录组',
   'group.manage': '管理目录组',
   'audit.read': '查看审计日志',
+  'feedback.read': '查看问数反馈',
   'role.read': '查看角色目录',
   'role.manage': '管理角色与权限',
 };
@@ -241,6 +248,7 @@ const PERMISSION_DESCRIPTION_OVERRIDES: Record<string, string> = {
   'group.read': '查看目录组与绑定关系。',
   'group.manage': '管理目录组及其角色绑定。',
   'audit.read': '查看工作空间审计日志。',
+  'feedback.read': '查看用户对问数结果提交的有用性反馈、原因与问题上下文。',
   'role.read': '查看角色目录与绑定情况。',
   'role.manage': '管理角色与权限配置。',
 };

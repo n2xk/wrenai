@@ -62,6 +62,7 @@ const formatChartType = (chartType?: ChartType | string | null) => {
       GROUPED_BAR: '分组柱状图',
       LINE: '折线图',
       MULTI_LINE: '多折线图',
+      NUMBER: '指标卡',
       PIE: '饼图',
       STACKED_BAR: '堆叠柱状图',
     }[String(chartType).toUpperCase()] || String(chartType).toUpperCase()
@@ -435,10 +436,14 @@ const toPreparationStepFromThinking = (
         key: step.key,
         title:
           normalizedStatus === 'running'
-            ? '正在生成图表'
+            ? chartType === '指标卡'
+              ? '正在生成指标卡'
+              : '正在生成图表'
             : normalizedStatus === 'failed'
               ? '图表生成失败'
-              : '图表已生成',
+              : chartType === '指标卡'
+                ? '指标卡已生成'
+                : '图表已生成',
         description: step.detail || null,
         status: normalizedStatus,
       });
