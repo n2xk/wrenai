@@ -300,6 +300,7 @@ export const shouldBlockRuntimeScopeBootstrapRender = ({
   routerReady,
   syncFailed,
   allowLoadingWhileValidating = false,
+  hasExplicitSelectorInCurrentUrl = false,
 }: {
   isBrowser: boolean;
   currentUrl: string;
@@ -308,6 +309,7 @@ export const shouldBlockRuntimeScopeBootstrapRender = ({
   routerReady: boolean;
   syncFailed: boolean;
   allowLoadingWhileValidating?: boolean;
+  hasExplicitSelectorInCurrentUrl?: boolean;
 }) => {
   if (!isBrowser) {
     return false;
@@ -319,6 +321,14 @@ export const shouldBlockRuntimeScopeBootstrapRender = ({
     return true;
   }
   if (syncFailed) {
+    return false;
+  }
+  if (
+    allowLoadingWhileValidating &&
+    hasExplicitSelectorInCurrentUrl &&
+    nextUrl &&
+    nextUrl !== currentUrl
+  ) {
     return false;
   }
   return Boolean(nextUrl && nextUrl !== currentUrl);

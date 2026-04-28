@@ -14,18 +14,24 @@ import {
 } from './homeSidebarRequests';
 import {
   EMPTY_SIDEBAR_THREADS,
+  HOME_SIDEBAR_PAGE_SIZE,
   buildHomeSidebarThreadsRequestKey,
+  cacheHomeSidebarPageInfo,
   cacheHomeSidebarQueryEnabled,
   cacheHomeSidebarThreads,
+  getCachedHomeSidebarPageInfo,
   getCachedHomeSidebarQueryEnabled,
   getCachedHomeSidebarThreads,
   resolveHomeSidebarHeaderSelector,
+  resolveHomeSidebarRuntimeScopeReady,
   resolveHomeSidebarScopeKey,
   resolveHomeSidebarThreadSelector,
   shouldEagerLoadHomeSidebarOnIntent,
   shouldEnableSidebarQueryOnIntent,
   shouldFetchHomeSidebarThreads,
+  shouldLoadMoreHomeSidebarThreads,
   shouldScheduleDeferredSidebarLoad,
+  type HomeSidebarThreadsPagePayload,
   type HomeSidebarThreadRecord,
   type SidebarThread,
 } from './homeSidebarHelpers';
@@ -37,12 +43,15 @@ export {
   getCachedHomeSidebarQueryEnabled,
   getCachedHomeSidebarThreads,
   normalizeHomeSidebarThreads,
+  normalizeHomeSidebarThreadsPage,
   resolveHomeSidebarHeaderSelector,
+  resolveHomeSidebarRuntimeScopeReady,
   resolveHomeSidebarScopeKey,
   resolveHomeSidebarThreadSelector,
   shouldEagerLoadHomeSidebarOnIntent,
   shouldEnableSidebarQueryOnIntent,
   shouldFetchHomeSidebarThreads,
+  shouldLoadMoreHomeSidebarThreads,
   shouldScheduleDeferredSidebarLoad,
 } from './homeSidebarHelpers';
 
@@ -59,8 +68,12 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const runtimeSelectorState = useRuntimeSelectorState();
   const { hasRuntimeScope } = runtimeScopeNavigation;
-  const runtimeScopeReady =
-    !hasRuntimeScope || !runtimeSelectorState.initialLoading;
+  const runtimeScopeReady = resolveHomeSidebarRuntimeScopeReady({
+    hasRuntimeScope,
+    initialLoading: runtimeSelectorState.initialLoading,
+    workspaceId: runtimeScopeNavigation.selector.workspaceId,
+    runtimeScopeId: runtimeScopeNavigation.selector.runtimeScopeId,
+  });
   const deferInitialLoad = Boolean(options?.deferInitialLoad);
   const loadOnIntent = Boolean(options?.loadOnIntent);
   const disabled = Boolean(options?.disabled);
@@ -68,6 +81,12 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     workspaceId: runtimeScopeNavigation.selector.workspaceId,
     runtimeScopeId: runtimeScopeNavigation.selector.runtimeScopeId,
   });
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [committedSearchKeyword, setCommittedSearchKeyword] = useState('');
+  const normalizedSearchKeyword = committedSearchKeyword.trim();
+  const sidebarCacheKey = normalizedSearchKeyword
+    ? `${scopeKey}:search:${normalizedSearchKeyword.toLowerCase()}`
+    : scopeKey;
   const sidebarHeaderSelector = useMemo(
     () =>
       resolveHomeSidebarHeaderSelector({
@@ -85,12 +104,27 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       (!deferInitialLoad || getCachedHomeSidebarQueryEnabled(scopeKey)),
   );
   const [threads, setThreads] = useState(() =>
-    getCachedHomeSidebarThreads(scopeKey),
+    getCachedHomeSidebarThreads(sidebarCacheKey),
   );
+  const [pageInfo, setPageInfo] = useState(() =>
+    getCachedHomeSidebarPageInfo(sidebarCacheKey),
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadingMoreRef = useRef(false);
   const [initialized, setInitialized] = useState(
-    () => getCachedHomeSidebarThreads(scopeKey).length > 0,
+    () => getCachedHomeSidebarThreads(sidebarCacheKey).length > 0,
   );
   const requestCacheModeRef = useRef<RequestCache>('default');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setCommittedSearchKeyword(searchKeyword.trim());
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [searchKeyword]);
 
   useEffect(() => {
     if (disabled) {
@@ -149,47 +183,87 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   }, [disabled, hasRuntimeScope, queryEnabled, scopeKey]);
 
   const cachedThreads = useMemo(
-    () => getCachedHomeSidebarThreads(scopeKey),
-    [scopeKey],
+    () => getCachedHomeSidebarThreads(sidebarCacheKey),
+    [sidebarCacheKey],
+  );
+  const cachedPageInfo = useMemo(
+    () => getCachedHomeSidebarPageInfo(sidebarCacheKey),
+    [sidebarCacheKey],
+  );
+
+  const normalizeSidebarThreads = useCallback(
+    (nextThreads?: HomeSidebarThreadRecord[]): SidebarThread[] =>
+      (nextThreads || []).map((thread) => ({
+        id: thread.id.toString(),
+        name: thread.summary || '未命名对话',
+        selector: resolveHomeSidebarThreadSelector(thread),
+      })),
+    [],
+  );
+
+  const syncThreadsPage = useCallback(
+    (payload: HomeSidebarThreadsPagePayload, append = false) => {
+      const normalizedThreads = normalizeSidebarThreads(payload.threads);
+      const nextThreads = append
+        ? Array.from(
+            new Map(
+              [
+                ...getCachedHomeSidebarThreads(sidebarCacheKey),
+                ...normalizedThreads,
+              ].map((thread) => [thread.id, thread]),
+            ).values(),
+          )
+        : normalizedThreads;
+      const nextPageInfo = {
+        nextCursor: payload.nextCursor,
+        hasMore: payload.hasMore,
+      };
+
+      cacheHomeSidebarThreads(sidebarCacheKey, nextThreads);
+      cacheHomeSidebarPageInfo(sidebarCacheKey, nextPageInfo);
+      const cachedNormalizedThreads =
+        getCachedHomeSidebarThreads(sidebarCacheKey);
+      setThreads(cachedNormalizedThreads);
+      setPageInfo(nextPageInfo);
+      return cachedNormalizedThreads;
+    },
+    [normalizeSidebarThreads, sidebarCacheKey],
   );
 
   const syncThreads = useCallback(
-    (nextThreads?: HomeSidebarThreadRecord[]) => {
-      const normalizedThreads: SidebarThread[] = (nextThreads || []).map(
-        (thread) => ({
-          id: thread.id.toString(),
-          name: thread.summary || '未命名对话',
-          selector: resolveHomeSidebarThreadSelector(thread),
-        }),
-      );
-      cacheHomeSidebarThreads(scopeKey, normalizedThreads);
-      const cachedNormalizedThreads = getCachedHomeSidebarThreads(scopeKey);
-      setThreads(cachedNormalizedThreads);
-      return cachedNormalizedThreads;
-    },
-    [scopeKey],
+    (payload: HomeSidebarThreadsPagePayload) => syncThreadsPage(payload, false),
+    [syncThreadsPage],
   );
 
   useEffect(() => {
     if (disabled) {
       setThreads(EMPTY_SIDEBAR_THREADS);
+      setPageInfo({
+        nextCursor: null,
+        hasMore: false,
+      });
       setInitialized(true);
       return;
     }
 
     setThreads(cachedThreads);
+    setPageInfo(cachedPageInfo);
     setInitialized(cachedThreads.length > 0);
-  }, [cachedThreads, disabled, scopeKey]);
+  }, [cachedPageInfo, cachedThreads, disabled, sidebarCacheKey]);
 
   const requestUrl = useMemo(
-    () => buildHomeSidebarThreadsRequestKey(sidebarHeaderSelector),
-    [sidebarHeaderSelector],
+    () =>
+      buildHomeSidebarThreadsRequestKey(sidebarHeaderSelector, {
+        limit: HOME_SIDEBAR_PAGE_SIZE,
+        keyword: normalizedSearchKeyword,
+      }),
+    [normalizedSearchKeyword, sidebarHeaderSelector],
   );
   const {
     loading,
     refetch: refetchThreads,
     cancel: cancelThreadsRequest,
-  } = useRestRequest<SidebarThread[], HomeSidebarThreadRecord[]>({
+  } = useRestRequest<SidebarThread[], HomeSidebarThreadsPagePayload>({
     enabled: !disabled && hasRuntimeScope && runtimeScopeReady && queryEnabled,
     auto: false,
     initialData: EMPTY_SIDEBAR_THREADS,
@@ -227,12 +301,16 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     } = {}) => {
       if (disabled || !hasRuntimeScope) {
         setThreads(EMPTY_SIDEBAR_THREADS);
+        setPageInfo({
+          nextCursor: null,
+          hasMore: false,
+        });
         setInitialized(true);
         return EMPTY_SIDEBAR_THREADS;
       }
 
       if (!runtimeScopeReady) {
-        return getCachedHomeSidebarThreads(scopeKey);
+        return getCachedHomeSidebarThreads(sidebarCacheKey);
       }
 
       requestCacheModeRef.current = networkOnly ? 'no-store' : 'default';
@@ -240,14 +318,20 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       try {
         return await refetchThreads();
       } catch (_error) {
-        const cachedFallback = getCachedHomeSidebarThreads(scopeKey);
+        const cachedFallback = getCachedHomeSidebarThreads(sidebarCacheKey);
         setThreads(cachedFallback);
         return cachedFallback;
       } finally {
         requestCacheModeRef.current = 'default';
       }
     },
-    [disabled, hasRuntimeScope, refetchThreads, runtimeScopeReady, scopeKey],
+    [
+      disabled,
+      hasRuntimeScope,
+      refetchThreads,
+      runtimeScopeReady,
+      sidebarCacheKey,
+    ],
   );
 
   useEffect(() => {
@@ -278,13 +362,13 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     }
 
     if (!runtimeScopeReady) {
-      return getCachedHomeSidebarThreads(scopeKey);
+      return getCachedHomeSidebarThreads(sidebarCacheKey);
     }
 
     cacheHomeSidebarQueryEnabled(scopeKey);
     if (!queryEnabled) {
       setQueryEnabled(true);
-      return getCachedHomeSidebarThreads(scopeKey);
+      return getCachedHomeSidebarThreads(sidebarCacheKey);
     }
 
     return loadThreads({ networkOnly: true });
@@ -294,7 +378,70 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
     loadThreads,
     queryEnabled,
     runtimeScopeReady,
+    sidebarCacheKey,
     scopeKey,
+  ]);
+
+  const loadMore = useCallback(async () => {
+    if (
+      !shouldLoadMoreHomeSidebarThreads({
+        disabled,
+        hasRuntimeScope,
+        loading: loading || loadingMoreRef.current,
+        hasMore: pageInfo.hasMore,
+        nextCursor: pageInfo.nextCursor,
+      })
+    ) {
+      return threads;
+    }
+
+    if (!runtimeScopeReady) {
+      return threads;
+    }
+
+    const nextPageUrl = buildHomeSidebarThreadsRequestKey(
+      sidebarHeaderSelector,
+      {
+        limit: HOME_SIDEBAR_PAGE_SIZE,
+        cursor: pageInfo.nextCursor,
+        keyword: normalizedSearchKeyword,
+      },
+    );
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const nextPage = await loadHomeSidebarThreadsPayload({
+        requestUrl: nextPageUrl,
+        cacheMode: 'default',
+      });
+      setInitialized(true);
+      return syncThreadsPage(nextPage, true);
+    } catch (error: any) {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载更多历史对话失败，请稍后重试',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
+      return threads;
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [
+    disabled,
+    hasRuntimeScope,
+    loading,
+    normalizedSearchKeyword,
+    pageInfo.hasMore,
+    pageInfo.nextCursor,
+    runtimeScopeReady,
+    sidebarHeaderSelector,
+    syncThreadsPage,
+    threads,
   ]);
 
   const onSelect = useCallback(
@@ -371,34 +518,50 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       !shouldEagerLoadHomeSidebarOnIntent({
         disabled,
         hasRuntimeScope,
-        cachedThreadCount: getCachedHomeSidebarThreads(scopeKey).length,
+        cachedThreadCount: getCachedHomeSidebarThreads(sidebarCacheKey).length,
       })
     ) {
       return;
     }
 
     void loadThreads();
-  }, [disabled, hasRuntimeScope, loadThreads, queryEnabled, scopeKey]);
+  }, [
+    disabled,
+    hasRuntimeScope,
+    loadThreads,
+    queryEnabled,
+    scopeKey,
+    sidebarCacheKey,
+  ]);
 
   return useMemo(
     () => ({
       data: { threads },
       loading,
       initialized,
+      hasMore: pageInfo.hasMore,
+      loadingMore,
+      searchKeyword,
+      setSearchKeyword,
       onSelect,
       onRename,
       onDelete,
       refetch: safeRefetch,
+      loadMore,
       ensureLoaded,
     }),
     [
       ensureLoaded,
+      loadMore,
+      pageInfo.hasMore,
       initialized,
       loading,
+      loadingMore,
       onDelete,
       onRename,
       onSelect,
       safeRefetch,
+      searchKeyword,
       threads,
     ],
   );

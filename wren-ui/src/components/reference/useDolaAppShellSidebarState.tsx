@@ -25,14 +25,22 @@ const HISTORY_VIRTUAL_OVERSCAN = 6;
 export type UseDolaAppShellSidebarStateArgs = {
   navItems: DolaShellNavItem[];
   historyItems?: DolaShellHistoryItem[];
+  historyHasMore?: boolean;
+  historyLoading?: boolean;
   onHistoryIntent?: () => void;
+  onHistoryLoadMore?: () => void;
+  onHistorySearchChange?: (keyword: string) => void;
   onSettingsClick?: () => void;
 };
 
 export default function useDolaAppShellSidebarState({
   navItems,
   historyItems = [],
+  historyHasMore = false,
+  historyLoading = false,
   onHistoryIntent,
+  onHistoryLoadMore,
+  onHistorySearchChange,
   onSettingsClick,
 }: UseDolaAppShellSidebarStateArgs) {
   const router = useRouter();
@@ -157,6 +165,14 @@ export default function useDolaAppShellSidebarState({
   const handleHistoryIntent = useCallback(() => {
     onHistoryIntent?.();
   }, [onHistoryIntent]);
+
+  const handleKeywordChange = useCallback(
+    (nextKeyword: string) => {
+      setKeyword(nextKeyword);
+      onHistorySearchChange?.(nextKeyword);
+    },
+    [onHistorySearchChange],
+  );
 
   const handleNavItemSelect = useCallback(
     (item: DolaShellNavItem) => {
@@ -403,13 +419,52 @@ export default function useDolaAppShellSidebarState({
       cacheShellUiState(scopeKey, {
         historyScrollTop: historyScroller.scrollTop,
       });
+
+      const remainingDistance =
+        historyScroller.scrollHeight -
+        historyScroller.scrollTop -
+        historyScroller.clientHeight;
+      if (
+        historyHasMore &&
+        !historyLoading &&
+        remainingDistance <= HISTORY_ITEM_ESTIMATED_HEIGHT * 3
+      ) {
+        onHistoryLoadMore?.();
+      }
     };
 
     historyScroller.addEventListener('scroll', handleScroll);
     return () => {
       historyScroller.removeEventListener('scroll', handleScroll);
     };
-  }, [collapsed, scopeKey]);
+  }, [collapsed, historyHasMore, historyLoading, onHistoryLoadMore, scopeKey]);
+
+  useEffect(() => {
+    const historyScroller = historyScrollerRef.current;
+    if (
+      !historyScroller ||
+      collapsed ||
+      !historyHasMore ||
+      historyLoading ||
+      !onHistoryLoadMore
+    ) {
+      return;
+    }
+
+    if (
+      historyScroller.scrollHeight - historyScroller.clientHeight <=
+      HISTORY_ITEM_ESTIMATED_HEIGHT * 2
+    ) {
+      onHistoryLoadMore();
+    }
+  }, [
+    collapsed,
+    filteredHistory.length,
+    historyHasMore,
+    historyLoading,
+    historyViewportHeight,
+    onHistoryLoadMore,
+  ]);
 
   return {
     router,
@@ -418,7 +473,7 @@ export default function useDolaAppShellSidebarState({
     collapsed,
     setCollapsed,
     keyword,
-    setKeyword,
+    setKeyword: handleKeywordChange,
     loggingOut,
     historyScrollerRef,
     filteredHistory,

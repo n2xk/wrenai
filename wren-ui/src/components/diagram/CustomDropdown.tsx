@@ -168,9 +168,10 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
     isSupportCached,
     disableRefresh,
     disableDelete,
+    hideCategoryToggle,
   } = props;
   const items: DropdownItem[] = [
-    {
+    !hideCategoryToggle && {
       label: isHideLegend ? (
         <>
           <EyeOutlined className="mr-2" />
@@ -205,9 +206,10 @@ export const DashboardItemDropdown = makeDropdown((props: Props) => {
       className: 'red-5',
       key: MORE_ACTION.DELETE,
       disabled: Boolean(disableDelete),
-      onClick: ({ domEvent }) => domEvent.stopPropagation(),
+      onClick: ({ domEvent }: { domEvent: React.MouseEvent }) =>
+        domEvent.stopPropagation(),
     },
-  ];
+  ].filter(Boolean) as DropdownItem[];
   return items;
 });
 

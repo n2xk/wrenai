@@ -144,6 +144,7 @@ export default async function handler(
         responsePayload,
         runtimeScope,
         apiType: ApiType.GET_THREADS,
+        threadId: String(threadId),
         requestPayload: {
           id: threadId,
         },
@@ -169,6 +170,7 @@ export default async function handler(
         responsePayload: toThreadResponse(updatedThread),
         runtimeScope,
         apiType: ApiType.UPDATE_THREAD,
+        threadId: String(threadId),
         requestPayload: {
           id: threadId,
           summary,
@@ -188,6 +190,7 @@ export default async function handler(
       },
       runtimeScope,
       apiType: ApiType.DELETE_THREAD,
+      threadId: String(threadId),
       requestPayload: {
         id: threadId,
       },

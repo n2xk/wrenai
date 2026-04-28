@@ -5,6 +5,7 @@ import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { Path } from '@/utils/enum';
 import { getReferenceDisplayThreadTitle } from '@/utils/referenceDemoKnowledge';
 import DolaAppShell from './DolaAppShell';
+import type { DolaShellHistoryItem } from './dolaShellUtils';
 import {
   PersistentShellProvider,
   usePersistentShellEmbedded,
@@ -14,6 +15,8 @@ import { buildNovaShellNavItems, NovaShellNavKey } from './novaShellNavigation';
 const PERSISTENT_CONSOLE_SHELL_PATHS = new Set<string>([
   Path.Home,
   Path.HomeDashboard,
+  Path.HomeSpreadsheets,
+  Path.HomeSpreadsheet,
   Path.Thread,
   Path.Knowledge,
 ]);
@@ -34,6 +37,9 @@ export const resolvePersistentShellActiveNav = (
       return 'knowledge';
     case Path.HomeDashboard:
       return 'dashboard';
+    case Path.HomeSpreadsheets:
+    case Path.HomeSpreadsheet:
+      return 'spreadsheet';
     default:
       return undefined;
   }
@@ -71,6 +77,8 @@ export const resolvePersistentShellLayoutProps = (pathname?: string | null) => {
         stretchContent: true,
       };
     case Path.HomeDashboard:
+    case Path.HomeSpreadsheets:
+    case Path.HomeSpreadsheet:
       return {
         mainPaddingTop: '8px',
         stretchContent: true,
@@ -118,15 +126,37 @@ export default function PersistentConsoleShell({ children }: Props) {
       }),
     [activeNav, runtimeScopeNavigation.pushWorkspace],
   );
-  const historyItems = useMemo(
+  const historyItems = useMemo(() => {
+    return (homeSidebar.data?.threads || []).map((thread) => ({
+      id: thread.id,
+      title: getReferenceDisplayThreadTitle(thread.name),
+      active: activeHistoryId ? thread.id === activeHistoryId : false,
+      selector: thread.selector,
+    }));
+  }, [activeHistoryId, homeSidebar.data?.threads]);
+  const handleHistoryRename = useMemo(
     () =>
-      (homeSidebar.data?.threads || []).map((thread) => ({
-        id: thread.id,
-        title: getReferenceDisplayThreadTitle(thread.name),
-        active: activeHistoryId ? thread.id === activeHistoryId : false,
-        selector: thread.selector,
-      })),
-    [activeHistoryId, homeSidebar.data?.threads],
+      homeSidebar.onRename
+        ? (item: DolaShellHistoryItem, nextTitle: string) =>
+            homeSidebar.onRename(item.id, nextTitle)
+        : undefined,
+    [homeSidebar.onRename],
+  );
+  const handleHistoryDelete = useMemo(
+    () =>
+      homeSidebar.onDelete
+        ? async (item: DolaShellHistoryItem) => {
+            await homeSidebar.onDelete(item.id);
+            if (activeHistoryId === item.id) {
+              void runtimeScopeNavigation.pushWorkspace(Path.Home);
+            }
+          }
+        : undefined,
+    [
+      activeHistoryId,
+      homeSidebar.onDelete,
+      runtimeScopeNavigation.pushWorkspace,
+    ],
   );
   const contextValue = useMemo(
     () => ({
@@ -145,7 +175,13 @@ export default function PersistentConsoleShell({ children }: Props) {
       navItems={navItems}
       historyItems={historyItems}
       historyLoading={homeSidebar.loading && historyItems.length === 0}
+      historyHasMore={homeSidebar.hasMore}
+      historyLoadingMore={homeSidebar.loadingMore}
       onHistoryIntent={homeSidebar.ensureLoaded}
+      onHistoryLoadMore={homeSidebar.loadMore}
+      onHistoryRename={handleHistoryRename}
+      onHistoryDelete={handleHistoryDelete}
+      onHistorySearchChange={homeSidebar.setSearchKeyword}
       {...layoutProps}
     >
       <PersistentShellProvider value={contextValue}>

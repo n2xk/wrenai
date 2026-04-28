@@ -63,7 +63,7 @@ const InlinePromptRow = styled.div`
   width: 100%;
 `;
 
-const PromptFooter = styled.div`
+const PromptFooter = styled.div.attrs({ className: 'prompt-footer' })`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -71,7 +71,9 @@ const PromptFooter = styled.div`
   width: 100%;
 `;
 
-const PromptFooterTools = styled.div`
+const PromptFooterTools = styled.div.attrs({
+  className: 'prompt-footer-tools',
+})`
   min-width: 0;
   display: flex;
   flex-wrap: wrap;

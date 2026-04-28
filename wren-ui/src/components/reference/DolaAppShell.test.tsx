@@ -9,6 +9,7 @@ import DolaAppShell, {
   resolveShellPrefetchUrls,
   resolveShellUiScopeKey,
   shouldPrefetchShellIntent,
+  shouldShowStableHistoryDuringRefresh,
 } from './DolaAppShell';
 
 const mockUseAuthSession = jest.fn();
@@ -85,6 +86,30 @@ jest.mock('antd', () => {
     React.createElement('div', { ...props, 'data-kind': 'input' }, prefix);
   const Dropdown = ({ children }: any) =>
     React.createElement('div', { 'data-kind': 'dropdown' }, children);
+  const Modal = Object.assign(
+    ({ children, open }: any) =>
+      open
+        ? React.createElement('div', { 'data-kind': 'modal' }, children)
+        : null,
+    {
+      confirm: () => undefined,
+      destroyAll: () => undefined,
+      error: () => undefined,
+      info: () => undefined,
+      success: () => undefined,
+      warning: () => undefined,
+    },
+  );
+  const message = {
+    destroy: () => undefined,
+    error: () => undefined,
+    info: () => undefined,
+    loading: () => undefined,
+    open: () => undefined,
+    success: () => undefined,
+    warning: () => undefined,
+  };
+  const notification = message;
   const Popover = ({ children }: any) =>
     React.createElement('div', { 'data-kind': 'popover' }, children);
   const Avatar = ({ children, ...props }: any) =>
@@ -128,9 +153,12 @@ jest.mock('antd', () => {
     Input,
     Layout,
     Menu,
+    Modal,
     Popover,
     Space,
     Typography,
+    message,
+    notification,
   };
 });
 
@@ -203,6 +231,34 @@ describe('DolaAppShell', () => {
     });
   });
 
+  it('renders history item action entry when rename/delete handlers are available', () => {
+    const html = renderToStaticMarkup(
+      <DolaAppShell
+        navItems={[
+          {
+            key: 'home',
+            label: '新对话',
+            icon: <span>⌘</span>,
+          },
+        ]}
+        historyItems={[
+          {
+            id: 'thread-1',
+            title: '渠道分析',
+            active: true,
+          },
+        ]}
+        onHistoryRename={jest.fn()}
+        onHistoryDelete={jest.fn()}
+      >
+        <div>main-content</div>
+      </DolaAppShell>,
+    );
+
+    expect(html).toContain('渠道分析');
+    expect(html).toContain('更多操作：渠道分析');
+  });
+
   it('renders loading copy instead of empty history text while history is fetching', () => {
     const html = renderToStaticMarkup(
       <DolaAppShell
@@ -262,6 +318,7 @@ describe('DolaAppShell', () => {
     ).toEqual([
       '/home?workspaceId=ws-1',
       '/home/dashboard?workspaceId=ws-1',
+      '/home/spreadsheets?workspaceId=ws-1',
       '/knowledge?workspaceId=ws-1',
     ]);
   });
@@ -444,5 +501,33 @@ describe('DolaAppShell', () => {
         2,
       ),
     ).toEqual([]);
+  });
+
+  it('keeps the last history list visible while a new empty history request is loading', () => {
+    expect(
+      shouldShowStableHistoryDuringRefresh({
+        historyItems: [],
+        historyLoading: true,
+        stableHistoryItems: [
+          {
+            id: 'thread-1',
+            title: '上一批历史',
+          },
+        ],
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldShowStableHistoryDuringRefresh({
+        historyItems: [],
+        historyLoading: false,
+        stableHistoryItems: [
+          {
+            id: 'thread-1',
+            title: '上一批历史',
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 });

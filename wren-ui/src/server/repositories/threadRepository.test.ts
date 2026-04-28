@@ -4,7 +4,10 @@ const buildKnexRows = (rows: any[]) => {
   const builder: any = {
     where: jest.fn(() => builder),
     andWhere: jest.fn(() => builder),
+    andWhereRaw: jest.fn(() => builder),
+    orWhere: jest.fn(() => builder),
     whereNull: jest.fn(() => builder),
+    limit: jest.fn(() => builder),
     orderBy: jest.fn(() => builder),
     first: jest.fn().mockResolvedValue(rows[0] ?? null),
     then: (
@@ -103,5 +106,36 @@ describe('ThreadRepository runtime scope query', () => {
     expect(builder.whereNull).not.toHaveBeenCalledWith('knowledge_base_id');
     expect(builder.whereNull).not.toHaveBeenCalledWith('kb_snapshot_id');
     expect(builder.whereNull).not.toHaveBeenCalledWith('deploy_hash');
+  });
+
+  it('applies pagination and keyword filters for sidebar history pages', async () => {
+    const { knex, builder } = buildKnexRows([]);
+    const repository = new ThreadRepository(knex as unknown as any);
+
+    await repository.listAllTimeDescOrderByScope(
+      {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+      },
+      {
+        limit: 51,
+        keyword: '充值',
+        cursor: {
+          createdAt: '2026-04-01T00:00:00.000Z',
+          id: 101,
+        },
+      },
+    );
+
+    expect(builder.andWhereRaw).toHaveBeenCalledWith('LOWER(summary) LIKE ?', [
+      '%充值%',
+    ]);
+    expect(builder.andWhere).toHaveBeenCalledWith(expect.any(Function));
+    expect(builder.limit).toHaveBeenCalledWith(51);
+    expect(builder.orderBy).toHaveBeenCalledWith('created_at', 'desc');
+    expect(builder.orderBy).toHaveBeenCalledWith('id', 'desc');
   });
 });

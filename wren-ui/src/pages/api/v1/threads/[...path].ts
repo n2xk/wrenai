@@ -185,6 +185,10 @@ export default async function handler(
       responsePayload,
       runtimeScope,
       apiType: ApiType.ASK,
+      threadId:
+        response?.threadId != null
+          ? String(response.threadId)
+          : String(threadId),
       requestPayload: {
         id: threadId,
         data: payload,

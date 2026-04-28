@@ -2,12 +2,14 @@ import BookOutlined from '@ant-design/icons/BookOutlined';
 import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 import ScheduleOutlined from '@ant-design/icons/ScheduleOutlined';
+import TableOutlined from '@ant-design/icons/TableOutlined';
 import TeamOutlined from '@ant-design/icons/TeamOutlined';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import ApiOutlined from '@ant-design/icons/ApiOutlined';
 import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlined';
 import AuditOutlined from '@ant-design/icons/AuditOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
+import MessageOutlined from '@ant-design/icons/MessageOutlined';
 import { Path } from '@/utils/enum';
 import { peekPrefetchedFirstDashboardId } from '@/utils/runtimePagePrefetch';
 import { DolaShellNavItem } from './DolaAppShell';
@@ -16,6 +18,7 @@ export type NovaShellNavKey =
   | 'home'
   | 'knowledge'
   | 'dashboard'
+  | 'spreadsheet'
   | 'settingsProfile'
   | 'settingsWorkspace'
   | 'settingsConnectors'
@@ -26,6 +29,7 @@ export type NovaShellNavKey =
   | 'settingsAutomation'
   | 'settingsAudit'
   | 'settingsDiagnostics'
+  | 'settingsFeedback'
   | 'settingsPlatform'
   | 'settingsSystemTasks';
 type NovaNavParams = Record<
@@ -70,6 +74,14 @@ export const buildNovaShellNavItems = ({
     active: activeKey === 'dashboard',
     path: activeKey === 'dashboard' ? undefined : Path.HomeDashboard,
     params: activeKey === 'dashboard' ? undefined : resolveDashboardNavParams(),
+  },
+  {
+    key: 'spreadsheet',
+    label: '数据表',
+    icon: <TableOutlined />,
+    iconKey: 'spreadsheet',
+    active: activeKey === 'spreadsheet',
+    path: activeKey === 'spreadsheet' ? undefined : Path.HomeSpreadsheets,
   },
 ];
 
@@ -167,6 +179,16 @@ export const buildNovaSettingsNavItems = ({
         activeKey === 'settingsSystemTasks'
           ? undefined
           : Path.SettingsSystemTasks,
+    },
+    {
+      key: 'settingsFeedback',
+      label: '问数反馈',
+      icon: <MessageOutlined />,
+      iconKey: 'settingsFeedback',
+      sectionLabel: '观测与运维',
+      active: activeKey === 'settingsFeedback',
+      path:
+        activeKey === 'settingsFeedback' ? undefined : Path.SettingsFeedback,
     },
     {
       key: 'settingsAudit',

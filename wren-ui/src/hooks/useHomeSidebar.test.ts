@@ -5,12 +5,15 @@ import {
   getCachedHomeSidebarThreads,
   getCachedHomeSidebarQueryEnabled,
   normalizeHomeSidebarThreads,
+  normalizeHomeSidebarThreadsPage,
   resolveHomeSidebarHeaderSelector,
+  resolveHomeSidebarRuntimeScopeReady,
   resolveHomeSidebarScopeKey,
   resolveHomeSidebarThreadSelector,
   shouldFetchHomeSidebarThreads,
   shouldEagerLoadHomeSidebarOnIntent,
   shouldEnableSidebarQueryOnIntent,
+  shouldLoadMoreHomeSidebarThreads,
   shouldScheduleDeferredSidebarLoad,
 } from './useHomeSidebar';
 
@@ -49,6 +52,33 @@ describe('useHomeSidebar helpers', () => {
     expect(resolveHomeSidebarHeaderSelector({})).toEqual({});
   });
 
+  it('keeps the workspace-scoped sidebar ready during knowledge-only selector loading', () => {
+    expect(
+      resolveHomeSidebarRuntimeScopeReady({
+        hasRuntimeScope: true,
+        initialLoading: true,
+        workspaceId: 'workspace-1',
+      }),
+    ).toBe(true);
+
+    expect(
+      resolveHomeSidebarRuntimeScopeReady({
+        hasRuntimeScope: true,
+        initialLoading: true,
+        runtimeScopeId: 'runtime-1',
+      }),
+    ).toBe(true);
+
+    expect(
+      resolveHomeSidebarRuntimeScopeReady({
+        hasRuntimeScope: true,
+        initialLoading: true,
+        workspaceId: null,
+        runtimeScopeId: null,
+      }),
+    ).toBe(false);
+  });
+
   it('builds the sidebar threads rest url with runtime scope query params', () => {
     expect(
       buildHomeSidebarThreadsUrl({
@@ -65,6 +95,23 @@ describe('useHomeSidebar helpers', () => {
         knowledgeBaseId: 'kb-1',
       }),
     ).toBe('/api/v1/threads?workspaceId=workspace-1&knowledgeBaseId=kb-1');
+  });
+
+  it('builds paginated sidebar thread urls with cursor and keyword', () => {
+    expect(
+      buildHomeSidebarThreadsRequestKey(
+        {
+          workspaceId: 'workspace-1',
+        },
+        {
+          limit: 50,
+          cursor: 'cursor-1',
+          keyword: '充值',
+        },
+      ),
+    ).toBe(
+      '/api/v1/threads?limit=50&cursor=cursor-1&keyword=%E5%85%85%E5%80%BC&workspaceId=workspace-1',
+    );
   });
 
   it('builds the sidebar thread detail rest url with runtime scope query params', () => {
@@ -108,6 +155,26 @@ describe('useHomeSidebar helpers', () => {
   it('normalizes invalid sidebar thread payloads to an empty list', () => {
     expect(normalizeHomeSidebarThreads(null)).toEqual([]);
     expect(normalizeHomeSidebarThreads({ threads: [] })).toEqual([]);
+  });
+
+  it('normalizes paginated sidebar thread payloads', () => {
+    expect(
+      normalizeHomeSidebarThreadsPage({
+        threads: [{ id: 1, summary: '收入分析' }],
+        nextCursor: 'cursor-2',
+        hasMore: true,
+      }),
+    ).toEqual({
+      threads: [{ id: 1, summary: '收入分析' }],
+      nextCursor: 'cursor-2',
+      hasMore: true,
+    });
+
+    expect(normalizeHomeSidebarThreadsPage([{ id: 1 }])).toEqual({
+      threads: [{ id: 1 }],
+      nextCursor: null,
+      hasMore: false,
+    });
   });
 
   it('starts with sidebar query cache disabled for a fresh scope', () => {
@@ -229,6 +296,38 @@ describe('useHomeSidebar helpers', () => {
         disabled: false,
         hasRuntimeScope: false,
         cachedThreadCount: 0,
+      }),
+    ).toBe(false);
+  });
+
+  it('only loads more sidebar threads when a next cursor is available', () => {
+    expect(
+      shouldLoadMoreHomeSidebarThreads({
+        disabled: false,
+        hasRuntimeScope: true,
+        loading: false,
+        hasMore: true,
+        nextCursor: 'cursor-1',
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldLoadMoreHomeSidebarThreads({
+        disabled: false,
+        hasRuntimeScope: true,
+        loading: true,
+        hasMore: true,
+        nextCursor: 'cursor-1',
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldLoadMoreHomeSidebarThreads({
+        disabled: false,
+        hasRuntimeScope: true,
+        loading: false,
+        hasMore: true,
+        nextCursor: null,
       }),
     ).toBe(false);
   });

@@ -4,8 +4,8 @@ import {
 } from '@/utils/rest';
 import {
   buildHomeSidebarThreadDetailUrl,
-  normalizeHomeSidebarThreads,
-  type HomeSidebarThreadRecord,
+  normalizeHomeSidebarThreadsPage,
+  type HomeSidebarThreadsPagePayload,
 } from './homeSidebarHelpers';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 
@@ -19,7 +19,7 @@ export const loadHomeSidebarThreadsPayload = async ({
   cacheMode?: RequestCache;
   signal?: AbortSignal;
   fetcher?: typeof fetch;
-}) => {
+}): Promise<HomeSidebarThreadsPagePayload> => {
   const payload = await withTransientRuntimeScopeRetry({
     signal,
     loader: async () => {
@@ -34,7 +34,7 @@ export const loadHomeSidebarThreadsPayload = async ({
     },
   });
 
-  return normalizeHomeSidebarThreads(payload) as HomeSidebarThreadRecord[];
+  return normalizeHomeSidebarThreadsPage(payload);
 };
 
 export const renameHomeSidebarThread = async ({

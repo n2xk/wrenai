@@ -1,4 +1,4 @@
-import { ReactNode, memo } from 'react';
+import { ReactNode, memo, useEffect, useState } from 'react';
 import { Divider } from 'antd';
 import styled from 'styled-components';
 import DolaShellFooterPanel from './DolaShellFooterPanel';
@@ -9,6 +9,7 @@ import {
   areShellNavItemsEqual,
   DolaShellHistoryItem,
   DolaShellNavItem,
+  shouldShowStableHistoryDuringRefresh,
 } from './dolaShellUtils';
 import { Main, MainInner, MainTopbar, Shell, Sidebar } from './dolaShellStyles';
 import useDolaAppShellSidebarState from './useDolaAppShellSidebarState';
@@ -24,13 +25,23 @@ export {
   resolveShellPrefetchUrls,
   resolveShellUiScopeKey,
   shouldPrefetchShellIntent,
+  shouldShowStableHistoryDuringRefresh,
 } from './dolaShellUtils';
 
 interface Props {
   navItems: DolaShellNavItem[];
   historyItems?: DolaShellHistoryItem[];
   historyLoading?: boolean;
+  historyHasMore?: boolean;
+  historyLoadingMore?: boolean;
   onHistoryIntent?: () => void;
+  onHistoryLoadMore?: () => void;
+  onHistoryRename?: (
+    item: DolaShellHistoryItem,
+    nextTitle: string,
+  ) => Promise<void> | void;
+  onHistoryDelete?: (item: DolaShellHistoryItem) => Promise<void> | void;
+  onHistorySearchChange?: (keyword: string) => void;
   onPrimaryAction?: () => void;
   primaryActionLabel?: string;
   primaryActionIcon?: ReactNode;
@@ -55,12 +66,20 @@ interface Props {
 
 type SidebarProps = Omit<Props, 'children' | 'topbarExtra'>;
 
+const EMPTY_HISTORY_ITEMS: DolaShellHistoryItem[] = [];
+
 const areDolaAppShellSidebarPropsEqual = (
   previous: SidebarProps,
   next: SidebarProps,
 ) =>
   previous.historyLoading === next.historyLoading &&
+  previous.historyHasMore === next.historyHasMore &&
+  previous.historyLoadingMore === next.historyLoadingMore &&
   previous.onHistoryIntent === next.onHistoryIntent &&
+  previous.onHistoryLoadMore === next.onHistoryLoadMore &&
+  previous.onHistoryRename === next.onHistoryRename &&
+  previous.onHistoryDelete === next.onHistoryDelete &&
+  previous.onHistorySearchChange === next.onHistorySearchChange &&
   previous.onPrimaryAction === next.onPrimaryAction &&
   previous.primaryActionLabel === next.primaryActionLabel &&
   previous.primaryActionIcon === next.primaryActionIcon &&
@@ -84,9 +103,15 @@ const areDolaAppShellSidebarPropsEqual = (
 
 const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
   navItems,
-  historyItems = [],
+  historyItems = EMPTY_HISTORY_ITEMS,
   historyLoading = false,
+  historyHasMore = false,
+  historyLoadingMore = false,
   onHistoryIntent,
+  onHistoryLoadMore,
+  onHistoryRename,
+  onHistoryDelete,
+  onHistorySearchChange,
   onPrimaryAction,
   primaryActionLabel = '新对话',
   primaryActionIcon,
@@ -100,6 +125,23 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
   hideSidebarFooterPanel = false,
   hideSidebarCollapseToggle = false,
 }: SidebarProps) {
+  const [stableHistoryItems, setStableHistoryItems] = useState(historyItems);
+  const showingStableHistoryDuringRefresh =
+    shouldShowStableHistoryDuringRefresh({
+      historyItems,
+      historyLoading,
+      stableHistoryItems,
+    });
+  const displayedHistoryItems = showingStableHistoryDuringRefresh
+    ? stableHistoryItems
+    : historyItems;
+
+  useEffect(() => {
+    if (historyItems.length > 0 || !historyLoading) {
+      setStableHistoryItems(historyItems);
+    }
+  }, [historyItems, historyLoading]);
+
   const {
     router,
     authSession,
@@ -126,8 +168,12 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
     prefetchHistoryRoute,
   } = useDolaAppShellSidebarState({
     navItems,
-    historyItems,
+    historyItems: displayedHistoryItems,
+    historyHasMore,
+    historyLoading: historyLoading || historyLoadingMore,
     onHistoryIntent,
+    onHistoryLoadMore,
+    onHistorySearchChange,
     onSettingsClick,
   });
 
@@ -145,6 +191,9 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
         sidebarBackAction={sidebarBackAction}
         hideBranding={hideSidebarBranding}
         hideCollapseToggle={hideSidebarCollapseToggle}
+        hasRuntimeScope={
+          runtimeScopeNavigation.hasRuntimeScope && !hideSidebarFooterPanel
+        }
         onPrimaryAction={onPrimaryAction}
         primaryActionLabel={primaryActionLabel}
         primaryActionIcon={primaryActionIcon}
@@ -153,7 +202,7 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
         onToggleCollapsed={() => setCollapsed((value) => !value)}
       />
 
-      <Divider style={{ margin: 0 }} />
+      <Divider style={{ margin: 0, borderColor: '#f1f5f9' }} />
 
       {hideHistorySection ? (
         <div style={{ flex: 1 }} />
@@ -161,7 +210,11 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
         <>
           <DolaShellHistoryPane
             collapsed={collapsed}
-            historyLoading={historyLoading}
+            historyLoading={
+              historyLoading && !showingStableHistoryDuringRefresh
+            }
+            historyLoadingMore={historyLoadingMore}
+            historyStale={showingStableHistoryDuringRefresh}
             historyTitle={historyTitle}
             historyEmptyText={historyEmptyText}
             searchPlaceholder={searchPlaceholder}
@@ -176,8 +229,10 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
             bottomSpacerHeight={bottomSpacerHeight}
             onHistoryPrefetch={prefetchHistoryRoute}
             onHistorySelect={handleHistoryItemSelect}
+            onHistoryRename={onHistoryRename}
+            onHistoryDelete={onHistoryDelete}
           />
-          <Divider style={{ margin: 0 }} />
+          <Divider style={{ margin: 0, borderColor: '#f1f5f9' }} />
         </>
       )}
 
@@ -186,7 +241,6 @@ const DolaAppShellSidebar = memo(function DolaAppShellSidebar({
           collapsed={collapsed}
           selectedKeys={selectedKeys}
           footerMenuItems={footerMenuItems}
-          hasRuntimeScope={runtimeScopeNavigation.hasRuntimeScope}
           onAccountMenuClick={onAccountMenuClick}
           loggingOut={loggingOut}
           authLoading={authSession.loading}

@@ -2,11 +2,13 @@ import { ReactNode, useEffect, useMemo, useRef } from 'react';
 import { Card, Layout, Segmented, Skeleton, Typography } from 'antd';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import { Path } from '@/utils/enum';
 import { getReferenceDisplayThreadTitle } from '@/utils/referenceDemoKnowledge';
 import DolaAppShell, {
   DolaShellBackAction,
   DolaShellNavItem,
 } from './DolaAppShell';
+import type { DolaShellHistoryItem } from './dolaShellUtils';
 import { usePersistentShellEmbedded } from './PersistentShellContext';
 import { buildNovaShellNavItems, NovaShellNavKey } from './novaShellNavigation';
 
@@ -151,6 +153,30 @@ export default function ConsoleShellLayout({
       })),
     [activeHistoryId, homeSidebar.data?.threads],
   );
+  const handleHistoryRename = useMemo(
+    () =>
+      homeSidebar.onRename
+        ? (item: DolaShellHistoryItem, nextTitle: string) =>
+            homeSidebar.onRename(item.id, nextTitle)
+        : undefined,
+    [homeSidebar.onRename],
+  );
+  const handleHistoryDelete = useMemo(
+    () =>
+      homeSidebar.onDelete
+        ? async (item: DolaShellHistoryItem) => {
+            await homeSidebar.onDelete(item.id);
+            if (activeHistoryId === item.id) {
+              void runtimeScopeNavigation.pushWorkspace(Path.Home);
+            }
+          }
+        : undefined,
+    [
+      activeHistoryId,
+      homeSidebar.onDelete,
+      runtimeScopeNavigation.pushWorkspace,
+    ],
+  );
 
   useEffect(() => {
     const threadIds = (homeSidebar.data?.threads || []).map(
@@ -182,9 +208,8 @@ export default function ConsoleShellLayout({
       navItems ||
       buildNovaShellNavItems({
         activeKey: activeNav,
-        onNavigate: runtimeScopeNavigation.pushWorkspace,
       }),
-    [activeNav, navItems, runtimeScopeNavigation.pushWorkspace],
+    [activeNav, navItems],
   );
 
   const renderedContent = loading ? (
@@ -355,7 +380,13 @@ export default function ConsoleShellLayout({
       navItems={resolvedNavItems}
       historyItems={historyItems}
       historyLoading={homeSidebar.loading && historyItems.length === 0}
+      historyHasMore={homeSidebar.hasMore}
+      historyLoadingMore={homeSidebar.loadingMore}
       onHistoryIntent={homeSidebar.ensureLoaded}
+      onHistoryLoadMore={homeSidebar.loadMore}
+      onHistoryRename={handleHistoryRename}
+      onHistoryDelete={handleHistoryDelete}
+      onHistorySearchChange={homeSidebar.setSearchKeyword}
       hideHistorySection={hideHistorySection}
       sidebarBackAction={sidebarBackAction}
       hideSidebarBranding={hideSidebarBranding}

@@ -4,10 +4,77 @@ import { invalidateKnowledgeBaseList } from '@/utils/runtimePagePrefetch';
 type KnowledgeBaseSwitchable = {
   id: string;
   workspaceId: string;
+  slug?: string | null;
+  name?: string | null;
+  defaultKbSnapshotId?: string | null;
+  assetCount?: number | null;
+  kind?: string | null;
+  sampleDataset?: string | null;
+  snapshotCount?: number | null;
   defaultKbSnapshot?: {
     id: string;
     deployHash: string;
   } | null;
+};
+
+export const areKnowledgeBaseListsEquivalent = <
+  TKnowledgeBase extends KnowledgeBaseSwitchable,
+>(
+  previous: TKnowledgeBase[],
+  next: TKnowledgeBase[],
+) => {
+  if (previous === next) {
+    return true;
+  }
+
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previous.length; index += 1) {
+    const prevKnowledgeBase = previous[index];
+    const nextKnowledgeBase = next[index];
+
+    if (
+      prevKnowledgeBase.id !== nextKnowledgeBase.id ||
+      prevKnowledgeBase.workspaceId !== nextKnowledgeBase.workspaceId ||
+      prevKnowledgeBase.slug !== nextKnowledgeBase.slug ||
+      prevKnowledgeBase.name !== nextKnowledgeBase.name ||
+      prevKnowledgeBase.defaultKbSnapshotId !==
+        nextKnowledgeBase.defaultKbSnapshotId ||
+      prevKnowledgeBase.assetCount !== nextKnowledgeBase.assetCount ||
+      prevKnowledgeBase.kind !== nextKnowledgeBase.kind ||
+      prevKnowledgeBase.sampleDataset !== nextKnowledgeBase.sampleDataset ||
+      prevKnowledgeBase.snapshotCount !== nextKnowledgeBase.snapshotCount ||
+      prevKnowledgeBase.defaultKbSnapshot?.id !==
+        nextKnowledgeBase.defaultKbSnapshot?.id ||
+      prevKnowledgeBase.defaultKbSnapshot?.deployHash !==
+        nextKnowledgeBase.defaultKbSnapshot?.deployHash
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+export const resolveStableKnowledgeBaseList = <
+  TKnowledgeBase extends KnowledgeBaseSwitchable,
+>(
+  currentKnowledgeBases: TKnowledgeBase[],
+  nextKnowledgeBases: TKnowledgeBase[],
+  { preserveCurrentWhenNextEmpty = false } = {},
+) => {
+  if (preserveCurrentWhenNextEmpty && nextKnowledgeBases.length === 0) {
+    return currentKnowledgeBases;
+  }
+
+  return areKnowledgeBaseListsEquivalent(
+    currentKnowledgeBases,
+    nextKnowledgeBases,
+  )
+    ? currentKnowledgeBases
+    : nextKnowledgeBases;
 };
 
 export default function useKnowledgeBaseSelection<
@@ -51,7 +118,7 @@ export default function useKnowledgeBaseSelection<
   const loadKnowledgeBases = useCallback(
     async (forceFresh = false): Promise<TKnowledgeBase[]> => {
       if (!hasRuntimeScope || !knowledgeBasesUrl) {
-        setKnowledgeBases([]);
+        setKnowledgeBases((currentKnowledgeBases) => currentKnowledgeBases);
         return [];
       }
 
@@ -61,11 +128,16 @@ export default function useKnowledgeBaseSelection<
         }
         const payload = await fetchKnowledgeBases(knowledgeBasesUrl);
         const nextKnowledgeBases = Array.isArray(payload) ? payload : [];
-        setKnowledgeBases(nextKnowledgeBases);
+        setKnowledgeBases((currentKnowledgeBases) =>
+          resolveStableKnowledgeBaseList(
+            currentKnowledgeBases,
+            nextKnowledgeBases,
+          ),
+        );
         return nextKnowledgeBases;
       } catch (error) {
         onLoadError?.(error);
-        setKnowledgeBases([]);
+        setKnowledgeBases((currentKnowledgeBases) => currentKnowledgeBases);
         return [];
       }
     },
@@ -76,7 +148,16 @@ export default function useKnowledgeBaseSelection<
     if (!cachedKnowledgeBases) {
       return;
     }
-    setKnowledgeBases(cachedKnowledgeBases);
+
+    setKnowledgeBases((currentKnowledgeBases) =>
+      resolveStableKnowledgeBaseList(
+        currentKnowledgeBases,
+        cachedKnowledgeBases,
+        {
+          preserveCurrentWhenNextEmpty: currentKnowledgeBases.length > 0,
+        },
+      ),
+    );
   }, [cachedKnowledgeBases]);
 
   useEffect(() => {
@@ -95,7 +176,7 @@ export default function useKnowledgeBaseSelection<
         return;
       }
 
-      void loadKnowledgeBases(hasHydratedKnowledgeBases).catch(() => null);
+      void loadKnowledgeBases(false).catch(() => null);
     };
 
     if (hasHydratedKnowledgeBases) {

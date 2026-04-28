@@ -11,6 +11,7 @@ import {
   HOME_REFERENCE_PROMPT_PLACEHOLDER,
   resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
+  resolveRecommendationRuntimeSelector,
 } from '@/features/home/homePageRuntime';
 import { useHomeLandingControls } from '@/features/home/useHomeLandingControls';
 import useHomeRecommendationAssets from '@/features/home/useHomeRecommendationAssets';
@@ -26,6 +27,7 @@ export {
   resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
   resolveCreatedThreadRuntimeSelector,
+  resolveRecommendationRuntimeSelector,
 } from '@/features/home/homePageRuntime';
 
 export { resolveActiveSelectedKnowledgeBaseIds } from './useHomeLandingPageSelectionState';
@@ -92,6 +94,25 @@ export default function Home() {
       runtimeSelectorState?.currentWorkspace?.id,
     ],
   );
+  const recommendationRuntimeSelector = useMemo(
+    () =>
+      resolveRecommendationRuntimeSelector({
+        currentSelector: runtimeScopeNavigation.selector,
+        selectedKnowledgeBaseIds: activeSelectedKnowledgeBaseIds,
+        knowledgeBases: currentKnowledgeBases,
+        currentKnowledgeBase: runtimeSelectorState?.currentKnowledgeBase,
+        currentKbSnapshot: runtimeSelectorState?.currentKbSnapshot,
+        workspaceId: runtimeSelectorState?.currentWorkspace?.id,
+      }),
+    [
+      activeSelectedKnowledgeBaseIds,
+      currentKnowledgeBases,
+      runtimeScopeNavigation.selector,
+      runtimeSelectorState?.currentKbSnapshot,
+      runtimeSelectorState?.currentKnowledgeBase,
+      runtimeSelectorState?.currentWorkspace?.id,
+    ],
+  );
   const askPrompt = useAskPrompt(
     undefined,
     {
@@ -118,7 +139,7 @@ export default function Home() {
   const { suggestedQuestionsData } = useHomeSuggestedQuestions({
     hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
     hasExecutableAskRuntime,
-    askRuntimeSelector,
+    askRuntimeSelector: recommendationRuntimeSelector,
   });
   const { recommendationAssets } = useHomeRecommendationAssets({
     hasRuntimeScope: runtimeScopePage.hasRuntimeScope,
@@ -180,14 +201,13 @@ export default function Home() {
     skillKeyword,
   });
 
-  const { recommendationCards, recommendationSourceHint } =
-    useHomeRecommendations({
-      currentKnowledgeBases,
-      currentKnowledgeBase: runtimeSelectorState?.currentKnowledgeBase,
-      selectedKnowledgeBaseIds: activeSelectedKnowledgeBaseIds,
-      suggestedQuestionsData,
-      knowledgeBaseAssets: recommendationAssets,
-    });
+  const { recommendationCards } = useHomeRecommendations({
+    currentKnowledgeBases,
+    currentKnowledgeBase: runtimeSelectorState?.currentKnowledgeBase,
+    selectedKnowledgeBaseIds: activeSelectedKnowledgeBaseIds,
+    suggestedQuestionsData,
+    knowledgeBaseAssets: recommendationAssets,
+  });
 
   const handleRecommendationSelect = useCallback(
     (card: HomeRecommendationCard) => {
@@ -249,7 +269,6 @@ export default function Home() {
       knowledgeListViewportRef={knowledgeListViewportRef}
       homePromptPlaceholder={homePromptPlaceholder}
       recommendationCards={recommendationCards}
-      recommendationSourceHint={recommendationSourceHint}
       skillPickerOpen={skillPickerOpen}
       skillKeyword={skillKeyword}
       skillOptionsLoading={skillOptionsLoading}

@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import useHomeSidebar from '@/hooks/useHomeSidebar';
-import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { getReferenceDisplayThreadTitle } from '@/utils/referenceDemoKnowledge';
 import {
   buildNovaShellNavItems,
   type NovaShellNavKey,
 } from './novaShellNavigation';
 import DolaAppShell from './DolaAppShell';
+import type { DolaShellHistoryItem } from './dolaShellUtils';
 import { usePersistentShellEmbedded } from './PersistentShellContext';
 
 type Props = {
@@ -26,7 +26,6 @@ export default function DirectShellPageFrame({
   children,
 }: Props) {
   const embedded = usePersistentShellEmbedded();
-  const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const homeSidebar = useHomeSidebar({
     deferInitialLoad: false,
     loadOnIntent: false,
@@ -37,9 +36,8 @@ export default function DirectShellPageFrame({
     () =>
       buildNovaShellNavItems({
         activeKey: activeNav,
-        onNavigate: runtimeScopeNavigation.pushWorkspace,
       }),
-    [activeNav, runtimeScopeNavigation.pushWorkspace],
+    [activeNav],
   );
   const historyItems = useMemo(
     () =>
@@ -51,6 +49,21 @@ export default function DirectShellPageFrame({
       })),
     [homeSidebar.data?.threads],
   );
+  const handleHistoryRename = useMemo(
+    () =>
+      homeSidebar.onRename
+        ? (item: DolaShellHistoryItem, nextTitle: string) =>
+            homeSidebar.onRename(item.id, nextTitle)
+        : undefined,
+    [homeSidebar.onRename],
+  );
+  const handleHistoryDelete = useMemo(
+    () =>
+      homeSidebar.onDelete
+        ? (item: DolaShellHistoryItem) => homeSidebar.onDelete(item.id)
+        : undefined,
+    [homeSidebar.onDelete],
+  );
 
   if (embedded) {
     return <>{children}</>;
@@ -61,7 +74,13 @@ export default function DirectShellPageFrame({
       navItems={navItems}
       historyItems={historyItems}
       historyLoading={homeSidebar.loading && historyItems.length === 0}
+      historyHasMore={homeSidebar.hasMore}
+      historyLoadingMore={homeSidebar.loadingMore}
       onHistoryIntent={homeSidebar.ensureLoaded}
+      onHistoryLoadMore={homeSidebar.loadMore}
+      onHistoryRename={handleHistoryRename}
+      onHistoryDelete={handleHistoryDelete}
+      onHistorySearchChange={homeSidebar.setSearchKeyword}
       flushBottomPadding={flushBottomPadding}
       mainPaddingTop={mainPaddingTop}
       stretchContent={stretchContent}

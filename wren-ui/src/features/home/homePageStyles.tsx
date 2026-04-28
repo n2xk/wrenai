@@ -6,15 +6,38 @@ const { Title } = Typography;
 
 export const Stage = styled.div`
   min-height: 100%;
-  padding: clamp(116px, 17vh, 184px) 20px clamp(8px, 2vh, 16px);
+  padding: clamp(36px, 6vh, 72px) 20px clamp(96px, 14vh, 152px);
   max-width: 920px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(22px, 3.6vh, 32px);
+  gap: clamp(16px, 2.4vh, 22px);
   background: transparent;
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: clamp(24px, 7vh, 72px);
+    left: 50%;
+    width: min(960px, 118vw);
+    height: clamp(360px, 54vh, 500px);
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: radial-gradient(
+      ellipse at 50% 26%,
+      rgba(123, 87, 232, 0.08) 0%,
+      rgba(123, 87, 232, 0.035) 28%,
+      rgba(247, 242, 235, 0.34) 52%,
+      rgba(255, 255, 255, 0) 74%
+    );
+    filter: blur(2px);
+    pointer-events: none;
+    z-index: -1;
+  }
 `;
 
 export const HeroPanel = styled.div`
@@ -49,17 +72,17 @@ export const HeroTitle = styled(Title)`
 `;
 
 export const ComposerCard = styled.div`
-  border-radius: 20px;
-  background: #ffffff;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e7ecf3;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.05);
-  padding: 12px 16px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.055);
+  padding: 10px 14px;
 `;
 
 export const ComposerShell = styled.div<{ $dropdownOpen?: boolean }>`
   width: min(100%, 680px);
   position: relative;
-  margin-top: 10px;
+  margin-top: 8px;
 `;
 
 export const SourceChip = styled.div`
@@ -130,7 +153,7 @@ export const RecommendationSection = styled.section`
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 `;
 
 export const RecommendationRow = styled.div`
@@ -148,35 +171,92 @@ export const RecommendationRow = styled.div`
 `;
 
 export const RecommendationCard = styled.button<{ $accent: string }>`
-  border: 1px solid #e7ecf3;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 16px;
+  border: 1px solid #e8edf4;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 15px;
+  padding: 14px 15px;
   text-align: left;
   cursor: pointer;
-  min-height: 0;
+  height: 134px;
+  min-height: 134px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.024);
   transition:
     background 0.2s ease,
     border-color 0.2s ease,
+    box-shadow 0.2s ease,
     transform 0.2s ease;
 
   &:hover {
-    background: #fcfdff;
-    border-color: rgba(123, 87, 232, 0.18);
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(123, 87, 232, 0.2);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.045);
     transform: translateY(-1px);
   }
 `;
 
+export const RecommendationCardHeader = styled.div`
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 7px;
+  max-width: 100%;
+  margin-bottom: 10px;
+`;
+
+export const RecommendationBadge = styled.span<{ $primary?: boolean }>`
+  height: 22px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: ${(props) => (props.$primary ? 'var(--nova-primary)' : '#7b5f49')};
+  background: ${(props) =>
+    props.$primary
+      ? 'rgba(141, 101, 225, 0.065)'
+      : 'rgba(239, 225, 209, 0.36)'};
+  font-size: 11.5px;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+`;
+
+export const RecommendationQuestion = styled.span`
+  display: -webkit-box;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.56;
+  font-weight: 400;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+`;
+
+export const RecommendationAssetName = styled.span`
+  display: block;
+  margin-top: auto;
+  padding-top: 8px;
+  color: var(--nova-text-secondary, #667085);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
 export const RecommendationIcon = styled.div<{ $accent: string }>`
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: ${(props) => props.$accent};
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  background: color-mix(in srgb, ${(props) => props.$accent} 70%, #ffffff);
   color: #6366f1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  flex: 0 0 auto;
+  font-size: 13px;
 `;
 
 export const ComposerScopeRow = styled.div`
@@ -184,7 +264,7 @@ export const ComposerScopeRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 `;
 
 export const KnowledgeDropdownPanel = styled.div`
@@ -286,8 +366,12 @@ export const ComposerAtMark = styled.span`
 export const ComposerPrompt = styled(Prompt)`
   width: 100%;
 
+  > div {
+    gap: 6px;
+  }
+
   .ant-input {
-    min-height: 72px !important;
+    min-height: 54px !important;
     color: #111827;
   }
 
@@ -295,9 +379,17 @@ export const ComposerPrompt = styled(Prompt)`
     color: #b2bac8;
   }
 
+  .prompt-footer {
+    align-items: flex-end;
+  }
+
+  .prompt-footer-tools {
+    transform: translateY(8px);
+  }
+
   .prompt-send-button.ant-btn {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: 999px;
   }
 `;
@@ -343,7 +435,7 @@ export const ExploreHeaderBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 9px;
   flex-wrap: wrap;
   padding-left: 4px;
 `;
@@ -357,40 +449,18 @@ export const ExploreTitle = styled.div`
   color: #111827;
 `;
 
-export const ExploreSegmented = styled.div`
+export const ExploreTemplateTag = styled.span`
+  height: 28px;
+  border-radius: 999px;
+  background: #f7f8fb;
+  border: 1px solid #edf1f6;
+  color: #4b5563;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 999px;
-  background: #f5f7fb;
-  border: 1px solid #edf1f6;
-`;
-
-export const ExploreSegmentButton = styled.button<{
-  $active?: boolean;
-  $disabled?: boolean;
-}>`
-  height: 28px;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 14px;
-  background: ${(props) => (props.$active ? '#ffffff' : 'transparent')};
-  color: ${(props) =>
-    props.$disabled ? '#b8c1cf' : props.$active ? '#111827' : '#6b7280'};
-  box-shadow: ${(props) =>
-    props.$active ? '0 1px 2px rgba(15, 23, 42, 0.08)' : 'none'};
+  justify-content: center;
   font-size: 12px;
   font-weight: 600;
-  cursor: ${(props) => (props.$disabled ? 'not-allowed' : 'pointer')};
-`;
-
-export const ExploreSourceHint = styled.div`
-  width: 100%;
-  padding-left: 2px;
-  color: #8b93a3;
-  font-size: 12px;
-  line-height: 1.5;
 `;
 
 export const ExploreEmpty = styled.div`

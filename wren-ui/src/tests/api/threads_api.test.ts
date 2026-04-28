@@ -145,6 +145,124 @@ describe('pages/api/v1/threads route', () => {
     );
   });
 
+  it('returns paginated runtime-scoped threads when limit is provided', async () => {
+    const handler = (await import('../../pages/api/v1/threads')).default;
+    const req = createReq({
+      method: 'GET',
+      query: {
+        limit: '1',
+        keyword: '充值',
+      },
+    });
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(buildRuntimeScope());
+    mockListThreads.mockResolvedValue([
+      {
+        id: 12,
+        summary: '充值分析 A',
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        createdAt: '2026-04-02T00:00:00.000Z',
+      },
+      {
+        id: 11,
+        summary: '充值分析 B',
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        createdAt: '2026-04-01T00:00:00.000Z',
+      },
+    ]);
+
+    await handler(req, res);
+
+    expect(mockListThreads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+      expect.objectContaining({
+        limit: 2,
+        keyword: '充值',
+      }),
+    );
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 200,
+        responsePayload: expect.objectContaining({
+          threads: [
+            expect.objectContaining({
+              id: 12,
+              summary: '充值分析 A',
+            }),
+          ],
+          hasMore: true,
+          nextCursor: expect.any(String),
+        }),
+      }),
+    );
+  });
+
+  it('decodes cursor query params and passes them to the thread service', async () => {
+    const handler = (await import('../../pages/api/v1/threads')).default;
+    const cursor = Buffer.from(
+      JSON.stringify({
+        createdAt: '2026-04-02T00:00:00.000Z',
+        id: 12,
+      }),
+    ).toString('base64');
+    const req = createReq({
+      method: 'GET',
+      query: {
+        limit: '10',
+        cursor,
+      },
+    });
+    const res = createRes();
+
+    mockResolveRequestScope.mockResolvedValue(buildRuntimeScope());
+    mockListThreads.mockResolvedValue([
+      {
+        id: 11,
+        summary: '充值分析 B',
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        createdAt: '2026-04-01T00:00:00.000Z',
+      },
+    ]);
+
+    await handler(req, res);
+
+    expect(mockListThreads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+      expect.objectContaining({
+        limit: 11,
+        cursor: {
+          createdAt: '2026-04-02T00:00:00.000Z',
+          id: 12,
+        },
+      }),
+    );
+    expect(mockRespondWithSimple).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 200,
+        responsePayload: expect.objectContaining({
+          threads: [
+            expect.objectContaining({
+              id: 11,
+              summary: '充值分析 B',
+            }),
+          ],
+          hasMore: false,
+          nextCursor: null,
+        }),
+      }),
+    );
+  });
+
   it('returns 405 for methods outside GET/POST', async () => {
     const handler = (await import('../../pages/api/v1/threads')).default;
     const req = createReq({ method: 'DELETE' });

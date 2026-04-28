@@ -113,6 +113,7 @@ export const respondWithSimple = async ({
   responsePayload,
   runtimeScope,
   apiType,
+  threadId,
   headers,
   requestPayload,
   startTime,
@@ -124,6 +125,7 @@ export const respondWithSimple = async ({
   apiType: ApiType;
   startTime: number;
   requestPayload?: Record<string, any>;
+  threadId?: string;
   headers?: Record<string, string>;
 }) => {
   const durationMs = startTime ? Date.now() - startTime : undefined;
@@ -132,6 +134,7 @@ export const respondWithSimple = async ({
     id: responseId,
     runtimeScope,
     apiType,
+    threadId,
     headers,
     requestPayload,
     responsePayload,

@@ -6,6 +6,7 @@ import MenuUnfoldOutlined from '@ant-design/icons/MenuUnfoldOutlined';
 import ArrowLeftOutlined from '@ant-design/icons/ArrowLeftOutlined';
 import styled from 'styled-components';
 import NovaBrandMark from '@/components/brand/NovaBrandMark';
+import DolaShellWorkspaceSwitcher from './DolaShellWorkspaceSwitcher';
 
 export type DolaShellBackAction = {
   label: string;
@@ -18,6 +19,7 @@ type Props = {
   sidebarBackAction?: DolaShellBackAction;
   hideBranding?: boolean;
   hideCollapseToggle?: boolean;
+  hasRuntimeScope: boolean;
   onPrimaryAction?: () => void;
   primaryActionLabel: string;
   primaryActionIcon?: ReactNode;
@@ -92,8 +94,19 @@ const BrandTitle = styled.div`
 const NavSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
+`;
+
+const WorkspaceContextGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const WorkspaceContextDivider = styled.div`
+  height: 1px;
+  background: rgba(226, 232, 240, 0.88);
 `;
 
 const SidebarBackButton = styled(Button)<{ $collapsed?: boolean }>`
@@ -125,6 +138,7 @@ export default function DolaShellNavPane({
   sidebarBackAction,
   hideBranding = false,
   hideCollapseToggle = false,
+  hasRuntimeScope,
   onPrimaryAction,
   primaryActionLabel,
   primaryActionIcon,
@@ -170,6 +184,16 @@ export default function DolaShellNavPane({
           >
             {collapsed ? null : sidebarBackAction.label}
           </SidebarBackButton>
+        ) : null}
+
+        {!collapsed && hasRuntimeScope ? (
+          <WorkspaceContextGroup>
+            <DolaShellWorkspaceSwitcher />
+            <WorkspaceContextDivider
+              aria-hidden
+              data-testid="workspace-context-divider"
+            />
+          </WorkspaceContextGroup>
         ) : null}
 
         {onPrimaryAction ? (

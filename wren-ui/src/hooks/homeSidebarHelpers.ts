@@ -21,7 +21,14 @@ export type HomeSidebarThreadRecord = SidebarThreadRuntimeIdentity & {
   summary?: string | null;
 };
 
+export type HomeSidebarThreadsPagePayload = {
+  threads: HomeSidebarThreadRecord[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 export const EMPTY_SIDEBAR_THREADS: SidebarThread[] = [];
+export const HOME_SIDEBAR_PAGE_SIZE = 50;
 const SIDEBAR_CACHE_TTL_MS = 20_000;
 const HOME_SIDEBAR_STORAGE_PREFIX = 'wren.homeSidebar';
 
@@ -104,11 +111,27 @@ export const resolveHomeSidebarHeaderSelector = ({
   return {};
 };
 
+export const resolveHomeSidebarRuntimeScopeReady = ({
+  hasRuntimeScope,
+  initialLoading,
+  workspaceId,
+  runtimeScopeId,
+}: {
+  hasRuntimeScope: boolean;
+  initialLoading: boolean;
+  workspaceId?: string | null;
+  runtimeScopeId?: string | null;
+}) =>
+  !hasRuntimeScope || Boolean(workspaceId || runtimeScopeId) || !initialLoading;
+
 const getHomeSidebarQueryEnabledStorageKey = (scopeKey: string) =>
   `${HOME_SIDEBAR_STORAGE_PREFIX}:queryEnabled:${scopeKey}`;
 
 const getHomeSidebarThreadsStorageKey = (scopeKey: string) =>
   `${HOME_SIDEBAR_STORAGE_PREFIX}:threads:${scopeKey}`;
+
+const getHomeSidebarPageInfoStorageKey = (scopeKey: string) =>
+  `${HOME_SIDEBAR_STORAGE_PREFIX}:pageInfo:${scopeKey}`;
 
 export const resolveHomeSidebarThreadSelector = (
   thread: SidebarThreadRuntimeIdentity,
@@ -132,11 +155,30 @@ export const resolveHomeSidebarThreadSelector = (
 
 export const buildHomeSidebarThreadsUrl = (
   selector: ClientRuntimeScopeSelector,
-) => buildRuntimeScopeUrl('/api/v1/threads', {}, selector);
+  options: {
+    limit?: number;
+    cursor?: string | null;
+    keyword?: string | null;
+  } = {},
+) =>
+  buildRuntimeScopeUrl(
+    '/api/v1/threads',
+    {
+      limit: options.limit,
+      cursor: options.cursor || undefined,
+      keyword: options.keyword?.trim() || undefined,
+    },
+    selector,
+  );
 
 export const buildHomeSidebarThreadsRequestKey = (
   selector: ClientRuntimeScopeSelector,
-) => buildHomeSidebarThreadsUrl(selector);
+  options: {
+    limit?: number;
+    cursor?: string | null;
+    keyword?: string | null;
+  } = {},
+) => buildHomeSidebarThreadsUrl(selector, options);
 
 export const buildHomeSidebarThreadDetailUrl = (
   id: string,
@@ -146,11 +188,54 @@ export const buildHomeSidebarThreadDetailUrl = (
 export const normalizeHomeSidebarThreads = (
   payload: unknown,
 ): HomeSidebarThreadRecord[] => {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    Array.isArray((payload as { threads?: unknown }).threads)
+  ) {
+    return (payload as { threads: HomeSidebarThreadRecord[] }).threads;
+  }
+
   if (!Array.isArray(payload)) {
     return [];
   }
 
   return payload as HomeSidebarThreadRecord[];
+};
+
+export const normalizeHomeSidebarThreadsPage = (
+  payload: unknown,
+): HomeSidebarThreadsPagePayload => {
+  if (Array.isArray(payload)) {
+    return {
+      threads: payload as HomeSidebarThreadRecord[],
+      nextCursor: null,
+      hasMore: false,
+    };
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return {
+      threads: EMPTY_SIDEBAR_THREADS,
+      nextCursor: null,
+      hasMore: false,
+    };
+  }
+
+  const pagePayload = payload as {
+    threads?: unknown;
+    nextCursor?: unknown;
+    hasMore?: unknown;
+  };
+
+  return {
+    threads: normalizeHomeSidebarThreads(pagePayload.threads),
+    nextCursor:
+      typeof pagePayload.nextCursor === 'string' && pagePayload.nextCursor
+        ? pagePayload.nextCursor
+        : null,
+    hasMore: pagePayload.hasMore === true,
+  };
 };
 
 export const getCachedHomeSidebarQueryEnabled = (scopeKey: string) =>
@@ -191,6 +276,32 @@ export const getCachedHomeSidebarThreads = (scopeKey: string) =>
     return cached.value;
   })();
 
+export const getCachedHomeSidebarPageInfo = (scopeKey: string) =>
+  (() => {
+    const cached = readSidebarCacheRecord<{
+      nextCursor: string | null;
+      hasMore: boolean;
+    }>(getHomeSidebarPageInfoStorageKey(scopeKey));
+    if (!cached) {
+      return {
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
+
+    if (Date.now() - cached.updatedAt > SIDEBAR_CACHE_TTL_MS) {
+      getHomeSidebarStorage()?.removeItem(
+        getHomeSidebarPageInfoStorageKey(scopeKey),
+      );
+      return {
+        nextCursor: null,
+        hasMore: false,
+      };
+    }
+
+    return cached.value;
+  })();
+
 export const cacheHomeSidebarQueryEnabled = (scopeKey: string) => {
   writeSidebarCacheRecord(getHomeSidebarQueryEnabledStorageKey(scopeKey), true);
 };
@@ -203,6 +314,16 @@ export const cacheHomeSidebarThreads = (
     getHomeSidebarThreadsStorageKey(scopeKey),
     threads.length === 0 ? EMPTY_SIDEBAR_THREADS : threads,
   );
+};
+
+export const cacheHomeSidebarPageInfo = (
+  scopeKey: string,
+  pageInfo: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  },
+) => {
+  writeSidebarCacheRecord(getHomeSidebarPageInfoStorageKey(scopeKey), pageInfo);
 };
 
 export const shouldScheduleDeferredSidebarLoad = ({
@@ -248,3 +369,18 @@ export const shouldEagerLoadHomeSidebarOnIntent = ({
   hasRuntimeScope: boolean;
   cachedThreadCount: number;
 }) => !disabled && hasRuntimeScope && cachedThreadCount === 0;
+
+export const shouldLoadMoreHomeSidebarThreads = ({
+  disabled,
+  hasRuntimeScope,
+  loading,
+  hasMore,
+  nextCursor,
+}: {
+  disabled?: boolean;
+  hasRuntimeScope: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  nextCursor?: string | null;
+}) =>
+  !disabled && hasRuntimeScope && !loading && hasMore && Boolean(nextCursor);

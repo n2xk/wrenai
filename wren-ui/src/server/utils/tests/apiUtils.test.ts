@@ -27,6 +27,7 @@ import {
   getScopedThreadHistories,
   handleApiError,
   prepareSqlForDryRunValidation,
+  respondWithSimple,
   validateSql,
 } from '../apiUtils';
 import { ApiType } from '../../repositories/apiHistoryRepository';
@@ -264,6 +265,50 @@ describe('apiUtils', () => {
           error: 'Runtime scope selector is required for this request',
         }),
       );
+    });
+  });
+
+  describe('respondWithSimple', () => {
+    it('persists thread id when provided', async () => {
+      const res = {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      } as any;
+
+      await respondWithSimple({
+        res,
+        statusCode: 200,
+        responsePayload: {
+          success: true,
+        },
+        runtimeScope: {
+          project: null,
+          deployment: null,
+          workspace: { id: 'workspace-1' },
+          knowledgeBase: { id: 'kb-1' },
+          kbSnapshot: { id: 'snapshot-1' },
+          deployHash: 'deploy-1',
+          userId: 'user-1',
+        } as any,
+        apiType: ApiType.ASK,
+        threadId: 'thread-42',
+        startTime: Date.now(),
+      });
+
+      expect(mockCreateOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiType: ApiType.ASK,
+          threadId: 'thread-42',
+          responsePayload: {
+            success: true,
+          },
+          statusCode: 200,
+        }),
+      );
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+      });
     });
   });
 

@@ -4,7 +4,7 @@ import {
   IThreadResponseRepository,
   ThreadResponse,
 } from '../repositories/threadResponseRepository';
-import { Thread } from '../repositories/threadRepository';
+import { Thread, ThreadListOptions } from '../repositories/threadRepository';
 import {
   isPersistedRuntimeIdentityCompatible,
   toPersistedRuntimeIdentityFromSource,
@@ -112,16 +112,23 @@ export const createThreadAction = async (
 export const listThreadsAction = async (
   service: AskingServiceThreadLike,
   runtimeIdentity: PersistedRuntimeIdentity,
+  options?: ThreadListOptions,
 ): Promise<Thread[]> => {
   const scopedRuntimeIdentity =
     service.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
-  return service.threadRepository.listAllTimeDescOrderByScope({
+  const scope = {
     projectId: scopedRuntimeIdentity.projectId ?? null,
     workspaceId: scopedRuntimeIdentity.workspaceId,
     knowledgeBaseId: scopedRuntimeIdentity.knowledgeBaseId,
     kbSnapshotId: scopedRuntimeIdentity.kbSnapshotId,
     deployHash: scopedRuntimeIdentity.deployHash,
-  });
+  };
+
+  if (options) {
+    return service.threadRepository.listAllTimeDescOrderByScope(scope, options);
+  }
+
+  return service.threadRepository.listAllTimeDescOrderByScope(scope);
 };
 
 export const assertThreadScopeAction = async (

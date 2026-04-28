@@ -20,6 +20,8 @@ export interface Thread {
   deployHash?: string | null;
   actorUserId?: string | null;
   summary: string; // Thread summary
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export type ThreadRuntimeScope = {
@@ -30,12 +32,26 @@ export type ThreadRuntimeScope = {
   deployHash?: string | null;
 };
 
+export type ThreadListCursor = {
+  createdAt: string | Date;
+  id: number;
+};
+
+export type ThreadListOptions = {
+  limit?: number;
+  cursor?: ThreadListCursor | null;
+  keyword?: string | null;
+};
+
 export interface IThreadRepository extends IBasicRepository<Thread> {
   findOneByIdWithRuntimeScope(
     id: number,
     scope: ThreadRuntimeScope,
   ): Promise<Thread | null>;
-  listAllTimeDescOrderByScope(scope: ThreadRuntimeScope): Promise<Thread[]>;
+  listAllTimeDescOrderByScope(
+    scope: ThreadRuntimeScope,
+    options?: ThreadListOptions,
+  ): Promise<Thread[]>;
 }
 
 export class ThreadRepository
@@ -59,10 +75,50 @@ export class ThreadRepository
 
   public async listAllTimeDescOrderByScope(
     scope: ThreadRuntimeScope,
+    options: ThreadListOptions = {},
   ): Promise<Thread[]> {
     const query = this.buildRuntimeScopedQuery(scope);
-    const threads = await query.orderBy('created_at', 'desc');
+    this.applyThreadListOptions(query, options);
+    const threads = await query
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc');
     return threads.map((thread) => this.transformFromDBData(thread));
+  }
+
+  private applyThreadListOptions(
+    query: Knex.QueryBuilder,
+    options: ThreadListOptions,
+  ) {
+    const keyword = options.keyword?.trim();
+    if (keyword) {
+      query.andWhereRaw('LOWER(summary) LIKE ?', [
+        `%${keyword.toLowerCase()}%`,
+      ]);
+    }
+
+    if (options.cursor) {
+      const cursorCreatedAt =
+        options.cursor.createdAt instanceof Date
+          ? options.cursor.createdAt.toISOString()
+          : options.cursor.createdAt;
+      const cursorId = Number(options.cursor.id);
+
+      if (cursorCreatedAt && Number.isFinite(cursorId)) {
+        query.andWhere((builder) => {
+          builder
+            .where('created_at', '<', cursorCreatedAt)
+            .orWhere((sameCreatedAtBuilder) => {
+              sameCreatedAtBuilder
+                .where('created_at', '=', cursorCreatedAt)
+                .andWhere('id', '<', cursorId);
+            });
+        });
+      }
+    }
+
+    if (options.limit && Number.isFinite(options.limit) && options.limit > 0) {
+      query.limit(options.limit);
+    }
   }
 
   private buildRuntimeScopedQuery(scope: ThreadRuntimeScope) {

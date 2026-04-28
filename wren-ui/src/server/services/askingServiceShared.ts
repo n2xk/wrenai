@@ -13,6 +13,7 @@ import {
   IThreadResponseRepository,
   ThreadResponse,
 } from '../repositories/threadResponseRepository';
+import type { ThreadListOptions } from '../repositories/threadRepository';
 import type { ThreadResponseRecommendationDetail } from '../repositories/threadResponseRepositoryTypes';
 import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 import { IQueryService, PreviewDataResponse } from './queryService';
@@ -153,7 +154,10 @@ export interface IAskingService {
     threadId: number,
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<void>;
-  listThreads(runtimeIdentity: PersistedRuntimeIdentity): Promise<any[]>;
+  listThreads(
+    runtimeIdentity: PersistedRuntimeIdentity,
+    options?: ThreadListOptions,
+  ): Promise<any[]>;
   assertThreadScope(
     threadId: number,
     runtimeIdentity: PersistedRuntimeIdentity,

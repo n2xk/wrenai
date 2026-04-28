@@ -15,8 +15,8 @@ export const Sidebar = styled(Sider)`
     top: 0;
     align-self: flex-start;
     height: 100vh;
-    background: #ffffff;
-    border-right: 1px solid #e5e7eb;
+    background: #fbfcfe;
+    border-right: 1px solid #e8edf4;
     padding: 10px 8px 0;
     display: flex;
     flex-direction: column;
@@ -27,7 +27,7 @@ export const Sidebar = styled(Sider)`
       flex-direction: column;
       height: 100%;
       min-height: 0;
-      gap: 12px;
+      gap: 8px;
     }
 
     .ant-menu {
@@ -38,16 +38,27 @@ export const Sidebar = styled(Sider)`
     .ant-menu-inline > .ant-menu-item,
     .ant-menu-inline > .ant-menu-submenu > .ant-menu-submenu-title {
       width: 100%;
-      height: 34px;
-      line-height: 34px;
+      height: 32px;
+      line-height: 32px;
       margin: 0;
-      padding-inline: 8px !important;
-      border-radius: 10px;
+      padding-inline: 9px !important;
+      border-radius: 9px;
       color: #4b5563;
-      font-weight: 400;
+      font-size: 13px;
+      font-weight: 500;
       transition:
         background 0.18s ease,
         color 0.18s ease;
+    }
+
+    .ant-menu-inline > .ant-menu-item .ant-menu-item-icon,
+    .ant-menu-inline
+      > .ant-menu-submenu
+      > .ant-menu-submenu-title
+      .ant-menu-item-icon {
+      color: #5f6b7a;
+      font-size: 14px;
+      transition: color 0.18s ease;
     }
 
     .ant-menu-inline > .ant-menu-item .ant-menu-title-content {
@@ -56,14 +67,27 @@ export const Sidebar = styled(Sider)`
 
     .ant-menu-inline > .ant-menu-item:hover,
     .ant-menu-inline > .ant-menu-submenu > .ant-menu-submenu-title:hover {
-      background: #f7f8fb;
-      color: #111827;
+      background: rgba(123, 87, 232, 0.045);
+      color: #3f3277;
+    }
+
+    .ant-menu-inline > .ant-menu-item:hover .ant-menu-item-icon,
+    .ant-menu-inline
+      > .ant-menu-submenu
+      > .ant-menu-submenu-title:hover
+      .ant-menu-item-icon {
+      color: #5b45c8;
     }
 
     .ant-menu-inline > .ant-menu-item-selected {
-      background: #f3f4f6;
-      color: #111827;
-      box-shadow: inset 2px 0 0 #d6dbe3;
+      background: rgba(123, 87, 232, 0.075);
+      color: #5b45c8;
+      box-shadow: inset 0 0 0 1px rgba(123, 87, 232, 0.18);
+      font-weight: 600;
+    }
+
+    .ant-menu-inline > .ant-menu-item-selected .ant-menu-item-icon {
+      color: #5b45c8;
     }
 
     .ant-menu-inline-collapsed > .ant-menu-item,
@@ -102,15 +126,15 @@ export const Sidebar = styled(Sider)`
     .ant-menu-item-group-list .ant-menu-item,
     .ant-menu-item-group-list .ant-menu-submenu > .ant-menu-submenu-title {
       width: 100%;
-      min-height: 30px;
-      height: 30px;
-      line-height: 30px;
+      min-height: 31px;
+      height: 31px;
+      line-height: 31px;
       margin: 0;
       padding-inline: 8px !important;
       border-radius: 9px;
       color: #4b5563;
       font-size: 13px;
-      font-weight: 400;
+      font-weight: 500;
       transition:
         background 0.18s ease,
         color 0.18s ease;
@@ -128,14 +152,15 @@ export const Sidebar = styled(Sider)`
     .ant-menu-item-group-list
       .ant-menu-submenu
       > .ant-menu-submenu-title:hover {
-      background: #f7f8fb;
-      color: #111827;
+      background: rgba(123, 87, 232, 0.045);
+      color: #3f3277;
     }
 
     .ant-menu-item-group-list .ant-menu-item-selected {
-      background: #f3f4f6;
-      color: #111827;
-      box-shadow: inset 2px 0 0 #d6dbe3;
+      background: rgba(123, 87, 232, 0.075);
+      color: #5b45c8;
+      box-shadow: inset 0 0 0 1px rgba(123, 87, 232, 0.18);
+      font-weight: 600;
     }
 
     .ant-menu-item-group-list .ant-menu-item .ant-menu-item-icon,

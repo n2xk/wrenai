@@ -34,6 +34,11 @@ type UseRestRequestResult<TData> = {
   setData: Dispatch<SetStateAction<TData>>;
 };
 
+type RequestDataState<TData> = {
+  requestKey: string | null;
+  data: TData;
+};
+
 export class RestRequestCoordinator {
   private requestId = 0;
   private abortController: AbortController | null = null;
@@ -82,10 +87,16 @@ export default function useRestRequest<TData, TResult = TData>({
   onError,
   resetDataOnDisable = true,
 }: UseRestRequestOptions<TData, TResult>): UseRestRequestResult<TData> {
+  const currentRequestKey = requestKey || null;
   const initialDataRef = useRef(initialData);
   initialDataRef.current = initialData;
 
-  const [data, setData] = useState<TData>(initialData);
+  const [dataState, setDataState] = useState<RequestDataState<TData>>(() => ({
+    requestKey: currentRequestKey,
+    data: initialData,
+  }));
+  const data =
+    dataState.requestKey === currentRequestKey ? dataState.data : initialData;
   const dataRef = useRef(data);
   dataRef.current = data;
   const [loading, setLoading] = useState(Boolean(enabled && auto));
@@ -103,12 +114,32 @@ export default function useRestRequest<TData, TResult = TData>({
   const cancelInFlightRequest = useCallback(() => {
     requestCoordinatorRef.current.cancel();
   }, []);
+  const setData = useCallback<Dispatch<SetStateAction<TData>>>(
+    (nextData) => {
+      setDataState((previousState) => {
+        const previousData =
+          previousState.requestKey === currentRequestKey
+            ? previousState.data
+            : initialDataRef.current;
+        const resolvedData =
+          typeof nextData === 'function'
+            ? (nextData as (previousState: TData) => TData)(previousData)
+            : nextData;
+
+        return {
+          requestKey: currentRequestKey,
+          data: resolvedData,
+        };
+      });
+    },
+    [currentRequestKey],
+  );
   const reset = useCallback(() => {
     cancelInFlightRequest();
     setData(initialDataRef.current);
     setError(null);
     setLoading(false);
-  }, [cancelInFlightRequest]);
+  }, [cancelInFlightRequest, setData]);
 
   const refetch = useCallback(async () => {
     if (!enabled) {
@@ -157,7 +188,7 @@ export default function useRestRequest<TData, TResult = TData>({
       }
       pendingRequest.finalize();
     }
-  }, [cancelInFlightRequest, enabled, resetDataOnDisable]);
+  }, [cancelInFlightRequest, enabled, reset, resetDataOnDisable, setData]);
 
   useEffect(() => {
     if (!enabled) {

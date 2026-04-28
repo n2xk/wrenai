@@ -27,6 +27,8 @@ jest.mock('./DolaAppShell', () => ({
     children,
     historyItems,
     navItems,
+    onHistoryRename,
+    onHistoryDelete,
     flushBottomPadding,
     mainPaddingTop,
     stretchContent,
@@ -37,6 +39,8 @@ jest.mock('./DolaAppShell', () => ({
       {
         'data-nav-count': navItems?.length || 0,
         'data-history-count': historyItems?.length || 0,
+        'data-history-rename': String(Boolean(onHistoryRename)),
+        'data-history-delete': String(Boolean(onHistoryDelete)),
         'data-flush-bottom': String(Boolean(flushBottomPadding)),
         'data-main-padding-top': mainPaddingTop || '',
         'data-stretch-content': String(Boolean(stretchContent)),
@@ -56,6 +60,8 @@ describe('DirectShellPageFrame', () => {
       },
       loading: false,
       ensureLoaded: jest.fn(),
+      onRename: jest.fn(),
+      onDelete: jest.fn(),
     });
     mockUseRuntimeScopeNavigation.mockReturnValue({
       pushWorkspace: jest.fn(),
@@ -70,8 +76,10 @@ describe('DirectShellPageFrame', () => {
     );
 
     expect(html).toContain('page-content');
-    expect(html).toContain('data-nav-count="3"');
+    expect(html).toContain('data-nav-count="4"');
     expect(html).toContain('data-history-count="1"');
+    expect(html).toContain('data-history-rename="true"');
+    expect(html).toContain('data-history-delete="true"');
   });
 
   it('returns raw page content when already embedded', () => {

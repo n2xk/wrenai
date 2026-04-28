@@ -18,6 +18,20 @@ type RecommendationAssetSummary = {
   suggestedQuestions?: string[];
 };
 
+const GOVERNED_SQL_PAIR_LABEL_PATTERN = /业务模板|可信参考|问数样例/;
+const GOVERNED_INSTRUCTION_LABEL_PATTERN = /分析规则/;
+
+const normalizeRecommendationLabel = (label?: string | null) =>
+  String(label || '').trim();
+
+const isGovernedSuggestedQuestionLabel = (label?: string | null) => {
+  const normalizedLabel = normalizeRecommendationLabel(label);
+  return (
+    GOVERNED_SQL_PAIR_LABEL_PATTERN.test(normalizedLabel) ||
+    GOVERNED_INSTRUCTION_LABEL_PATTERN.test(normalizedLabel)
+  );
+};
+
 export function useHomeRecommendations({
   currentKnowledgeBases,
   currentKnowledgeBase,
@@ -55,6 +69,38 @@ export function useHomeRecommendations({
   const sampleQuestions = useMemo(
     () => suggestedQuestionsData?.questions || [],
     [suggestedQuestionsData],
+  );
+
+  const suggestedQuestionCards = useMemo<HomeRecommendationCard[]>(
+    () =>
+      sampleQuestions
+        .filter(
+          (item): item is NonNullable<(typeof sampleQuestions)[number]> =>
+            item !== null && Boolean(item?.question?.trim()),
+        )
+        .slice(0, 3)
+        .map(
+          (
+            item: NonNullable<(typeof sampleQuestions)[number]>,
+            index: number,
+          ) => ({
+            question: item.question.trim(),
+            badge:
+              normalizeRecommendationLabel(item.label) ||
+              (index === 1 ? '最新' : '热门'),
+            knowledgeBaseId: recommendationKnowledgeBase?.id,
+            knowledgeBaseName: recommendationKnowledgeBase?.name || undefined,
+          }),
+        ),
+    [recommendationKnowledgeBase, sampleQuestions],
+  );
+
+  const governedSuggestedQuestionCards = useMemo(
+    () =>
+      suggestedQuestionCards.filter((card) =>
+        isGovernedSuggestedQuestionLabel(card.badge),
+      ),
+    [suggestedQuestionCards],
   );
 
   const assetRecommendationCards = useMemo<HomeRecommendationCard[]>(() => {
@@ -168,6 +214,10 @@ export function useHomeRecommendations({
         }
       : {};
 
+    if (governedSuggestedQuestionCards.length > 0) {
+      return governedSuggestedQuestionCards;
+    }
+
     if (assetRecommendationCards.length > 0) {
       return assetRecommendationCards;
     }
@@ -199,95 +249,31 @@ export function useHomeRecommendations({
       ];
     }
 
-    if (sampleQuestions.length === 0) {
-      if (scopedFallbackKnowledgeBaseCards.length > 0) {
-        return scopedFallbackKnowledgeBaseCards;
-      }
-      if (workspaceKnowledgeBaseCards.length > 0) {
-        return workspaceKnowledgeBaseCards;
-      }
-      return REFERENCE_HOME_RECOMMENDATIONS;
+    if (suggestedQuestionCards.length > 0) {
+      return suggestedQuestionCards.map((card) => ({
+        ...card,
+        ...scopedCardMeta,
+      }));
     }
 
-    return sampleQuestions
-      .filter(
-        (item): item is NonNullable<(typeof sampleQuestions)[number]> =>
-          item !== null,
-      )
-      .slice(0, 3)
-      .map(
-        (
-          item: NonNullable<(typeof sampleQuestions)[number]>,
-          index: number,
-        ) => ({
-          question: item.question,
-          badge: index === 1 ? '最新' : '热门',
-          ...scopedCardMeta,
-        }),
-      );
-  }, [
-    assetRecommendationCards,
-    matchedDemoKnowledge,
-    recommendationKnowledgeBase,
-    sampleQuestions,
-    scopedFallbackKnowledgeBaseCards,
-    workspaceKnowledgeBaseCards,
-  ]);
-
-  const recommendationSourceHint = useMemo(() => {
-    if (assetRecommendationCards.length > 0) {
-      const knowledgeBaseName = getReferenceDisplayKnowledgeName(
-        recommendationKnowledgeBase,
-      );
-      const assetNames = [
-        ...new Set(
-          assetRecommendationCards
-            .map((card) => card.assetName?.trim())
-            .filter(Boolean),
-        ),
-      ];
-
-      if (assetNames.length === 1) {
-        return `问题来自「${knowledgeBaseName}」知识库中资产「${assetNames[0]}」的推荐问法，点击后会填入输入框。`;
-      }
-
-      return `问题来自「${knowledgeBaseName}」知识库内多个资产的推荐问法，点击后会填入输入框。`;
+    if (scopedFallbackKnowledgeBaseCards.length > 0) {
+      return scopedFallbackKnowledgeBaseCards;
     }
-
-    if (matchedDemoKnowledge) {
-      const displayName = getReferenceDisplayKnowledgeName(
-        recommendationKnowledgeBaseName || matchedDemoKnowledge.name,
-      );
-      return `问题来自「${displayName}」知识库的示例问题，点击后会填入输入框。`;
-    }
-
-    if (sampleQuestions.length > 0) {
-      return '问题来自当前知识库的推荐问法或样例题库，点击后会填入输入框。';
-    }
-
-    if (recommendationKnowledgeBase) {
-      const displayName = getReferenceDisplayKnowledgeName(
-        recommendationKnowledgeBase,
-      );
-      return `问题围绕「${displayName}」知识库整理，点击后会填入输入框。`;
-    }
-
     if (workspaceKnowledgeBaseCards.length > 0) {
-      return '问题优先来自当前空间的知识库示例，点击后会填入输入框。';
+      return workspaceKnowledgeBaseCards;
     }
-
-    return '问题来自系统默认模板，可填入输入框后继续提问。';
+    return REFERENCE_HOME_RECOMMENDATIONS;
   }, [
     assetRecommendationCards,
+    governedSuggestedQuestionCards,
     matchedDemoKnowledge,
     recommendationKnowledgeBase,
-    recommendationKnowledgeBaseName,
-    sampleQuestions.length,
-    workspaceKnowledgeBaseCards.length,
+    scopedFallbackKnowledgeBaseCards,
+    suggestedQuestionCards,
+    workspaceKnowledgeBaseCards,
   ]);
 
   return {
     recommendationCards,
-    recommendationSourceHint,
   };
 }

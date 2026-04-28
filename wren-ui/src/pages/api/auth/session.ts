@@ -318,6 +318,14 @@ export default async function handler(
               workspaceKind: validatedSession.workspace.kind || null,
             },
           }),
+          'feedback.read': evaluateAction('feedback.read', {
+            resourceType: 'workspace',
+            resourceId: validatedSession.workspace.id,
+            workspaceId: validatedSession.workspace.id,
+            attributes: {
+              workspaceKind: validatedSession.workspace.kind || null,
+            },
+          }),
           'impersonation.start': evaluateAction('impersonation.start', {
             resourceType: 'workspace',
             resourceId: validatedSession.workspace.id,

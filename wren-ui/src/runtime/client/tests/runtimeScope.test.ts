@@ -854,6 +854,22 @@ describe('client runtime scope helpers', () => {
     ).toBe(true);
   });
 
+  it('keeps rendering during in-app explicit scope url expansion', () => {
+    expect(
+      shouldBlockRuntimeScopeBootstrapRender({
+        isBrowser: true,
+        currentUrl: '/knowledge?workspaceId=ws-1',
+        nextUrl:
+          '/knowledge?workspaceId=ws-1&knowledgeBaseId=kb-1&kbSnapshotId=snap-1&deployHash=deploy-1',
+        isBootstrapLoading: false,
+        routerReady: true,
+        syncFailed: false,
+        allowLoadingWhileValidating: true,
+        hasExplicitSelectorInCurrentUrl: true,
+      }),
+    ).toBe(false);
+  });
+
   it('defers url sync while an explicit runtime scope route is still validating', () => {
     expect(
       shouldDeferRuntimeScopeUrlSync({

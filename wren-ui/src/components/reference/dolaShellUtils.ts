@@ -30,6 +30,7 @@ export interface DolaShellHistoryItem {
 const SHELL_PREFETCH_PATHS = [
   Path.Home,
   Path.HomeDashboard,
+  Path.HomeSpreadsheets,
   Path.Knowledge,
 ] as const;
 const BACKGROUND_NAV_PREFETCH_KEYS = new Set(['dashboard']);
@@ -167,6 +168,17 @@ export const resolveBackgroundHistoryPrefetchIds = (
     .map((item) => item.id)
     .filter(Boolean)
     .slice(0, limit);
+
+export const shouldShowStableHistoryDuringRefresh = ({
+  historyItems,
+  historyLoading,
+  stableHistoryItems,
+}: {
+  historyItems: DolaShellHistoryItem[];
+  historyLoading: boolean;
+  stableHistoryItems: DolaShellHistoryItem[];
+}) =>
+  historyLoading && historyItems.length === 0 && stableHistoryItems.length > 0;
 
 export const areShellNavItemsEqual = (
   previous: DolaShellNavItem[],

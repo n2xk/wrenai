@@ -91,6 +91,11 @@ describe('novaShellNavigation', () => {
         sectionLabel: '业务与配置',
       },
       {
+        key: 'settingsFeedback',
+        label: '问数反馈',
+        sectionLabel: '观测与运维',
+      },
+      {
         key: 'settingsAudit',
         label: '审计日志',
         sectionLabel: '观测与运维',
@@ -110,7 +115,7 @@ describe('novaShellNavigation', () => {
       buildNovaShellNavItems({
         onNavigate,
       }).map((item) => item.key),
-    ).toEqual(['home', 'knowledge', 'dashboard']);
+    ).toEqual(['home', 'knowledge', 'dashboard', 'spreadsheet']);
   });
 
   it('keeps knowledge navigation in the primary shell stack below dashboard', () => {

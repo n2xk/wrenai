@@ -28,14 +28,18 @@ describe('homeSidebarRequests', () => {
         cacheMode: 'no-store',
         fetcher,
       }),
-    ).resolves.toEqual([
-      {
-        id: 1,
-        summary: '收入分析',
-        workspaceId: 'ws-1',
-        knowledgeBaseId: 'kb-1',
-      },
-    ]);
+    ).resolves.toEqual({
+      threads: [
+        {
+          id: 1,
+          summary: '收入分析',
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
     expect(fetcher).toHaveBeenCalledWith('/api/v1/threads?workspaceId=ws-1', {
       cache: 'no-store',
       signal: undefined,
@@ -53,14 +57,18 @@ describe('homeSidebarRequests', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => [
-          {
-            id: 1,
-            summary: '收入分析',
-            workspaceId: 'ws-1',
-            knowledgeBaseId: 'kb-1',
-          },
-        ],
+        json: async () => ({
+          threads: [
+            {
+              id: 1,
+              summary: '收入分析',
+              workspaceId: 'ws-1',
+              knowledgeBaseId: 'kb-1',
+            },
+          ],
+          nextCursor: 'cursor-2',
+          hasMore: true,
+        }),
       });
 
     await expect(
@@ -68,14 +76,18 @@ describe('homeSidebarRequests', () => {
         requestUrl: '/api/v1/threads?workspaceId=ws-1',
         fetcher,
       }),
-    ).resolves.toEqual([
-      {
-        id: 1,
-        summary: '收入分析',
-        workspaceId: 'ws-1',
-        knowledgeBaseId: 'kb-1',
-      },
-    ]);
+    ).resolves.toEqual({
+      threads: [
+        {
+          id: 1,
+          summary: '收入分析',
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+        },
+      ],
+      nextCursor: 'cursor-2',
+      hasMore: true,
+    });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 

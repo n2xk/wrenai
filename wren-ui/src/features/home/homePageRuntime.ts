@@ -15,6 +15,20 @@ export type AskRuntimeKnowledgeBase = {
   defaultKbSnapshotId?: string | null;
 };
 
+const compactRuntimeSelector = (
+  selector: ClientRuntimeScopeSelector,
+): ClientRuntimeScopeSelector => ({
+  ...(selector.workspaceId ? { workspaceId: selector.workspaceId } : {}),
+  ...(selector.knowledgeBaseId
+    ? { knowledgeBaseId: selector.knowledgeBaseId }
+    : {}),
+  ...(selector.kbSnapshotId ? { kbSnapshotId: selector.kbSnapshotId } : {}),
+  ...(selector.deployHash ? { deployHash: selector.deployHash } : {}),
+  ...(selector.runtimeScopeId
+    ? { runtimeScopeId: selector.runtimeScopeId }
+    : {}),
+});
+
 export const resolveAskRuntimeSelector = ({
   currentSelector,
   selectedKnowledgeBaseIds,
@@ -40,6 +54,68 @@ export const resolveAskRuntimeSelector = ({
       : {}),
     knowledgeBaseId: primaryKnowledgeBaseId,
   };
+};
+
+export const resolveRecommendationRuntimeSelector = ({
+  currentSelector,
+  selectedKnowledgeBaseIds,
+  knowledgeBases,
+  currentKnowledgeBase,
+  currentKbSnapshot,
+  workspaceId,
+}: {
+  currentSelector: ClientRuntimeScopeSelector;
+  selectedKnowledgeBaseIds: string[];
+  knowledgeBases: AskRuntimeKnowledgeBase[];
+  currentKnowledgeBase?: AskRuntimeKnowledgeBase | null;
+  currentKbSnapshot?: { id?: string | null; deployHash?: string | null } | null;
+  workspaceId?: string | null;
+}): ClientRuntimeScopeSelector => {
+  const primaryKnowledgeBaseId = selectedKnowledgeBaseIds[0];
+  const selectedKnowledgeBase = primaryKnowledgeBaseId
+    ? knowledgeBases.find(
+        (knowledgeBase) => knowledgeBase.id === primaryKnowledgeBaseId,
+      ) || null
+    : null;
+  const recommendationKnowledgeBase =
+    selectedKnowledgeBase ||
+    currentKnowledgeBase ||
+    (currentSelector.knowledgeBaseId
+      ? {
+          id: currentSelector.knowledgeBaseId,
+          defaultKbSnapshotId: currentSelector.kbSnapshotId,
+        }
+      : null);
+
+  if (!recommendationKnowledgeBase?.id) {
+    return compactRuntimeSelector(currentSelector);
+  }
+
+  const isCurrentSelectorKnowledgeBase =
+    recommendationKnowledgeBase.id === currentSelector.knowledgeBaseId;
+  const isCurrentRuntimeKnowledgeBase =
+    recommendationKnowledgeBase.id === currentKnowledgeBase?.id;
+  const snapshotId =
+    (isCurrentSelectorKnowledgeBase ? currentSelector.kbSnapshotId : null) ||
+    (isCurrentRuntimeKnowledgeBase ? currentKbSnapshot?.id : null) ||
+    recommendationKnowledgeBase.defaultKbSnapshotId ||
+    undefined;
+  const deployHash =
+    (isCurrentSelectorKnowledgeBase ? currentSelector.deployHash : null) ||
+    (isCurrentRuntimeKnowledgeBase ? currentKbSnapshot?.deployHash : null) ||
+    undefined;
+
+  return compactRuntimeSelector({
+    ...(workspaceId || currentSelector.workspaceId
+      ? { workspaceId: workspaceId || currentSelector.workspaceId }
+      : {}),
+    knowledgeBaseId: recommendationKnowledgeBase.id,
+    ...(snapshotId ? { kbSnapshotId: snapshotId } : {}),
+    ...(deployHash ? { deployHash } : {}),
+    ...(isCurrentSelectorKnowledgeBase && currentSelector.runtimeScopeId
+      ? { runtimeScopeId: currentSelector.runtimeScopeId }
+      : {}),
+  });
 };
 
 export const resolveCreatedThreadRuntimeSelector = ({

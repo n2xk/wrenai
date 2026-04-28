@@ -1,7 +1,6 @@
 import type { ComponentRef, RefObject, UIEvent } from 'react';
 import BookOutlined from '@ant-design/icons/BookOutlined';
 import CloseOutlined from '@ant-design/icons/CloseOutlined';
-import FundViewOutlined from '@ant-design/icons/FundViewOutlined';
 import PaperClipOutlined from '@ant-design/icons/PaperClipOutlined';
 import ToolOutlined from '@ant-design/icons/ToolOutlined';
 import Prompt from '@/components/pages/home/prompt';
@@ -11,7 +10,6 @@ import {
   ComposerAtMark,
   ComposerCard,
   ComposerKnowledgeAction,
-  ComposerPassiveChip,
   ComposerPrompt,
   ComposerScopeRow,
   ComposerShell,
@@ -54,7 +52,6 @@ type Props = {
   knowledgeListViewportRef: RefObject<HTMLDivElement | null>;
   homePromptPlaceholder: string;
   recommendationCards: HomeRecommendationCard[];
-  recommendationSourceHint: string;
   skillPickerOpen: boolean;
   skillKeyword: string;
   skillOptionsLoading: boolean;
@@ -85,7 +82,6 @@ export default function HomeLandingStage({
   promptRef,
   askPrompt,
   selectedKnowledgeBases,
-  selectedSkillLabel,
   knowledgePickerOpen,
   knowledgeKeyword,
   filteredKnowledgeBases,
@@ -97,7 +93,6 @@ export default function HomeLandingStage({
   knowledgeListViewportRef,
   homePromptPlaceholder,
   recommendationCards,
-  recommendationSourceHint,
   skillPickerOpen,
   skillKeyword,
   skillOptionsLoading,
@@ -114,7 +109,6 @@ export default function HomeLandingStage({
   onKnowledgeListScroll,
   onToggleKnowledgeBase,
   onSelectQuestion,
-  onOpenSkillPicker,
   onSkillKeywordChange,
   onToggleDraftSkill,
   onApplySkillSelection,
@@ -163,12 +157,6 @@ export default function HomeLandingStage({
                 <ComposerAtMark>@</ComposerAtMark>
                 <span>指定知识库</span>
               </ComposerKnowledgeAction>
-              {selectedSkillLabel ? (
-                <ComposerPassiveChip>
-                  <ToolOutlined />
-                  <span>{selectedSkillLabel}</span>
-                </ComposerPassiveChip>
-              ) : null}
             </ComposerScopeRow>
 
             <ComposerPrompt
@@ -187,19 +175,19 @@ export default function HomeLandingStage({
               onAtTrigger={onOpenKnowledgePicker}
               footerContent={
                 <>
-                  <ComposerToolButton type="button" disabled>
-                    <FundViewOutlined />
-                    <span>模式</span>
-                  </ComposerToolButton>
                   <ComposerToolButton
                     type="button"
-                    onClick={onOpenSkillPicker}
-                    disabled={skillOptionsLoading}
+                    disabled
+                    title="技能入口暂未开放"
                   >
                     <ToolOutlined />
                     <span>技能</span>
                   </ComposerToolButton>
-                  <ComposerToolButton type="button" disabled>
+                  <ComposerToolButton
+                    type="button"
+                    disabled
+                    title="文件入口暂未开放"
+                  >
                     <PaperClipOutlined />
                     <span>文件</span>
                   </ComposerToolButton>
@@ -228,7 +216,6 @@ export default function HomeLandingStage({
 
       <HomeRecommendationSectionBlock
         cards={recommendationCards}
-        sourceHint={recommendationSourceHint}
         onSelectQuestion={onSelectQuestion}
       />
 

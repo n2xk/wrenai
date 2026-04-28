@@ -387,6 +387,8 @@ export default function RuntimeScopeBootstrap({ children }: Props) {
     routerReady: router.isReady,
     syncFailed,
     allowLoadingWhileValidating: hasValidatedRuntimeScope,
+    hasExplicitSelectorInCurrentUrl:
+      hasExplicitRuntimeScopeSelector(selectorFromUrl),
   });
 
   if (shouldBlockRender) {

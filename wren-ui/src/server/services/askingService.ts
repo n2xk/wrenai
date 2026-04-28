@@ -342,18 +342,12 @@ export class AskingService implements IAskingService {
 }
 
 function ensureAskingServicePrototypePatched() {
-  const proto = AskingService.prototype as AskingService & {
-    initialize?: unknown;
-    normalizeRuntimeScope?: unknown;
-  };
-
-  if (typeof proto.initialize !== 'function') {
-    applyAskingServiceActionPrototype(AskingService);
-  }
-
-  if (typeof proto.normalizeRuntimeScope !== 'function') {
-    applyAskingServiceHelperPrototype(AskingService);
-  }
+  // Keep prototype patches idempotent but always refresh them. During Next.js
+  // dev-server hot reloads the AskingService singleton can outlive this module
+  // while action/helper modules are recompiled, so guarding on one existing
+  // method can leave stale method implementations on the prototype.
+  applyAskingServiceActionPrototype(AskingService);
+  applyAskingServiceHelperPrototype(AskingService);
 }
 
 ensureAskingServicePrototypePatched();

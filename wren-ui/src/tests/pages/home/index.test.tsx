@@ -5,6 +5,7 @@ import HomePage, {
   resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
   resolveCreatedThreadRuntimeSelector,
+  resolveRecommendationRuntimeSelector,
 } from '../../../pages/home';
 import {
   clearHomeSkillOptionsCacheForTests,
@@ -366,30 +367,62 @@ describe('home index page', () => {
     expect(markup).toContain('客户经营知识库');
     expect(markup).toContain('6 张表');
     expect(markup).toContain('3 张表');
-    expect(markup).toContain('案例广场');
+    expect(markup).not.toContain('案例广场');
     expect(markup).toContain('推荐模板');
-    expect(markup).toContain(
-      '问题来自「订单分析知识库」知识库中资产「订单明细」的推荐问法，点击后会填入输入框。',
-    );
+    expect(markup).not.toContain('问题来自');
     expect(markup).toContain('请先概览 订单明细 的核心业务字段与可回答的问题');
     expect(markup).toContain('来源资产 · 订单明细');
     expect(markup).not.toContain('当前知识库');
     expect(markup).not.toContain('系统工作空间');
     expect(markup).not.toContain('确认范围');
-    expect(renderToStaticMarkup(capturedPromptProps.footerContent)).toContain(
-      '模式',
+    const footerMarkup = renderToStaticMarkup(
+      capturedPromptProps.footerContent,
     );
-    expect(renderToStaticMarkup(capturedPromptProps.footerContent)).toContain(
-      '技能',
-    );
-    expect(renderToStaticMarkup(capturedPromptProps.footerContent)).toContain(
-      '文件',
-    );
+    expect(footerMarkup).not.toContain('模式');
+    expect(footerMarkup).toContain('技能');
+    expect(footerMarkup).toContain('技能入口暂未开放');
+    expect(footerMarkup).toContain('文件');
+    expect(footerMarkup).toContain('文件入口暂未开放');
+    expect(footerMarkup).toContain('disabled');
     expect(mockUseAuthSession).toHaveBeenCalledWith({
       includeWorkspaceQuery: false,
     });
 
     useStateSpy.mockRestore();
+  });
+
+  it('loads case cards with current knowledge-base scope without changing the ask scope', () => {
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: jest.fn(),
+      pushWorkspace: jest.fn(),
+      selector: {
+        workspaceId: 'ws-1',
+      },
+    });
+
+    renderPage();
+
+    expect(mockUseAskPrompt).toHaveBeenCalledWith(
+      undefined,
+      {
+        knowledgeBaseIds: undefined,
+        selectedSkillIds: undefined,
+      },
+      undefined,
+      {
+        workspaceId: 'ws-1',
+      },
+    );
+    expect(mockUseHomeSuggestedQuestions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        askRuntimeSelector: {
+          workspaceId: 'ws-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snap-1',
+          deployHash: 'deploy-1',
+        },
+      }),
+    );
   });
 
   it('renders removable pinned knowledge-base chips in composer scope row', () => {
@@ -405,7 +438,7 @@ describe('home index page', () => {
     useStateSpy.mockRestore();
   });
 
-  it('shows sample-runtime source hint when selected knowledge base has no demo mapping', () => {
+  it('shows runtime recommended questions when selected knowledge base has no demo mapping', () => {
     const useStateSpy = setHomeStateOverrides({
       3: ['kb-2'],
     });
@@ -424,9 +457,8 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain(
-      '问题来自当前运行时的样例题库，点击后会填入输入框。',
-    );
+    expect(markup).toContain('最近 30 天 GMV 趋势');
+    expect(markup).not.toContain('问题来自');
 
     useStateSpy.mockRestore();
   });
@@ -461,13 +493,11 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain(
-      '问题来自「客户经营知识库」知识库中资产「会员画像」的推荐问法，点击后会填入输入框。',
-    );
     expect(markup).toContain('请先概览 会员画像 的核心业务字段与可回答的问题');
     expect(markup).toContain('围绕 用户等级 分析 会员画像 的总体趋势');
     expect(markup).toContain('来源资产 · 会员画像');
     expect(markup).not.toContain('最近 30 天 GMV 趋势');
+    expect(markup).not.toContain('问题来自');
 
     useStateSpy.mockRestore();
   });
@@ -490,14 +520,42 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain(
-      '问题来自「订单分析知识库」知识库内多个资产的推荐问法，点击后会填入输入框。',
-    );
     expect(markup).toContain('订单明细问题 1');
     expect(markup).toContain('客户画像问题 1');
     expect(markup).toContain('订单明细问题 2');
     expect(markup).toContain('来源资产 · 订单明细');
     expect(markup).toContain('来源资产 · 客户画像');
+    expect(markup).not.toContain('问题来自');
+  });
+
+  it('prioritizes governed SQL template and instruction suggestions in case cards', () => {
+    mockUseHomeSuggestedQuestions.mockReturnValue({
+      suggestedQuestionsData: {
+        questions: [
+          {
+            question: '统计租户平台990001下渠道990011的渠道日报基础汇总',
+            label: '业务模板 T01',
+          },
+          {
+            question: '对比渠道日报时必须同步检查折扣配置',
+            label: '分析规则',
+          },
+        ],
+      },
+    });
+
+    const markup = renderPage();
+
+    expect(markup).toContain('业务模板 T01');
+    expect(markup).toContain(
+      '统计租户平台990001下渠道990011的渠道日报基础汇总',
+    );
+    expect(markup).toContain('分析规则');
+    expect(markup).toContain('对比渠道日报时必须同步检查折扣配置');
+    expect(markup).not.toContain(
+      '请先概览 订单明细 的核心业务字段与可回答的问题',
+    );
+    expect(markup).not.toContain('问题来自');
   });
 
   it('falls back to selected knowledge-base scoped prompts when runtime samples are unavailable', () => {
@@ -514,11 +572,9 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain(
-      '问题围绕「客户经营知识库」知识库整理，点击后会填入输入框。',
-    );
     expect(markup).toContain('围绕「客户经营知识库」先看哪些关键指标？');
     expect(markup).not.toContain('围绕「订单分析知识库」先看哪些关键指标？');
+    expect(markup).not.toContain('问题围绕');
 
     useStateSpy.mockRestore();
   });
@@ -558,9 +614,8 @@ describe('home index page', () => {
 
     const markup = renderPage();
 
-    expect(markup).toContain(
-      '问题来自「人力资源数据（HR）」知识库的示例问题，点击后会填入输入框。',
-    );
+    expect(markup).toContain('各岗位的平均薪资分别是多少？');
+    expect(markup).not.toContain('问题来自');
 
     useStateSpy.mockRestore();
   });
@@ -1006,6 +1061,32 @@ describe('home index page', () => {
           deployHash: 'deploy-1',
         },
         selectedKnowledgeBaseIds: [],
+        workspaceId: 'ws-1',
+      }),
+    ).toEqual({
+      workspaceId: 'ws-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snap-1',
+      deployHash: 'deploy-1',
+    });
+  });
+
+  it('uses the current knowledge base for recommendation scope when the page URL only has workspace scope', () => {
+    expect(
+      resolveRecommendationRuntimeSelector({
+        currentSelector: {
+          workspaceId: 'ws-1',
+        },
+        selectedKnowledgeBaseIds: [],
+        knowledgeBases: [{ id: 'kb-1', defaultKbSnapshotId: 'snap-1' }],
+        currentKnowledgeBase: {
+          id: 'kb-1',
+          defaultKbSnapshotId: 'snap-1',
+        },
+        currentKbSnapshot: {
+          id: 'snap-1',
+          deployHash: 'deploy-1',
+        },
         workspaceId: 'ws-1',
       }),
     ).toEqual({

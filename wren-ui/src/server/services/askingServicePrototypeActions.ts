@@ -1,4 +1,5 @@
 import { PersistedRuntimeIdentity } from '@server/context/runtimeScope';
+import type { ThreadListOptions } from '../repositories/threadRepository';
 import { PreviewDataResponse } from './queryService';
 import {
   AdjustmentReasoningInput,
@@ -102,8 +103,9 @@ export const applyAskingServiceActionPrototype = (AskingServiceClass: any) => {
   };
   proto.listThreads = async function (
     runtimeIdentity: PersistedRuntimeIdentity,
+    options?: ThreadListOptions,
   ) {
-    return listThreadsAction(this, runtimeIdentity);
+    return listThreadsAction(this, runtimeIdentity, options);
   };
   proto.assertThreadScope = async function (
     threadId: number,
