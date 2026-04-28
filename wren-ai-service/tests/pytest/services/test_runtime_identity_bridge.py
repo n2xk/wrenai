@@ -604,6 +604,59 @@ async def test_ask_feedback_uses_runtime_deploy_hash_when_project_id_is_missing(
 
 
 @pytest.mark.asyncio
+async def test_ask_feedback_passes_language_to_sql_diagnosis():
+    service = make_ask_feedback_service()
+    service._pipelines["sql_regeneration"] = PipelineStub(
+        {
+            "post_process": {
+                "valid_generation_result": None,
+                "invalid_generation_result": {
+                    "type": "ERROR",
+                    "original_sql": "SELECT 1",
+                    "sql": "SELECT broken",
+                    "error": "Column not found",
+                },
+            }
+        }
+    )
+    service._pipelines["sql_diagnosis"] = PipelineStub(
+        {"post_process": {"reasoning": "欄位不存在"}}
+    )
+    service._pipelines["sql_correction"] = PipelineStub(
+        {
+            "post_process": {
+                "valid_generation_result": {"sql": "SELECT 1"},
+                "invalid_generation_result": None,
+            }
+        }
+    )
+    request = AskFeedbackRequest.model_validate(
+        {
+            "question": "本月 GMV",
+            "tables": ["orders"],
+            "sql_generation_reasoning": "需要统计 GMV",
+            "sql": "SELECT broken",
+            "runtimeScopeId": "deploy-1",
+            "configurations": {"language": "Traditional Chinese"},
+        }
+    )
+    request.query_id = "ask-feedback-diagnosis-language-1"
+
+    await service.ask_feedback(request)
+
+    assert (
+        service._pipelines["sql_diagnosis"].run.await_args.kwargs["language"]
+        == "Traditional Chinese"
+    )
+    assert (
+        service._pipelines["sql_correction"].run.await_args.kwargs[
+            "invalid_generation_result"
+        ]["error"]
+        == "欄位不存在"
+    )
+
+
+@pytest.mark.asyncio
 async def test_sql_correction_uses_runtime_deploy_hash_when_project_id_is_missing():
     service = make_sql_correction_service()
     request = SqlCorrectionService.CorrectionRequest.model_validate(

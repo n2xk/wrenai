@@ -219,6 +219,7 @@ class AskFeedbackService:
                                 original_sql=original_sql,
                                 invalid_sql=invalid_sql,
                                 error_message=error_message,
+                                language=ask_feedback_request.configurations.language,
                             )
                             sql_diagnosis_reasoning = sql_diagnosis_results[
                                 "post_process"

@@ -6,14 +6,22 @@ type: llm
 provider: litellm_llm
 timeout: 120
 models:
-- model: openrouter/google/gemini-3.1-flash-lite-preview
+- model: openrouter/deepseek/deepseek-v4-flash
   alias: default
   api_base: https://openrouter.ai/api/v1
   api_key_name: OPENROUTER_API_KEY
   timeout: 120
+  context_window_size: 1048576
   kwargs:
     n: 1
     temperature: 0
+    provider:
+      order:
+      - siliconflow/fp8
+      - novita
+      - deepinfra/fp4
+      - akashml/fp8
+      allow_fallbacks: true
 ---
 type: embedder
 provider: litellm_embedder
