@@ -6,8 +6,11 @@ export type ChartabilityReasonCode =
   | 'INSUFFICIENT_DATA_VARIATION'
   | 'UNSUPPORTED_RESULT_SHAPE';
 
+export type ChartabilityRecommendedDisplay = 'CHART' | 'NUMBER_CARD';
+
 export type ChartabilityResult = {
   chartable: boolean;
+  recommendedDisplay?: ChartabilityRecommendedDisplay | null;
   reasonCode?: ChartabilityReasonCode | null;
   message?: string | null;
 };
@@ -75,7 +78,16 @@ export const evaluateChartability = (
     };
   }
 
-  if (columns.length < 2 || rows.length === 1) {
+  if (rows.length === 1) {
+    return {
+      chartable: true,
+      recommendedDisplay: 'NUMBER_CARD',
+      reasonCode: null,
+      message: '当前结果为单行汇总指标，已切换为指标卡展示。',
+    };
+  }
+
+  if (columns.length < 2) {
     return {
       chartable: false,
       reasonCode: 'UNSUPPORTED_RESULT_SHAPE',
@@ -97,6 +109,7 @@ export const evaluateChartability = (
 
   return {
     chartable: true,
+    recommendedDisplay: 'CHART',
     reasonCode: null,
     message: null,
   };

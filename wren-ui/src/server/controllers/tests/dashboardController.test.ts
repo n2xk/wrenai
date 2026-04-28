@@ -68,6 +68,7 @@ describe('DashboardController scope guards', () => {
       askingService: {
         assertResponseScope: jest.fn(),
         getResponseScoped: jest.fn(),
+        getAskingTaskById: jest.fn(),
       },
       projectService: {
         getProjectById: jest.fn(),
@@ -588,6 +589,7 @@ describe('DashboardController scope guards', () => {
       dashboardId: 7,
       type: 'BAR',
       sql: 'select 1',
+      sqlMode: undefined,
       chartSchema: { mark: 'bar' },
       renderHints: { preferredRenderer: 'svg' },
       canonicalizationVersion: 'chart-canonical-v1',
@@ -603,6 +605,186 @@ describe('DashboardController scope guards', () => {
       sourceThreadId: 34,
       sourceQuestion: '各供应商单产品成本趋势',
     });
+  });
+
+  it('allows pinning number-card chart responses as dashboard NUMBER items', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 7,
+      projectId: 999,
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 12,
+      threadId: 34,
+      question: '统计投注汇总指标',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+      sql: 'select 5 as bet_user_count',
+      chartDetail: {
+        status: 'FINISHED',
+        chartType: 'NUMBER',
+        chartability: {
+          chartable: true,
+          recommendedDisplay: 'NUMBER_CARD',
+        },
+        renderHints: { displayType: 'number_card' },
+        canonicalizationVersion: 'number-card-v1',
+      },
+    });
+    ctx.kbSnapshotRepository.findOneBy.mockResolvedValue({
+      id: 'snapshot-1',
+      projectBridgeId: 42,
+      deployHash: 'deploy-from-snapshot',
+    });
+    ctx.projectService.getProjectById.mockResolvedValue({
+      id: 42,
+      type: 'view',
+    });
+    ctx.deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 42,
+      manifest: 'manifest-42',
+    });
+    ctx.dashboardService.createDashboardItem.mockResolvedValue({
+      id: 88,
+      dashboardId: 7,
+      type: 'NUMBER',
+    });
+
+    await resolver.createDashboardItem(
+      null,
+      { data: { responseId: 12, itemType: 'NUMBER' as any, dashboardId: 7 } },
+      ctx,
+    );
+
+    expect(ctx.queryService.preview).toHaveBeenCalledWith(
+      'select 5 as bet_user_count',
+      expect.objectContaining({
+        cacheEnabled: true,
+        refresh: true,
+      }),
+    );
+    expect(ctx.dashboardService.createDashboardItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardId: 7,
+        type: 'NUMBER',
+        sql: 'select 5 as bet_user_count',
+        chartSchema: undefined,
+        renderHints: { displayType: 'number_card' },
+        canonicalizationVersion: 'number-card-v1',
+        sourceResponseId: 12,
+        sourceThreadId: 34,
+        sourceQuestion: '统计投注汇总指标',
+      }),
+    );
+  });
+
+  it('pins direct template SQL with dialect preview mode', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 7,
+      projectId: 999,
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 12,
+      threadId: 34,
+      question: '统计渠道日报',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+      askingTaskId: 66,
+      sql: 'select DATE_ADD(dt, INTERVAL 1 DAY) as dt from channel_daily',
+      chartDetail: {
+        chartSchema: { mark: 'line' },
+      },
+    });
+    ctx.askingService.getAskingTaskById.mockResolvedValue({
+      templateDecision: {
+        sqlSource: 'anchored_template',
+        missingParameters: [],
+      },
+    });
+    ctx.kbSnapshotRepository.findOneBy.mockResolvedValue({
+      id: 'snapshot-1',
+      projectBridgeId: 42,
+      deployHash: 'deploy-from-snapshot',
+    });
+    ctx.projectService.getProjectById.mockResolvedValue({
+      id: 42,
+      type: 'view',
+    });
+    ctx.deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 42,
+      manifest: 'manifest-42',
+    });
+    ctx.dashboardService.createDashboardItem.mockResolvedValue({
+      id: 88,
+      dashboardId: 7,
+      type: 'LINE',
+    });
+
+    await resolver.createDashboardItem(
+      null,
+      { data: { responseId: 12, itemType: 'LINE' as any, dashboardId: 7 } },
+      ctx,
+    );
+
+    expect(ctx.queryService.preview).toHaveBeenCalledWith(
+      'select DATE_ADD(dt, INTERVAL 1 DAY) as dt from channel_daily',
+      expect.objectContaining({
+        sqlMode: 'dialect',
+      }),
+    );
+    expect(ctx.dashboardService.createDashboardItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sqlMode: 'dialect',
+      }),
+    );
+  });
+
+  it('rejects pinning response SQL results as dashboard table items', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 7,
+      projectId: 999,
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 12,
+      threadId: 34,
+      question: '查看渠道日报明细',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+      sql: 'select * from channel_daily',
+      chartDetail: null,
+    });
+    await expect(
+      resolver.createDashboardItem(
+        null,
+        { data: { responseId: 12, itemType: 'TABLE' as any, dashboardId: 7 } },
+        ctx,
+      ),
+    ).rejects.toThrow(
+      'Table results should be saved as Spreadsheet assets instead of dashboard items.',
+    );
+
+    expect(ctx.queryService.preview).not.toHaveBeenCalled();
+    expect(ctx.dashboardService.createDashboardItem).not.toHaveBeenCalled();
   });
 
   it('resolves the current dashboard from runtime binding even when the current project bridge is null', async () => {
@@ -725,6 +907,7 @@ describe('DashboardController scope guards', () => {
       dashboardId: 4,
       detail: {
         sql: 'select gm from revenue',
+        sourceResponseId: 82,
         runtimeIdentity: {
           projectId: null,
           workspaceId: 'workspace-2',
@@ -732,6 +915,17 @@ describe('DashboardController scope guards', () => {
           kbSnapshotId: 'snapshot-2',
           deployHash: 'deploy-2',
         },
+      },
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 82,
+      askingTaskId: 66,
+      sourceResponseId: null,
+    });
+    ctx.askingService.getAskingTaskById.mockResolvedValue({
+      templateDecision: {
+        sqlSource: 'anchored_template',
+        missingParameters: [],
       },
     });
     ctx.dashboardService.getDashboardForScope.mockResolvedValue({
@@ -771,6 +965,12 @@ describe('DashboardController scope guards', () => {
       kbSnapshotId: 'snapshot-2',
       deployHash: 'deploy-2',
     });
+    expect(ctx.queryService.preview).toHaveBeenCalledWith(
+      'select gm from revenue',
+      expect.objectContaining({
+        sqlMode: 'dialect',
+      }),
+    );
     expect(result.data).toEqual([{ gm: 321 }]);
   });
 });

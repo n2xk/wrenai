@@ -266,6 +266,9 @@ export const deriveChartThinkingTrace = (
     buildThinkingStep({
       key: 'chart.chart_generated',
       status: generationStatus,
+      messageParams: {
+        chartType: chartDetail.chartType || null,
+      },
       phase: 'generation',
       detail:
         generationStatus === 'failed'

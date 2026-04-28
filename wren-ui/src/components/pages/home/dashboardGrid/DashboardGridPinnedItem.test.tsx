@@ -20,6 +20,39 @@ jest.mock('antd', () => {
       capturedButtons.push(props);
       return React.createElement('button', props, props.children);
     },
+    Table: ({ columns = [], dataSource = [] }: any) =>
+      React.createElement(
+        'table',
+        null,
+        React.createElement(
+          'thead',
+          null,
+          React.createElement(
+            'tr',
+            null,
+            columns.map((column: any) =>
+              React.createElement('th', { key: column.key }, column.title),
+            ),
+          ),
+        ),
+        React.createElement(
+          'tbody',
+          null,
+          dataSource.map((row: any) =>
+            React.createElement(
+              'tr',
+              { key: row.key },
+              columns.map((column: any) =>
+                React.createElement(
+                  'td',
+                  { key: column.key },
+                  row[column.dataIndex],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
   };
 });
 
@@ -108,5 +141,62 @@ describe('DashboardGridPinnedItem', () => {
 
     expect(clickEvent.stopPropagation).toHaveBeenCalledTimes(1);
     expect(onNavigateToThread).toHaveBeenCalledWith(5, 20);
+  });
+
+  it('renders table dashboard items as data tables', () => {
+    const markup = renderToStaticMarkup(
+      <DashboardGridPinnedItem
+        item={{
+          id: 2,
+          dashboardId: 10,
+          type: 'TABLE',
+          displayName: '渠道日报明细',
+          layout: { x: 0, y: 0, w: 4, h: 3 },
+          detail: {
+            sql: 'select * from channel_daily',
+            sourceQuestion: '查看渠道日报明细',
+            validationErrors: [],
+          },
+        }}
+        isSupportCached
+        runtimeScopeSelector={runtimeScopeSelector}
+        onDelete={jest.fn().mockResolvedValue(undefined)}
+        onItemUpdated={jest.fn()}
+        onNavigateToThread={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(markup).toContain('渠道日报明细');
+    expect(markup).toContain('<table>');
+    expect(markup).not.toContain('chart');
+  });
+
+  it('renders number dashboard items as indicator cards instead of charts', () => {
+    const markup = renderToStaticMarkup(
+      <DashboardGridPinnedItem
+        item={{
+          id: 3,
+          dashboardId: 10,
+          type: 'NUMBER',
+          displayName: '投注汇总指标',
+          layout: { x: 0, y: 0, w: 3, h: 2 },
+          detail: {
+            sql: 'select count(*) as bet_user_count',
+            renderHints: { displayType: 'number_card' },
+            sourceQuestion: '统计投注汇总指标',
+            validationErrors: [],
+          },
+        }}
+        isSupportCached
+        runtimeScopeSelector={runtimeScopeSelector}
+        onDelete={jest.fn().mockResolvedValue(undefined)}
+        onItemUpdated={jest.fn()}
+        onNavigateToThread={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(markup).toContain('投注汇总指标');
+    expect(markup).toContain('暂无可展示的指标数据');
+    expect(markup).not.toContain('chart');
   });
 });

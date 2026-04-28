@@ -21,6 +21,9 @@ import {
   previewDashboardItem,
   type DashboardPreviewData,
 } from '@/utils/dashboardRest';
+import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
+import { DashboardItemType } from '@/types/home';
+import NumberCardGroup from '@/components/numberCard/NumberCard';
 
 import { DashboardGridPinnedItemTitle } from './DashboardGridPinnedItemTitle';
 import type {
@@ -34,6 +37,23 @@ const Chart = dynamic(() => import('@/components/chart'), {
 
 const toPreferredRenderer = (value: unknown): 'svg' | 'canvas' | undefined =>
   value === 'svg' || value === 'canvas' ? value : undefined;
+
+const toDashboardTablePreview = (previewItem?: DashboardPreviewData | null) => {
+  const rows = previewItem?.data || [];
+  const columns = previewItem?.columns?.length
+    ? previewItem.columns.map((column) => column.name)
+    : Array.from(new Set(rows.flatMap((row) => Object.keys(row || {}))));
+
+  return {
+    columns: columns.map((name) => ({
+      dataIndex: name,
+      key: name,
+      title: name,
+      titleText: name,
+    })),
+    data: rows.map((row) => columns.map((column) => row[column])),
+  };
+};
 
 export const DashboardGridPinnedItem = forwardRef(
   (
@@ -97,12 +117,12 @@ export const DashboardGridPinnedItem = forwardRef(
         } catch (error) {
           if (previewRequestIdRef.current === requestId) {
             setPreviewItem(null);
+            message.error(
+              error instanceof Error
+                ? error.message
+                : '加载看板图表失败，请稍后重试。',
+            );
           }
-          message.error(
-            error instanceof Error
-              ? error.message
-              : '加载看板图表失败，请稍后重试。',
-          );
           return null;
         } finally {
           if (previewRequestIdRef.current === requestId) {
@@ -129,6 +149,13 @@ export const DashboardGridPinnedItem = forwardRef(
     const lastRefreshTime =
       previewItem?.cacheOverrodeAt || previewItem?.cacheCreatedAt;
 
+    useEffect(
+      () => () => {
+        previewRequestIdRef.current += 1;
+      },
+      [],
+    );
+
     useEffect(() => {
       if (readOnly) {
         previewRequestIdRef.current += 1;
@@ -153,9 +180,25 @@ export const DashboardGridPinnedItem = forwardRef(
       });
     }, [item.layout]);
 
+    const isTableItem = item.type === DashboardItemType.TABLE;
+    const isNumberItem = item.type === DashboardItemType.NUMBER;
+    const tablePreview = useMemo(
+      () => (isTableItem ? toDashboardTablePreview(previewItem) : null),
+      [isTableItem, previewItem],
+    );
     const title = useMemo(
-      () => item.displayName || item.detail?.chartSchema?.title || '',
-      [item.displayName, item.detail?.chartSchema?.title],
+      () =>
+        item.displayName ||
+        item.detail?.chartSchema?.title ||
+        item.detail?.sourceQuestion ||
+        (isTableItem ? '数据表' : isNumberItem ? '指标卡' : ''),
+      [
+        isTableItem,
+        isNumberItem,
+        item.detail?.chartSchema?.title,
+        item.detail?.sourceQuestion,
+        item.displayName,
+      ],
     );
 
     const onMoreClick = async (
@@ -222,6 +265,7 @@ export const DashboardGridPinnedItem = forwardRef(
               isSupportCached={isSupportCached}
               disableRefresh={readOnly}
               disableDelete={readOnly}
+              hideCategoryToggle={isTableItem || isNumberItem}
             >
               <Button
                 className="adm-pinned-more gray-8"
@@ -244,12 +288,34 @@ export const DashboardGridPinnedItem = forwardRef(
                 description={validationErrors[0]}
               />
             ) : null}
-            <LoadingWrapper loading={loading} tip="图表加载中…">
+            <LoadingWrapper
+              loading={loading}
+              tip={
+                isTableItem
+                  ? '数据表加载中…'
+                  : isNumberItem
+                    ? '指标卡加载中…'
+                    : '图表加载中…'
+              }
+            >
               {readOnly ? (
                 <Alert
                   showIcon
                   type="info"
                   title="历史快照下不支持执行看板查询。"
+                />
+              ) : isTableItem ? (
+                <PreviewDataContent
+                  columns={tablePreview?.columns || []}
+                  data={tablePreview?.data || []}
+                  loading={loading}
+                  locale={{ emptyText: '暂无数据' }}
+                />
+              ) : isNumberItem ? (
+                <NumberCardGroup
+                  columns={previewItem?.columns || []}
+                  rows={previewItem?.data || []}
+                  variant="pinned"
                 />
               ) : (
                 <Chart

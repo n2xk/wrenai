@@ -3,11 +3,13 @@ import { Button, Input, type InputRef, Modal, Space, Typography } from 'antd';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 
 export default function ChartAnswerPinModal({
+  artifactLabel = '当前图表',
   open,
   submitting,
   onCancel,
   onSubmit,
 }: {
+  artifactLabel?: string;
   open: boolean;
   submitting: boolean;
   onCancel: () => void;
@@ -41,7 +43,7 @@ export default function ChartAnswerPinModal({
     >
       <Space orientation="vertical" size={14} style={{ width: '100%' }}>
         <Typography.Text type="secondary">
-          创建一个新的工作空间看板，并在创建后立即固定当前图表。
+          创建一个新的工作空间看板，并在创建后立即固定{artifactLabel}。
         </Typography.Text>
         <Input
           ref={inputRef}

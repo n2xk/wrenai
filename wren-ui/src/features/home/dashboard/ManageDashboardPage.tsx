@@ -3,7 +3,10 @@ import { useRouter } from 'next/router';
 
 import { appMessage as message, appModal } from '@/utils/antdAppBridge';
 import { LoadingWrapper } from '@/components/PageLoading';
-import type { DashboardGridHandle } from '@/components/pages/home/dashboardGrid';
+import type {
+  DashboardGridHandle,
+  DashboardGridItem,
+} from '@/components/pages/home/dashboardGrid';
 import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 import DirectShellPageFrame from '@/components/reference/DirectShellPageFrame';
 import useDrawerAction from '@/hooks/useDrawerAction';
@@ -34,6 +37,15 @@ import {
 import { useManageDashboardPageActions } from './useManageDashboardPageActions';
 import { resolveDashboardBoundSelector } from './dashboardRuntimeSelectors';
 
+const resolveDashboardItemDisplayTitle = (
+  item?: DashboardGridItem | null,
+  fallback = '图表卡片',
+) =>
+  item?.displayName ||
+  item?.detail?.chartSchema?.title ||
+  item?.detail?.sourceQuestion ||
+  fallback;
+
 export default function Dashboard() {
   const router = useRouter();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -50,6 +62,11 @@ export default function Dashboard() {
     null,
   );
   const [renameDashboardName, setRenameDashboardName] = useState('');
+  const [renameDashboardItemOpen, setRenameDashboardItemOpen] = useState(false);
+  const [renameDashboardItemId, setRenameDashboardItemId] = useState<
+    number | null
+  >(null);
+  const [renameDashboardItemName, setRenameDashboardItemName] = useState('');
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const runtimeSelectorState = useRuntimeSelectorState().runtimeSelectorState;
   const currentDashboardRuntimeSelector = useMemo(
@@ -237,7 +254,7 @@ export default function Dashboard() {
     () =>
       dashboardItems.map((item, index) => ({
         id: item.id,
-        title: item.displayName || `图表卡片 ${index + 1}`,
+        title: resolveDashboardItemDisplayTitle(item, `图表卡片 ${index + 1}`),
         meta: `${item.type} · ${item.layout.w}×${item.layout.h}`,
       })),
     [dashboardItems],
@@ -253,6 +270,7 @@ export default function Dashboard() {
   const {
     cacheSettingsSubmitting,
     createDashboardLoading,
+    dashboardItemMutationTargetId,
     dashboardMutationTargetId,
     dashboardMutationType,
     goToSourceThread,
@@ -265,6 +283,7 @@ export default function Dashboard() {
     submitCreateDashboard,
     submitDeleteDashboard,
     submitRenameDashboard,
+    submitRenameDashboardItem,
     submitSetDefaultDashboard,
   } = useManageDashboardPageActions({
     activeDashboardId,
@@ -309,6 +328,38 @@ export default function Dashboard() {
       setRenameDashboardOpen(true);
     },
     [visibleDashboards],
+  );
+
+  const onOpenRenameDashboardItem = useCallback(
+    (itemId: number) => {
+      const targetItem = dashboardItems.find((item) => item.id === itemId);
+      if (!targetItem) {
+        return;
+      }
+      setRenameDashboardItemId(itemId);
+      setRenameDashboardItemName(resolveDashboardItemDisplayTitle(targetItem));
+      setRenameDashboardItemOpen(true);
+    },
+    [dashboardItems],
+  );
+
+  const onDeleteDashboardItemFromRail = useCallback(
+    (itemId: number) => {
+      const targetItem = dashboardItems.find((item) => item.id === itemId);
+      appModal.confirm({
+        title: '确认删除这个图表吗？',
+        content: `删除后将从当前看板移除「${resolveDashboardItemDisplayTitle(
+          targetItem,
+        )}」。`,
+        okText: '删除图表',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: async () => {
+          await onDelete(itemId);
+        },
+      });
+    },
+    [dashboardItems, onDelete],
   );
 
   const onDeleteDashboard = useCallback(
@@ -369,10 +420,12 @@ export default function Dashboard() {
             }
             onCreateDashboard={() => setCreateDashboardOpen(true)}
             onDeleteDashboard={onDeleteDashboard}
+            onDeleteItem={onDeleteDashboardItemFromRail}
             onRefreshDashboard={(dashboardId) =>
               void refreshDashboard(dashboardId)
             }
             onRenameDashboard={onOpenRenameDashboard}
+            onRenameItem={onOpenRenameDashboardItem}
             onSelectDashboard={(dashboardId) => {
               void replaceDashboardRoute(dashboardId);
             }}
@@ -451,6 +504,36 @@ export default function Dashboard() {
             setRenameDashboardOpen(false);
             setRenameDashboardId(null);
             setRenameDashboardName('');
+          }
+        }}
+      />
+      <DashboardCreateModal
+        confirmLoading={dashboardItemMutationTargetId === renameDashboardItemId}
+        description="更新当前看板中已固定图表的名称，不会影响来源问数结果。"
+        inputPlaceholder="请输入新的图表名称"
+        isDashboardReadonly={isDashboardReadonly}
+        okText="保存名称"
+        open={renameDashboardItemOpen}
+        title="重命名图表"
+        value={renameDashboardItemName}
+        onCancel={() => {
+          setRenameDashboardItemOpen(false);
+          setRenameDashboardItemId(null);
+          setRenameDashboardItemName('');
+        }}
+        onChangeValue={setRenameDashboardItemName}
+        onSubmit={async () => {
+          if (renameDashboardItemId == null) {
+            return;
+          }
+          const success = await submitRenameDashboardItem(
+            renameDashboardItemId,
+            renameDashboardItemName,
+          );
+          if (success) {
+            setRenameDashboardItemOpen(false);
+            setRenameDashboardItemId(null);
+            setRenameDashboardItemName('');
           }
         }}
       />

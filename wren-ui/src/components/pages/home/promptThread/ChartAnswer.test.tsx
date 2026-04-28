@@ -12,6 +12,12 @@ const mockPushWorkspace = jest.fn();
 const mockMessageSuccess = jest.fn();
 const mockMessageError = jest.fn();
 const mockMessageWarning = jest.fn();
+let mockWatchedChartType: string | null = 'LINE';
+let mockChartSpecOptionValues: { chartType: string | null } = {
+  chartType: 'LINE',
+};
+let mockPreviewData: any = { data: [], columns: [] };
+const capturedButtons: any[] = [];
 let capturedChartProps: any = null;
 
 let capturedPinModalProps: any = null;
@@ -31,18 +37,22 @@ jest.mock('antd', () => {
   (FormComponent as any).useForm = () => [
     {
       setFieldsValue: jest.fn(),
-      getFieldsValue: () => ({ chartType: 'LINE' }),
+      getFieldsValue: () => ({ chartType: mockWatchedChartType }),
       resetFields: jest.fn(),
     },
   ];
-  (FormComponent as any).useWatch = () => 'LINE';
+  (FormComponent as any).useWatch = () => mockWatchedChartType;
 
   return {
     Alert: ({ message, title, description }: any) =>
       React.createElement('div', null, message || title, description),
     Form: FormComponent,
-    Button: ({ children, onClick }: any) =>
-      React.createElement('button', { onClick }, children),
+    Button: ({ children, onClick, ...props }: any) => {
+      capturedButtons.push({ children, onClick, ...props });
+      return React.createElement('button', { onClick }, children);
+    },
+    Popover: ({ children, content }: any) =>
+      React.createElement('div', null, children, content),
     Skeleton: ({ children }: any) => React.createElement('div', null, children),
     Input: Object.assign(
       ({ allowClear: _allowClear, ...props }: any) =>
@@ -96,13 +106,13 @@ jest.mock(
 
 jest.mock('@/components/chart/meta', () => ({
   getChartSpecFieldTitleMap: () => ({}),
-  getChartSpecOptionValues: () => ({ chartType: 'LINE' }),
+  getChartSpecOptionValues: () => mockChartSpecOptionValues,
 }));
 
 jest.mock('@/hooks/useResponsePreviewData', () => ({
   __esModule: true,
   default: () => ({
-    data: { previewData: { data: [], columns: [] } },
+    data: { previewData: mockPreviewData },
     loading: false,
     error: undefined,
     called: true,
@@ -161,6 +171,10 @@ describe('ChartAnswer', () => {
     jest.clearAllMocks();
     capturedPinModalProps = null;
     capturedChartProps = null;
+    capturedButtons.length = 0;
+    mockWatchedChartType = 'LINE';
+    mockChartSpecOptionValues = { chartType: 'LINE' };
+    mockPreviewData = { data: [], columns: [] };
     mockEnsureLoaded.mockResolvedValue({
       previewData: { data: [], columns: [] },
     });
@@ -350,6 +364,120 @@ describe('ChartAnswer', () => {
     useStateSpy.mockRestore();
   });
 
+  it('pins multi-line charts as a supported dashboard item type', async () => {
+    mockWatchedChartType = 'MULTI_LINE';
+    mockChartSpecOptionValues = { chartType: 'MULTI_LINE' };
+    const useStateSpy = setStateOverrides({
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: '经营总览' },
+    ]);
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 99,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '多指标趋势',
+            chartType: 'MULTI_LINE',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'bet_times', type: 'temporal' },
+                y: { field: 'Value', type: 'quantitative' },
+                color: { field: 'Metric', type: 'nominal' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedChartProps.onPin();
+
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+      {
+        itemType: 'MULTI_LINE',
+        responseId: 99,
+        dashboardId: 11,
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
+  it('renders single-row numeric results as number cards and pins them as NUMBER items', async () => {
+    mockWatchedChartType = null;
+    mockChartSpecOptionValues = { chartType: null };
+    mockPreviewData = {
+      columns: [
+        { name: 'bet_user_count', type: 'BIGINT' },
+        { name: 'bet_order_count', type: 'BIGINT' },
+        { name: 'total_valid_bet_amount', type: 'DECIMAL' },
+      ],
+      data: [[5, 13, '7300.00']],
+    };
+    const useStateSpy = setStateOverrides({
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: '经营总览' },
+    ]);
+
+    const markup = renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 100,
+          chartDetail: {
+            status: 'FINISHED',
+            chartType: 'NUMBER',
+            description: '当前结果为单行汇总指标，已切换为指标卡展示。',
+            chartability: {
+              chartable: true,
+              recommendedDisplay: 'NUMBER_CARD',
+            },
+            renderHints: {
+              displayType: 'number_card',
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(markup).toContain('bet user count');
+    expect(markup).toContain('7,300.00');
+    expect(capturedChartProps).toBeNull();
+
+    const pinButton = capturedButtons.find(
+      (button) => button.children === '固定到看板',
+    );
+    await pinButton.onClick();
+
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+      {
+        itemType: 'NUMBER',
+        responseId: 100,
+        dashboardId: 11,
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
   it('passes canonical renderer hints through to the chart component', () => {
     renderToStaticMarkup(
       React.createElement(ChartAnswer, {
@@ -409,7 +537,7 @@ describe('ChartAnswer', () => {
     expect(markup).toContain('Vega-Lite schema warning');
   });
 
-  it('uses the dashboard pin text button while hiding inline chart edit actions', () => {
+  it('uses the dashboard pin text button while exposing inline chart edit actions', () => {
     renderToStaticMarkup(
       React.createElement(ChartAnswer, {
         threadResponse: {
@@ -430,7 +558,7 @@ describe('ChartAnswer', () => {
     );
 
     expect(capturedChartProps?.pinButtonLabel).toBe('固定到看板');
-    expect(capturedChartProps?.hideEditAction).toBe(true);
+    expect(capturedChartProps?.hideEditAction).toBeUndefined();
     expect(capturedChartProps?.hideReloadAction).toBe(true);
   });
 

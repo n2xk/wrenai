@@ -74,6 +74,7 @@ export type DashboardDetailData = DashboardListItem & {
 };
 
 export type DashboardPreviewData = {
+  columns?: Array<{ name: string; type?: string | null }> | null;
   chartDataProfile?: Record<string, unknown> | null;
   cacheHit?: boolean;
   cacheCreatedAt?: string | null;

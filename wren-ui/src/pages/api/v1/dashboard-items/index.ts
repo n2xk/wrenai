@@ -31,6 +31,9 @@ export default async function handler(
     ) {
       throw new ApiError('Dashboard item type is required', 400);
     }
+    if (itemType === DashboardItemType.TABLE) {
+      throw new ApiError('表格结果请保存为数据表，不能固定到看板。', 400);
+    }
 
     const ctx = await buildApiContextFromRequest({ req });
     const item = await dashboardController.createDashboardItem(

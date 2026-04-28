@@ -1,5 +1,7 @@
 import { memo, useMemo } from 'react';
-import { Alert, Typography } from 'antd';
+import { Alert, Button, Space, Tooltip, Typography } from 'antd';
+import DownloadOutlined from '@ant-design/icons/DownloadOutlined';
+import FileExcelOutlined from '@ant-design/icons/FileExcelOutlined';
 import styled from 'styled-components';
 import { getColumnTypeIcon } from '@/utils/columnType';
 import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
@@ -8,8 +10,25 @@ import {
   parseOperationError,
 } from '@/utils/errorHandler';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import {
+  exportPreviewDataCsv,
+  exportPreviewDataExcel,
+  hasExportablePreviewData,
+} from '@/utils/exportTabularData';
 
 const { Text } = Typography;
+
+const PreviewDataShell = styled.div`
+  min-width: 0;
+`;
+
+const PreviewDataToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+`;
 
 const StyledCell = styled.div`
   position: relative;
@@ -86,6 +105,7 @@ const getPreviewColumns = (
   });
 
 interface Props {
+  className?: string;
   previewData?: {
     data: Array<Array<any>>;
     columns: Array<{
@@ -97,14 +117,34 @@ interface Props {
   error?: Error | null;
   locale?: { emptyText: React.ReactNode };
   copyable?: boolean;
+  exportFileName?: string;
+  extraActions?: React.ReactNode;
+  showExport?: boolean;
+  showRowIndex?: boolean;
+  rowIndexOffset?: number;
+  tableScrollY?: number | string | false;
 }
 
 export default function PreviewData(props: Props) {
-  const { previewData, loading, error, locale, copyable = true } = props;
+  const {
+    className,
+    previewData,
+    loading,
+    error,
+    locale,
+    copyable = true,
+    exportFileName,
+    extraActions,
+    showExport = true,
+    showRowIndex = false,
+    rowIndexOffset = 0,
+    tableScrollY,
+  } = props;
   const mergedLocale = useMemo(
     () => ({ emptyText: '暂无数据', ...locale }),
     [locale],
   );
+  const hasExportableData = hasExportablePreviewData(previewData);
 
   const columns = useMemo(
     () =>
@@ -133,12 +173,56 @@ export default function PreviewData(props: Props) {
     );
   }
 
+  const shouldRenderExportActions = showExport && hasExportableData;
+  const shouldRenderToolbar =
+    Boolean(extraActions) || shouldRenderExportActions;
+
   return (
-    <PreviewDataContent
-      columns={columns}
-      data={previewData?.data || []}
-      loading={loading}
-      locale={mergedLocale}
-    />
+    <PreviewDataShell className={className}>
+      {shouldRenderToolbar ? (
+        <PreviewDataToolbar>
+          {extraActions ? <Space size={6}>{extraActions}</Space> : null}
+          {shouldRenderExportActions ? (
+            <Space size={6}>
+              <Tooltip title="导出当前已加载的预览结果，可用 Excel 打开">
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  disabled={loading}
+                  onClick={() =>
+                    previewData &&
+                    exportPreviewDataCsv(previewData, exportFileName)
+                  }
+                >
+                  导出 CSV
+                </Button>
+              </Tooltip>
+              <Tooltip title="导出为 Excel 可打开的表格文件">
+                <Button
+                  size="small"
+                  icon={<FileExcelOutlined />}
+                  disabled={loading}
+                  onClick={() =>
+                    previewData &&
+                    exportPreviewDataExcel(previewData, exportFileName)
+                  }
+                >
+                  导出 Excel
+                </Button>
+              </Tooltip>
+            </Space>
+          ) : null}
+        </PreviewDataToolbar>
+      ) : null}
+      <PreviewDataContent
+        columns={columns}
+        data={previewData?.data || []}
+        loading={loading}
+        locale={mergedLocale}
+        showRowIndex={showRowIndex}
+        rowIndexOffset={rowIndexOffset}
+        scrollY={tableScrollY}
+      />
+    </PreviewDataShell>
   );
 }

@@ -17,7 +17,8 @@ export interface CreateDashboardItemInput {
   dashboardId: number;
   type: DashboardItemType;
   sql: string;
-  chartSchema: DashboardItemDetail['chartSchema'];
+  sqlMode?: DashboardItemDetail['sqlMode'];
+  chartSchema?: DashboardItemDetail['chartSchema'];
   renderHints?: DashboardItemDetail['renderHints'];
   canonicalizationVersion?: DashboardItemDetail['canonicalizationVersion'];
   chartDataProfile?: DashboardItemDetail['chartDataProfile'];

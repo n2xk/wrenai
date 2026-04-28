@@ -1,9 +1,10 @@
 import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Form } from 'antd';
+import { Alert, Form, Popover } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
+import PushPinOutlined from '@ant-design/icons/PushpinOutlined';
 import { ChartType, DashboardItemType } from '@/types/home';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import { isEmpty, isEqual } from 'lodash';
@@ -40,6 +41,9 @@ import {
 import { appMessage, appModal } from '@/utils/antdAppBridge';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 import { getThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
+import NumberCardGroup, {
+  isNumberCardChartDetail,
+} from '@/components/numberCard/NumberCard';
 
 const Chart = dynamic(() => import('@/components/chart'), { ssr: false });
 
@@ -83,6 +87,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   const { chartDetail } = threadResponse;
   const { error, status, adjustment } = chartDetail || {};
   const effectiveChartStatus = status || null;
+  const isNumberCard = isNumberCardChartDetail(chartDetail);
 
   const previewDataResult = useResponsePreviewData(
     threadResponse.id,
@@ -173,7 +178,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
   }, [chartDetail, effectiveChartStatus]);
 
   const shouldRequestPreview =
-    shouldAutoPreview || !!chartSpec || isWorkbenchMode;
+    shouldAutoPreview || !!chartSpec || isNumberCard || isWorkbenchMode;
 
   useEffect(() => {
     setHasRequestedPreview(false);
@@ -364,9 +369,11 @@ export default function ChartAnswer(props: AnswerResultProps) {
     targetDashboardId: number | null,
     targetDashboardName?: string | null,
   ) => {
-    const itemType = String(
-      chartType || chartOptionValues.chartType || '',
-    ).toUpperCase() as DashboardItemType;
+    const itemType = (
+      isNumberCard
+        ? DashboardItemType.NUMBER
+        : String(chartType || chartOptionValues.chartType || '').toUpperCase()
+    ) as DashboardItemType;
     if (!Object.values(DashboardItemType).includes(itemType)) {
       throw new Error('当前图表类型暂不支持固定到看板。');
     }
@@ -504,6 +511,32 @@ export default function ChartAnswer(props: AnswerResultProps) {
   }
 
   const chartRegenerateBtn = adjustment ? regenerateBtn : null;
+  const pinPopoverContent = shouldUsePinPopover ? (
+    <ChartAnswerPinPopover
+      dashboardsLoading={dashboardsLoading}
+      dashboardOptions={dashboardOptions}
+      disabled={pinActionDisabled}
+      onCreateAndPin={() => {
+        setIsPinPopoverOpen(false);
+        setIsCreatePinModalOpen(true);
+      }}
+      onSelectDashboard={async (dashboardId, dashboardName) => {
+        setIsPinPopoverOpen(false);
+        await runPinToDashboard(dashboardId, dashboardName);
+      }}
+    />
+  ) : undefined;
+
+  const numberCardPinButton = (
+    <ResultActionButton
+      icon={<PushPinOutlined />}
+      disabled={pinActionDisabled}
+      loading={pinSubmitting}
+      onClick={shouldUsePinPopover ? undefined : () => onPin()}
+    >
+      {messages.headerActions.pinDashboard}
+    </ResultActionButton>
+  );
 
   return (
     <StyledSkeleton
@@ -529,7 +562,38 @@ export default function ChartAnswer(props: AnswerResultProps) {
             }
           />
         ) : null}
-        {chartSpec ? (
+        {isNumberCard ? (
+          <ChartWrapper className="border border-gray-4 rounded mt-4 p-4 overflow-hidden">
+            <div className="d-flex justify-content-between align-center mb-4">
+              <div className="gray-7 text-sm">
+                当前结果为汇总指标，已按指标卡展示
+              </div>
+              {shouldUsePinPopover ? (
+                <Popover
+                  trigger="click"
+                  placement="bottomRight"
+                  content={pinPopoverContent}
+                  open={isPinPopoverOpen}
+                  onOpenChange={(open) => {
+                    if (pinActionDisabled) {
+                      return;
+                    }
+                    if (open) {
+                      void onPin();
+                    } else {
+                      setIsPinPopoverOpen(false);
+                    }
+                  }}
+                >
+                  {numberCardPinButton}
+                </Popover>
+              ) : (
+                numberCardPinButton
+              )}
+            </div>
+            <NumberCardGroup columns={dataColumns} rows={dataValues} />
+          </ChartWrapper>
+        ) : chartSpec ? (
           <ChartWrapper
             className={clsx(
               'border border-gray-4 rounded mt-4 pb-3 overflow-hidden',
@@ -576,30 +640,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
               width={isWorkbenchMode ? '100%' : 700}
               spec={chartSpec}
               values={dataValues}
-              hideEditAction
               hideReloadAction
               onEdit={onEdit}
               onReload={onReload}
               onPin={onPin}
               pinButtonLabel={messages.headerActions.pinDashboard}
               pinDisabled={pinActionDisabled}
-              pinPopoverContent={
-                shouldUsePinPopover ? (
-                  <ChartAnswerPinPopover
-                    dashboardsLoading={dashboardsLoading}
-                    dashboardOptions={dashboardOptions}
-                    disabled={pinActionDisabled}
-                    onCreateAndPin={() => {
-                      setIsPinPopoverOpen(false);
-                      setIsCreatePinModalOpen(true);
-                    }}
-                    onSelectDashboard={async (dashboardId, dashboardName) => {
-                      setIsPinPopoverOpen(false);
-                      await runPinToDashboard(dashboardId, dashboardName);
-                    }}
-                  />
-                ) : undefined
-              }
+              pinPopoverContent={pinPopoverContent}
               pinPopoverOpen={
                 shouldUsePinPopover ? isPinPopoverOpen : undefined
               }

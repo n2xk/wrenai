@@ -12,6 +12,9 @@ interface Props {
   data: Array<any[]>;
   loading: boolean;
   locale?: { emptyText: React.ReactNode };
+  showRowIndex?: boolean;
+  rowIndexOffset?: number;
+  scrollY?: number | string | false;
 }
 
 const getValueByValueType = (value: any) =>
@@ -35,27 +38,63 @@ const convertResultData = (data: Array<any[]>, columns: TableColumn[]) => {
   });
 };
 
+const ROW_INDEX_COLUMN_WIDTH = 56;
+
 export default function PreviewDataContent(props: Props) {
-  const { columns = [], data = [], loading, locale } = props;
+  const {
+    columns = [],
+    data = [],
+    loading,
+    locale,
+    showRowIndex = false,
+    rowIndexOffset = 0,
+    scrollY = 280,
+  } = props;
   const hasColumns = !!columns.length;
 
   const dynamicWidth = useMemo(() => {
-    return columns.reduce((result, column) => {
-      const width = isString(column.titleText || column.title)
-        ? (column.titleText || (column.title as string)).length * FONT_SIZE
-        : BASIC_COLUMN_WIDTH;
-      return result + width;
-    }, 0);
-  }, [columns]);
+    return (
+      columns.reduce((result, column) => {
+        const width = isString(column.titleText || column.title)
+          ? (column.titleText || (column.title as string)).length * FONT_SIZE
+          : BASIC_COLUMN_WIDTH;
+        return result + width;
+      }, 0) + (showRowIndex ? ROW_INDEX_COLUMN_WIDTH : 0)
+    );
+  }, [columns, showRowIndex]);
 
   const tableColumns = useMemo(() => {
-    return columns.map((column) => ({
+    const dataColumns = columns.map((column) => ({
       ...column,
       ellipsis: true,
     }));
-  }, [columns]);
 
-  const dataSource = useMemo(() => convertResultData(data, columns), [data]);
+    if (!showRowIndex) {
+      return dataColumns;
+    }
+
+    return [
+      {
+        dataIndex: '__rowIndex',
+        key: '__rowIndex',
+        width: ROW_INDEX_COLUMN_WIDTH,
+        fixed: 'left' as const,
+        className: 'preview-row-index-cell',
+        title: '',
+        render: (_value: unknown, _record: unknown, index: number) =>
+          rowIndexOffset + index + 1,
+      },
+      ...dataColumns,
+    ];
+  }, [columns, rowIndexOffset, showRowIndex]);
+
+  const dataSource = useMemo(
+    () => convertResultData(data, columns),
+    [columns, data],
+  );
+
+  const scroll =
+    scrollY === false ? { x: dynamicWidth } : { y: scrollY, x: dynamicWidth };
 
   // https://posthog.com/docs/session-replay/privacy#other-elements
   return (
@@ -66,7 +105,7 @@ export default function PreviewDataContent(props: Props) {
       columns={tableColumns}
       pagination={false}
       size="small"
-      scroll={{ y: 280, x: dynamicWidth }}
+      scroll={scroll}
       loading={loading}
       locale={locale}
     />

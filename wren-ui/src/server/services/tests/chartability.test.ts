@@ -16,6 +16,7 @@ describe('evaluateChartability', () => {
       } as any),
     ).toEqual({
       chartable: true,
+      recommendedDisplay: 'CHART',
       reasonCode: null,
       message: null,
     });
@@ -53,8 +54,27 @@ describe('evaluateChartability', () => {
       } as any),
     ).toEqual({
       chartable: true,
+      recommendedDisplay: 'CHART',
       reasonCode: null,
       message: null,
+    });
+  });
+
+  it('routes single-row numeric summaries to number cards', () => {
+    expect(
+      evaluateChartability({
+        columns: [
+          { name: 'bet_user_count', type: 'BIGINT' },
+          { name: 'bet_order_count', type: 'BIGINT' },
+          { name: 'total_valid_bet_amount', type: 'DECIMAL' },
+        ],
+        data: [[5, 13, '7300.00']],
+      } as any),
+    ).toEqual({
+      chartable: true,
+      recommendedDisplay: 'NUMBER_CARD',
+      reasonCode: null,
+      message: '当前结果为单行汇总指标，已切换为指标卡展示。',
     });
   });
 });

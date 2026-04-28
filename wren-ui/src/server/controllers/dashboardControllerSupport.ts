@@ -274,6 +274,7 @@ export const toDashboardPreviewItemResponse = ({
   );
 
   return {
+    columns: previewData.columns,
     chartDataProfile: chartDataProfile || item.detail.chartDataProfile || null,
     cacheHit: previewData.cacheHit || false,
     cacheCreatedAt: previewData.cacheCreatedAt || null,

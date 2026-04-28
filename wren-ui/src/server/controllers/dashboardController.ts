@@ -43,6 +43,10 @@ import {
   toDashboardPreviewItemResponse,
   toDashboardResponseRuntimeIdentitySource,
 } from './dashboardControllerSupport';
+import {
+  resolveDashboardItemSqlMode,
+  resolveThreadResponseSqlMode,
+} from '@server/utils/dashboardItemSqlMode';
 
 const logger = getLogger('DashboardController');
 logger.level = 'debug';
@@ -234,12 +238,32 @@ export class DashboardController {
     if (!response) {
       throw new Error(`Thread response not found. responseId: ${responseId}`);
     }
-    if (!Object.keys(ChartType).includes(itemType)) {
-      throw new Error(`Chart type not supported. responseId: ${responseId}`);
+    const isChartItem = Object.keys(ChartType).includes(itemType);
+    const isNumberItem = itemType === DashboardItemType.NUMBER;
+    if (itemType === DashboardItemType.TABLE) {
+      throw new Error(
+        'Table results should be saved as Spreadsheet assets instead of dashboard items.',
+      );
     }
-    if (!response.chartDetail?.chartSchema) {
+    if (!isChartItem && !isNumberItem) {
+      throw new Error(
+        `Dashboard item type not supported. responseId: ${responseId}`,
+      );
+    }
+    if (isChartItem && !response.chartDetail?.chartSchema) {
       throw new Error(
         `Chart schema not found in thread response. responseId: ${responseId}`,
+      );
+    }
+    if (
+      isNumberItem &&
+      response.chartDetail?.chartability?.recommendedDisplay !==
+        'NUMBER_CARD' &&
+      response.chartDetail?.renderHints?.displayType !== 'number_card' &&
+      String(response.chartDetail?.chartType || '').toUpperCase() !== 'NUMBER'
+    ) {
+      throw new Error(
+        `Number card detail not found in thread response. responseId: ${responseId}`,
       );
     }
     const responseSql = response.sql;
@@ -248,6 +272,11 @@ export class DashboardController {
         `SQL not found in thread response. responseId: ${responseId}`,
       );
     }
+    const previewSqlMode = await resolveThreadResponseSqlMode({
+      askingService: ctx.askingService,
+      response,
+      runtimeIdentity,
+    });
     const sourceRuntimeIdentity = {
       ...(response.projectId != null ? { projectId: response.projectId } : {}),
       ...(response.workspaceId ? { workspaceId: response.workspaceId } : {}),
@@ -275,17 +304,29 @@ export class DashboardController {
       limit: DEFAULT_PREVIEW_LIMIT,
       cacheEnabled: true,
       refresh: true,
+      ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
     });
 
     return await ctx.dashboardService.createDashboardItem({
       dashboardId: dashboard.id,
       type: itemType,
       sql: responseSql,
-      chartSchema: response.chartDetail?.chartSchema,
-      renderHints: response.chartDetail?.renderHints,
-      canonicalizationVersion: response.chartDetail?.canonicalizationVersion,
-      chartDataProfile: response.chartDetail?.chartDataProfile,
-      validationErrors: response.chartDetail?.validationErrors,
+      sqlMode: previewSqlMode,
+      chartSchema: isChartItem ? response.chartDetail?.chartSchema : undefined,
+      renderHints:
+        isChartItem || isNumberItem
+          ? response.chartDetail?.renderHints
+          : undefined,
+      canonicalizationVersion:
+        isChartItem || isNumberItem
+          ? response.chartDetail?.canonicalizationVersion
+          : undefined,
+      chartDataProfile: isChartItem
+        ? response.chartDetail?.chartDataProfile
+        : undefined,
+      validationErrors: isChartItem
+        ? response.chartDetail?.validationErrors
+        : undefined,
       sourceRuntimeIdentity:
         Object.keys(sourceRuntimeIdentity).length > 0
           ? sourceRuntimeIdentity
@@ -349,6 +390,11 @@ export class DashboardController {
       }
       const { cacheEnabled } = dashboard;
       const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+      const previewSqlMode = await resolveDashboardItemSqlMode({
+        askingService: ctx.askingService,
+        item,
+        runtimeIdentity,
+      });
       const { project, manifest } = await resolveDashboardExecutionContext({
         dashboard,
         kbSnapshotRepository: ctx.kbSnapshotRepository,
@@ -363,6 +409,7 @@ export class DashboardController {
         limit: limit || DEFAULT_PREVIEW_LIMIT,
         cacheEnabled,
         refresh: refresh || false,
+        ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
       })) as PreviewDataResponse;
       const shapedChartPreview = shapeChartPreviewData({
         chartDetail: {

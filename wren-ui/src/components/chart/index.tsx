@@ -444,12 +444,8 @@ export default function Chart(props: VegaLiteProps) {
             </Tooltip>
           )}
           {shouldShowEditAction && (
-            <Tooltip title="Edit chart">
-              <button
-                aria-label="Edit chart"
-                title="Edit chart"
-                onClick={onEdit}
-              >
+            <Tooltip title="调整图表">
+              <button aria-label="调整图表" title="调整图表" onClick={onEdit}>
                 <EditOutlined />
               </button>
             </Tooltip>

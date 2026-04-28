@@ -58,8 +58,10 @@ export const DashboardWorkbenchRail = (props: {
   onCacheSettings: (dashboardId?: number) => void;
   onCreateDashboard: () => void;
   onDeleteDashboard: (dashboardId: number) => void;
+  onDeleteItem: (itemId: number) => void;
   onRefreshDashboard: (dashboardId?: number) => void;
   onRenameDashboard: (dashboardId: number) => void;
+  onRenameItem: (itemId: number) => void;
   onSelectDashboard: (dashboardId: number) => void;
   onSelectItem: (itemId: number) => void;
   onSetDefaultDashboard: (dashboardId: number) => void;
@@ -76,8 +78,10 @@ export const DashboardWorkbenchRail = (props: {
     onCacheSettings,
     onCreateDashboard,
     onDeleteDashboard,
+    onDeleteItem,
     onRefreshDashboard,
     onRenameDashboard,
+    onRenameItem,
     onSelectDashboard,
     onSelectItem,
     onSetDefaultDashboard,
@@ -230,33 +234,68 @@ export const DashboardWorkbenchRail = (props: {
                     description="没有匹配的图表"
                   />
                 ) : (
-                  filteredDashboardSummaryItems.map((item) => (
-                    <DashboardRailItem
-                      key={item.id}
-                      $active={selectedDashboardItem?.id === item.id}
-                      aria-pressed={selectedDashboardItem?.id === item.id}
-                      onClick={() => onSelectItem(item.id)}
-                      onKeyDown={handleRailItemKeyDown(() =>
-                        onSelectItem(item.id),
-                      )}
-                    >
-                      <DashboardRailItemBody>
-                        <DashboardRailItemRow>
-                          <DashboardRailTitle>
-                            <Typography.Text
-                              ellipsis
-                              style={{ marginBottom: 0 }}
-                            >
-                              {item.title}
-                            </Typography.Text>
-                          </DashboardRailTitle>
-                          <DashboardRailInlineMeta>
-                            {item.meta}
-                          </DashboardRailInlineMeta>
-                        </DashboardRailItemRow>
-                      </DashboardRailItemBody>
-                    </DashboardRailItem>
-                  ))
+                  filteredDashboardSummaryItems.map((item) => {
+                    const itemMenuItems: NonNullable<MenuProps['items']> = [
+                      {
+                        key: 'rename',
+                        icon: <EditOutlined />,
+                        label: '重命名',
+                        disabled: isDashboardReadonly,
+                        onClick: () => onRenameItem(item.id),
+                      },
+                      {
+                        key: 'delete',
+                        icon: <DeleteOutlined />,
+                        label: '删除图表',
+                        danger: true,
+                        disabled: isDashboardReadonly,
+                        onClick: () => onDeleteItem(item.id),
+                      },
+                    ];
+
+                    return (
+                      <DashboardRailItem
+                        key={item.id}
+                        $active={selectedDashboardItem?.id === item.id}
+                        aria-pressed={selectedDashboardItem?.id === item.id}
+                        onClick={() => onSelectItem(item.id)}
+                        onKeyDown={handleRailItemKeyDown(() =>
+                          onSelectItem(item.id),
+                        )}
+                      >
+                        <DashboardRailItemBody>
+                          <DashboardRailItemRow>
+                            <DashboardRailTitle>
+                              <Typography.Text
+                                ellipsis
+                                style={{ marginBottom: 0 }}
+                              >
+                                {item.title}
+                              </Typography.Text>
+                            </DashboardRailTitle>
+                            <DashboardRailInlineMeta>
+                              {item.meta}
+                            </DashboardRailInlineMeta>
+                          </DashboardRailItemRow>
+                        </DashboardRailItemBody>
+                        <Dropdown
+                          menu={{
+                            items: itemMenuItems,
+                            onClick: ({ domEvent }) =>
+                              domEvent.stopPropagation(),
+                          }}
+                          placement="bottomRight"
+                          trigger={['click']}
+                        >
+                          <DashboardRailItemMenuButton
+                            type="text"
+                            icon={<MoreOutlined />}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </Dropdown>
+                      </DashboardRailItem>
+                    );
+                  })
                 )}
               </DashboardRailList>
             </DashboardRailSection>

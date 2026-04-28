@@ -1,6 +1,7 @@
 import { DashboardItem } from '@server/repositories';
 
 export interface PreviewItemResponse {
+  columns?: Array<{ name: string; type?: string | null }>;
   data: Record<string, any>[];
   chartDataProfile?: Record<string, any> | null;
   cacheHit: boolean;

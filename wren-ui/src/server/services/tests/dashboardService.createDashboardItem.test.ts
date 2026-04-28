@@ -40,7 +40,7 @@ describe('DashboardService', () => {
 
     expect(
       mockDashboardItemRepository.findByDashboardIdAndSourceResponseId,
-    ).toHaveBeenCalledWith(7, 62);
+    ).toHaveBeenCalledWith(7, 62, 'BAR');
     expect(mockDashboardItemRepository.createOne).not.toHaveBeenCalled();
     expect(result).toEqual(
       expect.objectContaining({
@@ -69,6 +69,7 @@ describe('DashboardService', () => {
       dashboardId: 7,
       type: 'BAR' as any,
       sql: 'select 1',
+      sqlMode: 'dialect',
       chartSchema: { mark: 'bar' },
       sourceRuntimeIdentity: {
         projectId: 999,
@@ -86,6 +87,7 @@ describe('DashboardService', () => {
       expect.objectContaining({
         dashboardId: 7,
         detail: expect.objectContaining({
+          sqlMode: 'dialect',
           runtimeIdentity: {
             projectId: null,
             workspaceId: 'workspace-1',
@@ -96,5 +98,25 @@ describe('DashboardService', () => {
         }),
       }),
     );
+  });
+
+  it('rejects creating table dashboard items because table results are spreadsheet assets', async () => {
+    await expect(
+      dashboardService.createDashboardItem({
+        dashboardId: 7,
+        type: 'TABLE' as any,
+        sql: 'select * from channel_daily',
+        sourceResponseId: 63,
+        sourceThreadId: 51,
+        sourceQuestion: '查看渠道日报明细',
+      }),
+    ).rejects.toThrow(
+      'Table results should be saved as Spreadsheet assets instead of dashboard items.',
+    );
+
+    expect(
+      mockDashboardItemRepository.findByDashboardIdAndSourceResponseId,
+    ).not.toHaveBeenCalled();
+    expect(mockDashboardItemRepository.createOne).not.toHaveBeenCalled();
   });
 });

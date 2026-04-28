@@ -24,6 +24,7 @@ import type { SetDashboardCacheData } from '@server/models/dashboard';
 import { shapeChartPreviewData } from '@/utils/chartSpecRuntime';
 import type { PreviewDataResponse } from '@server/services';
 import { DEFAULT_PREVIEW_LIMIT } from '@server/services';
+import { resolveDashboardItemSqlMode } from '@server/utils/dashboardItemSqlMode';
 
 const getCurrentPersistedRuntimeIdentity = (ctx: IContext) =>
   normalizeCanonicalPersistedRuntimeIdentity(
@@ -217,6 +218,11 @@ export const buildDashboardPreviewResponse = async ({
   refresh?: boolean | null;
 }) => {
   const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+  const previewSqlMode = await resolveDashboardItemSqlMode({
+    askingService: ctx.askingService,
+    item,
+    runtimeIdentity,
+  });
   const { project, manifest } = await resolveDashboardExecutionContext({
     dashboard,
     kbSnapshotRepository: ctx.kbSnapshotRepository,
@@ -232,6 +238,7 @@ export const buildDashboardPreviewResponse = async ({
     limit: limit || DEFAULT_PREVIEW_LIMIT,
     cacheEnabled: dashboard.cacheEnabled,
     refresh: Boolean(refresh),
+    ...(previewSqlMode ? { sqlMode: previewSqlMode } : {}),
   })) as PreviewDataResponse;
 
   const shapedChartPreview = shapeChartPreviewData({
@@ -254,6 +261,7 @@ export const buildDashboardPreviewResponse = async ({
   );
 
   return {
+    columns: shapedChartPreview.previewData.columns,
     chartDataProfile:
       shapedChartPreview.chartDataProfile ||
       item.detail.chartDataProfile ||

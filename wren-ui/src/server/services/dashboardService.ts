@@ -1,4 +1,8 @@
-import { Dashboard, DashboardItem } from '@server/repositories';
+import {
+  Dashboard,
+  DashboardItem,
+  DashboardItemType,
+} from '@server/repositories';
 import { getLogger } from '@server/utils';
 import {
   DashboardSchedule,
@@ -529,11 +533,18 @@ export class DashboardService implements IDashboardService {
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItem> {
+    if (input.type === DashboardItemType.TABLE) {
+      throw new Error(
+        'Table results should be saved as Spreadsheet assets instead of dashboard items.',
+      );
+    }
+
     if (input.sourceResponseId != null) {
       const existingDashboardItem =
         await this.dashboardItemRepository.findByDashboardIdAndSourceResponseId(
           input.dashboardId,
           input.sourceResponseId,
+          input.type,
         );
       if (existingDashboardItem) {
         return existingDashboardItem;
@@ -549,6 +560,7 @@ export class DashboardService implements IDashboardService {
       type: input.type,
       detail: {
         sql: input.sql,
+        sqlMode: input.sqlMode,
         chartSchema: input.chartSchema,
         renderHints: input.renderHints,
         canonicalizationVersion: input.canonicalizationVersion ?? null,

@@ -4,4 +4,5 @@ export {
   resolveAskRuntimeAvailability,
   resolveAskRuntimeSelector,
   resolveCreatedThreadRuntimeSelector,
+  resolveRecommendationRuntimeSelector,
 } from '@/features/home/routes/HomeLandingPage';

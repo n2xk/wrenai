@@ -265,6 +265,35 @@ export const generateThreadResponseChartAction = async (
   }
 
   const chartability = evaluateChartability(previewDataSample);
+  if (chartability.recommendedDisplay === 'NUMBER_CARD') {
+    const chartDetail = {
+      diagnostics: {
+        ...chartDiagnostics,
+        finalizedAt: new Date().toISOString(),
+      },
+      chartability,
+      chartType: 'NUMBER',
+      description:
+        chartability.message || '当前结果为单行汇总指标，已切换为指标卡展示。',
+      renderHints: {
+        displayType: 'number_card',
+      },
+      canonicalizationVersion: 'number-card-v1',
+      status: ChartStatus.FINISHED,
+    };
+
+    return service.threadResponseRepository.updateOne(threadResponse.id, {
+      chartDetail: {
+        ...chartDetail,
+        thinking: deriveChartThinkingTrace(chartDetail, {
+          sqlPairsCount,
+          sqlInstructionsCount,
+          chartInstructionsCount,
+        }),
+      },
+    });
+  }
+
   if (!chartability.chartable) {
     const chartDetail = {
       diagnostics: chartDiagnostics,

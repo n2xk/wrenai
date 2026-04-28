@@ -93,6 +93,7 @@ export enum DashboardItemType {
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',
   LINE = 'LINE',
+  MULTI_LINE = 'MULTI_LINE',
   PIE = 'PIE',
   STACKED_BAR = 'STACKED_BAR',
   TABLE = 'TABLE',
@@ -324,6 +325,7 @@ export type ThreadResponseChartDetail = {
   canonicalizationVersion?: string | null;
   chartability?: {
     chartable: boolean;
+    recommendedDisplay?: 'CHART' | 'NUMBER_CARD' | string | null;
     reasonCode?: string | null;
     message?: string | null;
   } | null;

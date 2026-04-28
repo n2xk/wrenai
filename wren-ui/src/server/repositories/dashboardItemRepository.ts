@@ -14,6 +14,7 @@ export enum DashboardItemType {
   BAR = 'BAR',
   GROUPED_BAR = 'GROUPED_BAR',
   LINE = 'LINE',
+  MULTI_LINE = 'MULTI_LINE',
   PIE = 'PIE',
   STACKED_BAR = 'STACKED_BAR',
   // other types
@@ -30,6 +31,7 @@ export interface DashboardItemLayout {
 
 export interface DashboardItemDetail {
   sql: string;
+  sqlMode?: 'wren' | 'dialect';
   chartSchema?: Record<string, any>;
   renderHints?: Record<string, any>;
   canonicalizationVersion?: string | null;
@@ -60,6 +62,7 @@ export interface IDashboardItemRepository extends IBasicRepository<DashboardItem
   findByDashboardIdAndSourceResponseId(
     dashboardId: number,
     sourceResponseId: number,
+    type?: DashboardItemType,
   ): Promise<DashboardItem | null>;
 }
 
@@ -76,9 +79,15 @@ export class DashboardItemRepository
   public async findByDashboardIdAndSourceResponseId(
     dashboardId: number,
     sourceResponseId: number,
+    type?: DashboardItemType,
   ): Promise<DashboardItem | null> {
     const result = await this.knex(this.tableName)
       .where({ dashboard_id: dashboardId })
+      .modify((query) => {
+        if (type) {
+          query.where({ type });
+        }
+      })
       .whereRaw(`detail->>'sourceResponseId' = ?`, [
         sourceResponseId.toString(),
       ])

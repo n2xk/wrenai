@@ -6,7 +6,7 @@ export const DashboardWorkbench = styled.div`
   width: 100%;
   margin: 0;
   display: grid;
-  grid-template-columns: 304px minmax(0, 1fr);
+  grid-template-columns: 252px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
@@ -51,10 +51,10 @@ export const DashboardRailCard = styled(Card)`
 
   .ant-card-body {
     flex: 1;
-    padding: 10px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     min-height: 0;
     height: 100%;
   }
@@ -77,7 +77,7 @@ export const DashboardRailSectionHeader = styled.div`
 
 export const DashboardRailSectionTitle = styled.span`
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.25;
   font-weight: 600;
   color: var(--nova-text-secondary);
 `;
@@ -86,13 +86,13 @@ export const DashboardRailSectionCount = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #f3f4f6;
-  color: var(--nova-text-secondary);
-  font-size: 11px;
+  background: #f5f6fa;
+  color: #7a8294;
+  font-size: 10px;
   line-height: 1;
   font-weight: 600;
 `;
@@ -100,7 +100,7 @@ export const DashboardRailSectionCount = styled.span`
 export const DashboardRailList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
   overflow: auto;
 `;
@@ -118,17 +118,18 @@ export const DashboardRailItem = styled.div.attrs({
   padding: 5px 6px 5px 8px;
   border-radius: 8px;
   border: 1px solid
-    ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.2)' : 'transparent')};
+    ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.16)' : 'transparent')};
   background: ${(props) =>
-    props.$active ? 'rgba(141, 101, 225, 0.08)' : 'transparent'};
+    props.$active ? 'rgba(141, 101, 225, 0.06)' : 'transparent'};
   text-align: left;
   cursor: pointer;
   user-select: none;
-  transition: all 0.18s ease;
+  transition: all 0.2s ease;
+  overflow: hidden;
 
   &:hover {
     background: ${(props) =>
-      props.$active ? 'rgba(141, 101, 225, 0.1)' : '#f7f7fb'};
+      props.$active ? 'rgba(141, 101, 225, 0.075)' : '#f7f7fb'};
   }
 
   &:focus-visible {
@@ -157,16 +158,30 @@ export const DashboardRailItemRow = styled.div`
 export const DashboardRailTitle = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  font-weight: 600;
-  color: var(--nova-text-primary);
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: #252b3a;
 
   > span,
   .ant-typography {
     min-width: 0;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+    margin-bottom: 0;
+  }
+
+  .ant-tag {
+    height: 17px;
+    margin-inline-end: 0;
+    padding-inline: 5px;
+    border-radius: 999px;
+    font-size: 9px;
+    line-height: 15px;
+    font-weight: 600;
   }
 `;
 
@@ -174,14 +189,15 @@ export const DashboardRailInlineMeta = styled.span`
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  height: 20px;
-  padding: 0 8px;
+  height: 17px;
+  padding: 0 6px;
   border-radius: 999px;
-  background: rgba(111, 71, 255, 0.08);
-  color: var(--nova-primary);
-  font-size: 11px;
+  background: rgba(111, 71, 255, 0.06);
+  color: #7657d8;
+  font-size: 9px;
   line-height: 1;
   font-weight: 600;
+  letter-spacing: 0.01em;
 `;
 
 export const DashboardRailMeta = styled.span`
@@ -194,29 +210,38 @@ export const DashboardRailMeta = styled.span`
 
 export const DashboardRailItemMenuButton = styled(Button)`
   &.ant-btn {
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
     padding: 0;
     border: none;
     box-shadow: none;
     color: var(--nova-text-secondary);
+    font-size: 12px;
+    opacity: 0.62;
+    transition: opacity 0.18s ease;
+  }
+
+  &.ant-btn:hover,
+  &.ant-btn:focus-visible,
+  &.ant-dropdown-open {
+    opacity: 1;
   }
 `;
 
 export const DashboardRailCreateButton = styled(Button)`
   &.ant-btn {
     width: 100%;
-    height: 32px;
+    height: 34px;
     border-radius: 10px;
-    border: 1px dashed rgba(111, 71, 255, 0.35);
-    color: #6f47ff;
-    background: rgba(111, 71, 255, 0.04);
+    border: 1px dashed rgba(111, 71, 255, 0.3);
+    color: #7357e6;
+    background: rgba(111, 71, 255, 0.025);
     box-shadow: none;
     justify-content: flex-start;
     padding-inline: 10px;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
   }
 
   &.ant-btn:hover:not([disabled]),

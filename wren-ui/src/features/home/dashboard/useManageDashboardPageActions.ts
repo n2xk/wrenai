@@ -18,6 +18,7 @@ import {
   deleteDashboardItem,
   loadDashboardDetailPayload,
   updateDashboard,
+  updateDashboardItem,
   updateDashboardItemLayouts,
   updateDashboardSchedule,
 } from '@/utils/dashboardRest';
@@ -104,6 +105,8 @@ export const useManageDashboardPageActions = ({
   >(null);
   const [dashboardMutationType, setDashboardMutationType] =
     useState<DashboardMutationType>(null);
+  const [dashboardItemMutationTargetId, setDashboardItemMutationTargetId] =
+    useState<number | null>(null);
   const [cacheSettingsSubmitting, setCacheSettingsSubmitting] = useState(false);
   const cacheSettingsSubmittingRef = useRef(false);
   const workspaceScopeKey = resolveHomeSidebarScopeKey({
@@ -129,13 +132,13 @@ export const useManageDashboardPageActions = ({
       }
 
       try {
-        const threads = await loadHomeSidebarThreadsPayload({
+        const threadsPage = await loadHomeSidebarThreadsPayload({
           requestUrl: buildHomeSidebarThreadsRequestKey(
             workspaceThreadHeaderSelector,
           ),
           cacheMode: 'no-store',
         });
-        const matchedThread = threads.find(
+        const matchedThread = threadsPage.threads.find(
           (thread) => Number(thread.id) === threadId,
         );
         if (matchedThread) {
@@ -355,6 +358,54 @@ export const useManageDashboardPageActions = ({
       }));
     },
     [updateDashboardDetailData],
+  );
+
+  const submitRenameDashboardItem = useCallback(
+    async (itemId: number, name: string) => {
+      if (isDashboardReadonly) {
+        message.info(HISTORICAL_SNAPSHOT_READONLY_HINT);
+        return false;
+      }
+
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        message.warning('请输入图表名称。');
+        return false;
+      }
+
+      try {
+        setDashboardItemMutationTargetId(itemId);
+        const updatedItem = await updateDashboardItem(
+          resolveDashboardSelector(activeDashboardId),
+          itemId,
+          {
+            displayName: normalizedName,
+          },
+        );
+        onDashboardItemUpdated(updatedItem);
+        await refetchDashboards({ useCache: false });
+        message.success('图表名称已更新。');
+        return true;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '重命名看板图表失败，请稍后重试。',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        return false;
+      } finally {
+        setDashboardItemMutationTargetId(null);
+      }
+    },
+    [
+      activeDashboardId,
+      isDashboardReadonly,
+      onDashboardItemUpdated,
+      refetchDashboards,
+      resolveDashboardSelector,
+    ],
   );
 
   const refreshDashboard = useCallback(
@@ -664,6 +715,7 @@ export const useManageDashboardPageActions = ({
   return {
     cacheSettingsSubmitting,
     createDashboardLoading,
+    dashboardItemMutationTargetId,
     dashboardMutationTargetId,
     dashboardMutationType,
     goToSourceThread,
@@ -676,6 +728,7 @@ export const useManageDashboardPageActions = ({
     submitCreateDashboard,
     submitDeleteDashboard,
     submitRenameDashboard,
+    submitRenameDashboardItem,
     submitSetDefaultDashboard,
   };
 };

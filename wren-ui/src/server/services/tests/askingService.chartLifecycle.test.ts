@@ -188,6 +188,84 @@ describe('AskingService', () => {
       );
     });
 
+    it('finishes single-row numeric chart requests as number cards without calling AI chart generation', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.assertResponseScope = jest.fn().mockResolvedValue(undefined);
+      service.getExecutionResources = jest.fn().mockResolvedValue({
+        project: { id: 42 },
+        manifest: { models: [] },
+      });
+      service.queryService = {
+        preview: jest.fn().mockResolvedValue({
+          columns: [
+            { name: 'bet_user_count', type: 'BIGINT' },
+            { name: 'bet_order_count', type: 'BIGINT' },
+            { name: 'total_valid_bet_amount', type: 'DECIMAL' },
+          ],
+          data: [[5, 13, '7300.00']],
+        }),
+      };
+      service.threadResponseRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 14,
+          threadId: 9,
+          question: '生成一张图表给我',
+          sql: 'select 5 as bet_user_count',
+        }),
+        updateOne: jest.fn().mockResolvedValue({ id: 14 }),
+      };
+      service.wrenAIAdaptor = {
+        generateChart: jest.fn(),
+      };
+      service.chartBackgroundTracker = {
+        addTask: jest.fn(),
+      };
+
+      await service.generateThreadResponseChartScoped(
+        14,
+        runtimeIdentity,
+        { language: 'English' },
+        'scope-1',
+      );
+
+      expect(service.wrenAIAdaptor.generateChart).not.toHaveBeenCalled();
+      expect(service.chartBackgroundTracker.addTask).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.updateOne).toHaveBeenCalledWith(
+        14,
+        expect.objectContaining({
+          chartDetail: expect.objectContaining({
+            status: 'FINISHED',
+            chartType: 'NUMBER',
+            canonicalizationVersion: 'number-card-v1',
+            renderHints: { displayType: 'number_card' },
+            chartability: expect.objectContaining({
+              chartable: true,
+              recommendedDisplay: 'NUMBER_CARD',
+            }),
+            thinking: expect.objectContaining({
+              currentStepKey: null,
+              steps: expect.arrayContaining([
+                expect.objectContaining({
+                  key: 'chart.chart_type_selected',
+                  status: 'finished',
+                  messageParams: expect.objectContaining({
+                    chartType: 'NUMBER',
+                  }),
+                }),
+                expect.objectContaining({
+                  key: 'chart.chart_generated',
+                  status: 'finished',
+                  messageParams: expect.objectContaining({
+                    chartType: 'NUMBER',
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      );
+    });
+
     it('carries source ask retrieval context into chart follow-up thinking', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.assertResponseScope = jest.fn().mockResolvedValue(undefined);

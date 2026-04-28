@@ -7,6 +7,7 @@ import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkben
 import type { ThreadResponse } from '@/types/home';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
+import ResponseSpreadsheetSaveButton from '@/components/pages/home/promptThread/ResponseSpreadsheetSaveButton';
 
 const { Text } = Typography;
 
@@ -60,6 +61,16 @@ export default function ThreadWorkbenchPreviewPanel(props: {
             error={previewDataResult.error}
             loading={previewDataResult.loading}
             previewData={previewDataResult.data.previewData}
+            exportFileName={
+              responseId == null
+                ? undefined
+                : `thread-response-${responseId}-preview-result`
+            }
+            extraActions={
+              response ? (
+                <ResponseSpreadsheetSaveButton response={response} />
+              ) : null
+            }
             locale={{
               emptyText: (
                 <Empty
@@ -74,6 +85,11 @@ export default function ThreadWorkbenchPreviewPanel(props: {
             error={previewDataResult.error}
             loading={previewDataResult.loading}
             previewData={previewDataResult.data?.previewData}
+            exportFileName={
+              responseId == null
+                ? undefined
+                : `thread-response-${responseId}-preview-result`
+            }
             locale={{
               emptyText: (
                 <Empty
