@@ -34,6 +34,12 @@ export default function KnowledgeWorkbenchEditorRailControls({
   onFilterChange,
   onSearchChange,
 }: KnowledgeWorkbenchEditorRailControlsProps) {
+  const hasControls = totalCount > 0 || searchValue.trim().length > 0;
+
+  if (!hasControls) {
+    return null;
+  }
+
   return (
     <WorkbenchRailTop>
       <Input

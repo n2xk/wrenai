@@ -58,6 +58,26 @@ describe('useKnowledgeRuntimeContext helpers', () => {
     });
   });
 
+  it('does not mix a route workspace with stale current knowledge state from another workspace', () => {
+    expect(
+      resolveKnowledgeEffectiveRuntimeSelector({
+        routeRuntimeSelector: {
+          workspaceId: 'ws-route',
+        },
+        currentWorkspaceId: 'ws-current',
+        currentKnowledgeBaseId: 'kb-current',
+        currentKbSnapshotId: 'snap-current',
+        currentKbSnapshotDeployHash: 'deploy-current',
+      }),
+    ).toEqual({
+      workspaceId: 'ws-route',
+      knowledgeBaseId: undefined,
+      kbSnapshotId: undefined,
+      deployHash: undefined,
+      runtimeScopeId: undefined,
+    });
+  });
+
   it('does not reuse a current snapshot when the route points to a different knowledge base', () => {
     expect(
       resolveKnowledgeEffectiveRuntimeSelector({

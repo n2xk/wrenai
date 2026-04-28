@@ -23,6 +23,7 @@ import type { WorkbenchSqlController } from '@/features/home/thread/useWorkbench
 import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
+import ResponseSpreadsheetSaveButton from './ResponseSpreadsheetSaveButton';
 
 const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
   ssr: false,
@@ -221,6 +222,16 @@ export default function ViewSQLTabContent(
                 error={previewDataResult.error}
                 loading={previewDataResult.loading}
                 previewData={previewDataResult?.data?.previewData}
+                exportFileName={`thread-response-${id}-sql-result`}
+                extraActions={
+                  previewDataResult?.data?.previewData ? (
+                    <>
+                      <ResponseSpreadsheetSaveButton
+                        response={threadResponse}
+                      />
+                    </>
+                  ) : null
+                }
                 locale={{
                   emptyText: (
                     <Empty

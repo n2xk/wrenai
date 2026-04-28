@@ -1,6 +1,6 @@
 import styled from 'styled-components';
 
-export const WorkbenchEditorCard = styled.button<{ $active?: boolean }>`
+export const WorkbenchEditorCard = styled.div<{ $active?: boolean }>`
   width: 100%;
   border: 1px solid
     ${(props) =>
@@ -24,6 +24,11 @@ export const WorkbenchEditorCard = styled.button<{ $active?: boolean }>`
     background: ${(props) => (props.$active ? '#faf6ff' : '#fcfcfd')};
     box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
     transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(91, 75, 219, 0.34);
+    outline-offset: 2px;
   }
 `;
 

@@ -21,6 +21,7 @@ import type {
 import type { CreateCalculatedFieldInput } from '@/types/calculatedField';
 import ModelingAssistantLauncher from './components/ModelingAssistantLauncher';
 import { buildModelingAssistantTaskSummaries } from './components/modelingAssistantStatus';
+import type { ModelingAssistantIntent } from './assistant/modelingAssistantRoutes';
 import {
   DiagramPanel,
   DiagramWrapper,
@@ -56,6 +57,7 @@ type ModelingWorkspaceContentProps = {
   modelLoading: boolean;
   calculatedFieldLoading: boolean;
   relationshipLoading: boolean;
+  onOpenAssistant?: (intent: ModelingAssistantIntent) => void;
   onOpenModelDrawer: () => void;
   onSelect: (selectKeys: Key[]) => void;
   onRefresh: (options?: { fitView?: boolean }) => Promise<unknown>;
@@ -99,6 +101,7 @@ export default function ModelingWorkspaceContent({
   modelLoading,
   calculatedFieldLoading,
   relationshipLoading,
+  onOpenAssistant,
   onOpenModelDrawer,
   onSelect,
   onRefresh,
@@ -119,11 +122,14 @@ export default function ModelingWorkspaceContent({
     : [];
   return (
     <>
-      <div style={{ marginBottom: 18 }}>
-        {!isModelingReadonly ? (
-          <ModelingAssistantLauncher summaries={launcherSummaries} />
-        ) : null}
-      </div>
+      {!isModelingReadonly ? (
+        <div>
+          <ModelingAssistantLauncher
+            summaries={launcherSummaries}
+            onOpenAssistant={onOpenAssistant}
+          />
+        </div>
+      ) : null}
       <ModelingStage $embedded={embedded}>
         <ModelingSidebarPanel $embedded={embedded}>
           {diagramData ? (

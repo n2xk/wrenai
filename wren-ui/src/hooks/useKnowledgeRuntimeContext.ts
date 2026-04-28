@@ -18,15 +18,22 @@ export const resolveKnowledgeEffectiveRuntimeSelector = ({
   currentKbSnapshotId?: string;
   currentKbSnapshotDeployHash?: string;
 }): ClientRuntimeScopeSelector => {
+  const routeWorkspaceId = routeRuntimeSelector.workspaceId;
   const routeKnowledgeBaseId = routeRuntimeSelector.knowledgeBaseId;
+  const canReuseCurrentKnowledgeBase =
+    !routeWorkspaceId ||
+    !currentWorkspaceId ||
+    routeWorkspaceId === currentWorkspaceId;
   const shouldReuseCurrentSnapshot =
-    !routeKnowledgeBaseId || routeKnowledgeBaseId === currentKnowledgeBaseId;
+    canReuseCurrentKnowledgeBase &&
+    (!routeKnowledgeBaseId || routeKnowledgeBaseId === currentKnowledgeBaseId);
 
   return {
-    workspaceId:
-      routeRuntimeSelector.workspaceId || currentWorkspaceId || undefined,
+    workspaceId: routeWorkspaceId || currentWorkspaceId || undefined,
     knowledgeBaseId:
-      routeKnowledgeBaseId || currentKnowledgeBaseId || undefined,
+      routeKnowledgeBaseId ||
+      (canReuseCurrentKnowledgeBase ? currentKnowledgeBaseId : undefined) ||
+      undefined,
     kbSnapshotId:
       routeRuntimeSelector.kbSnapshotId ||
       (shouldReuseCurrentSnapshot ? currentKbSnapshotId : undefined) ||

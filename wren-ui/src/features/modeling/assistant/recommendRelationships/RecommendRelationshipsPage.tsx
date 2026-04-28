@@ -30,7 +30,6 @@ import { Path } from '@/utils/enum';
 import { getJoinTypeText } from '@/utils/data';
 import {
   AssistantColumn,
-  AssistantDocLink,
   AssistantFooterBar,
   AssistantIntroCard,
   AssistantMetricCard,
@@ -44,6 +43,8 @@ import {
 } from '../modelingAssistantVisuals';
 
 const { Paragraph, Text } = Typography;
+
+type ModelingAssistantCompletionHandler = () => void | Promise<void>;
 
 const RelationshipTableCard = styled.div`
   border: 1px solid #e5e7eb;
@@ -164,7 +165,13 @@ const columns = ({
   },
 ];
 
-export default function RecommendRelationshipsPage() {
+export function RecommendRelationshipsAssistantContent({
+  onBack,
+  onSaveSuccess,
+}: {
+  onBack?: ModelingAssistantCompletionHandler;
+  onSaveSuccess?: ModelingAssistantCompletionHandler;
+}) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const modelingAssistantReadonly = useModelingAssistantReadonly();
@@ -172,24 +179,13 @@ export default function RecommendRelationshipsPage() {
   const [selectedRelation, setSelectedRelation] =
     useState<SelectedRelationState | null>(null);
 
-  const navigateBack = async () => {
-    await runtimeScopeNavigation.pushWorkspace(
-      Path.Knowledge,
-      buildModelingAssistantBackParams(),
-    );
-  };
-
-  const leaveGuard = useModelingAssistantLeaveGuard({
-    onLeave: navigateBack,
-  });
-
   const relationshipsTask = useRecommendRelationshipsTask({
     enabled:
       runtimeScopePage.hasRuntimeScope && !modelingAssistantReadonly.isReadOnly,
     selector: runtimeScopeNavigation.selector,
     onSaveSuccess: async () => {
       message.success('关联关系保存成功。');
-      await navigateBack();
+      await onSaveSuccess?.();
     },
   });
 
@@ -314,13 +310,6 @@ export default function RecommendRelationshipsPage() {
                   本次运行已成功完成，但当前没有新的关联关系建议可应用。
                 </AssistantMutedText>
               </div>
-              <AssistantDocLink
-                href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
-                target="_blank"
-                rel="noreferrer"
-              >
-                了解更多
-              </AssistantDocLink>
             </AssistantSectionHeader>
             <AssistantPillRow>
               <AssistantPill $tone="success">审核完成</AssistantPill>
@@ -351,7 +340,7 @@ export default function RecommendRelationshipsPage() {
                 当前没有可应用的关联关系建议。
               </AssistantMutedText>
               <Space>
-                <Button onClick={() => void navigateBack()}>取消并返回</Button>
+                <Button onClick={() => void onBack?.()}>取消并返回</Button>
                 <Button disabled>保存</Button>
               </Space>
             </AssistantFooterBar>
@@ -383,13 +372,6 @@ export default function RecommendRelationshipsPage() {
                 请先审核推荐的关联关系，处理特殊情况后，再保存回当前语义层。
               </AssistantMutedText>
             </div>
-            <AssistantDocLink
-              href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
-              target="_blank"
-              rel="noreferrer"
-            >
-              了解更多
-            </AssistantDocLink>
           </AssistantSectionHeader>
           <AssistantPillRow>
             <AssistantPill $tone="accent">
@@ -434,13 +416,7 @@ export default function RecommendRelationshipsPage() {
 
   return (
     <>
-      <ModelingAssistantRouteLayout
-        title="生成关联关系"
-        description="建模 AI 助手会用 AI 识别模型之间潜在的连接关系。请先审核并按需调整，再保存到当前数据模型。"
-        onBack={leaveGuard.onBackClick}
-      >
-        {renderContent()}
-      </ModelingAssistantRouteLayout>
+      {renderContent()}
       <RelationModal
         {...relationModal.state}
         onClose={() => {
@@ -465,5 +441,32 @@ export default function RecommendRelationshipsPage() {
         showDescriptionField
       />
     </>
+  );
+}
+
+export default function RecommendRelationshipsPage() {
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const navigateBack = async () => {
+    await runtimeScopeNavigation.pushWorkspace(
+      Path.Knowledge,
+      buildModelingAssistantBackParams(),
+    );
+  };
+
+  const leaveGuard = useModelingAssistantLeaveGuard({
+    onLeave: navigateBack,
+  });
+
+  return (
+    <ModelingAssistantRouteLayout
+      title="生成关联关系"
+      description="建模 AI 助手会用 AI 识别模型之间潜在的连接关系。请先审核并按需调整，再保存到当前数据模型。"
+      onBack={leaveGuard.onBackClick}
+    >
+      <RecommendRelationshipsAssistantContent
+        onBack={leaveGuard.onBackClick}
+        onSaveSuccess={navigateBack}
+      />
+    </ModelingAssistantRouteLayout>
   );
 }

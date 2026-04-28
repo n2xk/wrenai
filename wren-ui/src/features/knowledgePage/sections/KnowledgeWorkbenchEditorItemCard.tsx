@@ -4,6 +4,7 @@ import {
   WorkbenchEditorCardMain,
   WorkbenchEditorDesc,
 } from '@/features/knowledgePage/index.styles';
+import type { KeyboardEvent } from 'react';
 
 import KnowledgeWorkbenchEditorItemCardActions from './KnowledgeWorkbenchEditorItemCardActions';
 import KnowledgeWorkbenchEditorItemCardMeta from './KnowledgeWorkbenchEditorItemCardMeta';
@@ -37,8 +38,25 @@ export default function KnowledgeWorkbenchEditorItemCard({
   onDuplicate,
   onSelect,
 }: KnowledgeWorkbenchEditorItemCardProps) {
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onSelect();
+    }
+  };
+
   return (
-    <WorkbenchEditorCard type="button" $active={active} onClick={onSelect}>
+    <WorkbenchEditorCard
+      role="button"
+      tabIndex={0}
+      $active={active}
+      onClick={onSelect}
+      onKeyDown={handleCardKeyDown}
+    >
       <WorkbenchEditorCardHead>
         <WorkbenchEditorCardMain>
           <KnowledgeWorkbenchEditorItemCardMeta

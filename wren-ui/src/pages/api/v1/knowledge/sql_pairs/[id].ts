@@ -28,7 +28,7 @@ import {
 import {
   MAX_SQL_PAIR_QUESTION_LENGTH,
   MAX_SQL_PAIR_SQL_LENGTH,
-} from './limits';
+} from '@/server/utils/sqlPairLimits';
 import {
   finalizeSqlPairTemplateMetadata,
   normalizeSqlPairTemplateMetadata,

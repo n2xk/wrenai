@@ -7,6 +7,12 @@ import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
 import { buildKnowledgeWorkbenchParams } from '@/utils/knowledgeWorkbench';
 import { Path } from '@/utils/enum';
 import { EmbeddedLoadingState } from '@/features/modeling/modelingWorkspaceLayout';
+import ModelingAssistantWorkbenchDrawer from '@/features/modeling/assistant/ModelingAssistantWorkbenchDrawer';
+import {
+  buildModelingAssistantWorkbenchParams,
+  resolveModelingAssistantIntent,
+  type ModelingAssistantIntent,
+} from '@/features/modeling/assistant/modelingAssistantRoutes';
 import ModelingWorkspaceContent from '@/features/modeling/ModelingWorkspaceContent';
 import useModelingWorkspaceInteractions from '@/features/modeling/useModelingWorkspaceInteractions';
 import useModelingWorkspaceMutationHandlers from '@/features/modeling/useModelingWorkspaceMutationHandlers';
@@ -25,6 +31,31 @@ export default function ModelingWorkspace({
   const editMetadataModal = useModalAction();
   const calculatedFieldModal = useModalAction();
   const relationshipModal = useRelationshipModal(modelingState.diagramData);
+  const activeAssistantIntent = resolveModelingAssistantIntent(
+    modelingState.queryParams.openAssistant,
+  );
+
+  const openAssistant = (intent: ModelingAssistantIntent) => {
+    modelingState.runtimeScopeNavigation.pushWorkspace(
+      Path.Knowledge,
+      buildModelingAssistantWorkbenchParams(intent),
+    );
+  };
+
+  const closeAssistant = async () => {
+    await modelingState.runtimeScopeNavigation.replaceWorkspace(
+      Path.Knowledge,
+      buildModelingAssistantWorkbenchParams(),
+    );
+  };
+
+  const handleAssistantSaveSuccess = async () => {
+    try {
+      await modelingState.refreshModelingData();
+    } finally {
+      await closeAssistant();
+    }
+  };
 
   const runDiagramMutation = async <T,>(
     setLoadingState: (loading: boolean) => void,
@@ -84,6 +115,7 @@ export default function ModelingWorkspace({
       modelLoading={mutationHandlers.modelLoading}
       calculatedFieldLoading={mutationHandlers.calculatedFieldLoading}
       relationshipLoading={mutationHandlers.relationshipLoading}
+      onOpenAssistant={openAssistant}
       onOpenModelDrawer={() => {
         if (modelingState.isModelingReadonly) {
           notifyModelingReadonly();
@@ -109,6 +141,16 @@ export default function ModelingWorkspace({
       onRelationshipSubmit={mutationHandlers.onRelationshipSubmit}
     />
   );
+  const workspaceStage = (
+    <>
+      {workspaceContent}
+      <ModelingAssistantWorkbenchDrawer
+        intent={activeAssistantIntent}
+        onClose={closeAssistant}
+        onSaveSuccess={handleAssistantSaveSuccess}
+      />
+    </>
+  );
 
   return (
     <DeployStatusContext.Provider
@@ -120,7 +162,7 @@ export default function ModelingWorkspace({
             <Skeleton active paragraph={{ rows: 8 }} />
           </EmbeddedLoadingState>
         ) : (
-          workspaceContent
+          workspaceStage
         )
       ) : (
         <ConsoleShellLayout
@@ -153,7 +195,7 @@ export default function ModelingWorkspace({
           activeSectionKey="modeling"
           loading={modelingState.loading}
         >
-          {workspaceContent}
+          {workspaceStage}
         </ConsoleShellLayout>
       )}
     </DeployStatusContext.Provider>

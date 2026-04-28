@@ -24,14 +24,26 @@ export const WorkbenchEditorCardGrid = styled.div`
 `;
 
 export const WorkbenchRailTop = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 12px;
+
+  .ant-input-affix-wrapper {
+    min-height: 34px;
+    border-radius: 12px;
+  }
+
+  @media (max-width: 980px) {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
 `;
 
 export const WorkbenchListCount = styled.div`
   color: var(--nova-text-secondary);
   font-size: 12px;
+  white-space: nowrap;
 `;
 
 export const WorkbenchFilterRow = styled.div`

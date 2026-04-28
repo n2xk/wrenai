@@ -231,7 +231,7 @@ describe('knowledge index page', () => {
     const markup = renderPage();
 
     expect(markup).toContain('新建 SQL 模板');
-    expect(markup).toContain('当前显示 0 / 0 条');
+    expect(markup).not.toContain('当前显示 0 / 0 条');
     expect(markup).not.toContain('新建 SQL 模板草稿');
   });
 
@@ -246,7 +246,7 @@ describe('knowledge index page', () => {
     const markup = renderPage();
 
     expect(markup).toContain('新建分析规则');
-    expect(markup).toContain('当前显示 0 / 0 条');
+    expect(markup).not.toContain('当前显示 0 / 0 条');
     expect(markup).not.toContain('新建分析规则草稿');
   });
 

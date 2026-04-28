@@ -13,7 +13,6 @@ import ModelingAssistantTaskStatusPanel from '../ModelingAssistantTaskStatusPane
 import { Path } from '@/utils/enum';
 import {
   AssistantColumn,
-  AssistantDocLink,
   AssistantFooterBar,
   AssistantIntroCard,
   AssistantMetricCard,
@@ -28,6 +27,8 @@ import {
 } from '../modelingAssistantVisuals';
 
 const { Paragraph, Text, Title } = Typography;
+
+type ModelingAssistantCompletionHandler = () => void | Promise<void>;
 
 const ModelPickList = styled.div`
   width: 100%;
@@ -47,27 +48,20 @@ const ModelPickRow = styled.label`
   cursor: pointer;
 `;
 
-export default function RecommendSemanticsPage() {
+export function RecommendSemanticsAssistantContent({
+  onSaveSuccess,
+}: {
+  onSaveSuccess?: ModelingAssistantCompletionHandler;
+}) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const modelingAssistantReadonly = useModelingAssistantReadonly();
-
-  const navigateBack = async () => {
-    await runtimeScopeNavigation.pushWorkspace(
-      Path.Knowledge,
-      buildModelingAssistantBackParams(),
-    );
-  };
-
-  const leaveGuard = useModelingAssistantLeaveGuard({
-    onLeave: navigateBack,
-  });
 
   const semanticsWizard = useRecommendSemanticsWizard({
     enabled:
       runtimeScopePage.hasRuntimeScope && !modelingAssistantReadonly.isReadOnly,
     selector: runtimeScopeNavigation.selector,
-    onSaveSuccess: navigateBack,
+    onSaveSuccess: onSaveSuccess || (() => undefined),
   });
 
   const selectedModelCount = semanticsWizard.selectedModels.length;
@@ -117,13 +111,6 @@ export default function RecommendSemanticsPage() {
                 选择需要补充描述的模型，再生成简洁、贴近业务的模型和字段说明后保存。
               </AssistantMutedText>
             </div>
-            <AssistantDocLink
-              href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
-              target="_blank"
-              rel="noreferrer"
-            >
-              了解更多
-            </AssistantDocLink>
           </AssistantSectionHeader>
           <AssistantPillRow>
             <AssistantPill $tone="accent">第 1 步 / 共 2 步</AssistantPill>
@@ -197,13 +184,6 @@ export default function RecommendSemanticsPage() {
               如有需要可补充提示词，生成后确认结果，再将描述保存回建模。
             </AssistantMutedText>
           </div>
-          <AssistantDocLink
-            href="https://docs.getwren.ai/cp/guide/modeling-ai-assistant"
-            target="_blank"
-            rel="noreferrer"
-          >
-            了解更多
-          </AssistantDocLink>
         </AssistantSectionHeader>
         <AssistantPillRow>
           <AssistantPill $tone="accent">第 2 步 / 共 2 步</AssistantPill>
@@ -340,14 +320,34 @@ export default function RecommendSemanticsPage() {
   );
 
   return (
+    <>
+      {semanticsWizard.step === 'pick'
+        ? renderPickStep()
+        : renderGenerateStep()}
+    </>
+  );
+}
+
+export default function RecommendSemanticsPage() {
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const navigateBack = async () => {
+    await runtimeScopeNavigation.pushWorkspace(
+      Path.Knowledge,
+      buildModelingAssistantBackParams(),
+    );
+  };
+
+  const leaveGuard = useModelingAssistantLeaveGuard({
+    onLeave: navigateBack,
+  });
+
+  return (
     <ModelingAssistantRouteLayout
       title="生成语义描述"
       description="选择模型并补充可选上下文，让建模 AI 助手生成描述，确认后再保存回语义模型。"
       onBack={leaveGuard.onBackClick}
     >
-      {semanticsWizard.step === 'pick'
-        ? renderPickStep()
-        : renderGenerateStep()}
+      <RecommendSemanticsAssistantContent onSaveSuccess={navigateBack} />
     </ModelingAssistantRouteLayout>
   );
 }

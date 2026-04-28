@@ -6,7 +6,10 @@ import {
   buildKnowledgeSqlTemplatesStageProps,
   buildKnowledgeWorkbenchHeaderProps,
 } from '@/features/knowledgePage/sections/buildKnowledgeMainStageSectionProps';
-import { MainStage } from '@/features/knowledgePage/index.styles';
+import {
+  MainStage,
+  MainStageContent,
+} from '@/features/knowledgePage/index.styles';
 import KnowledgeWorkbenchHeader from '@/features/knowledgePage/sections/KnowledgeWorkbenchHeader';
 import KnowledgeBusinessTermsStage from '@/features/knowledgePage/sections/KnowledgeBusinessTermsStage';
 import KnowledgeExternalDependenciesStage from '@/features/knowledgePage/sections/KnowledgeExternalDependenciesStage';
@@ -112,88 +115,90 @@ function KnowledgeMainStage({
         })}
       />
 
-      <KnowledgeOverviewStage
-        {...buildKnowledgeOverviewStageProps({
-          activeWorkbenchSection,
-          activeDetailAsset,
-          detailAssetFields,
-          detailAssets,
-          detailFieldFilter,
-          detailFieldKeyword,
-          detailTab,
-          historicalSnapshotReadonlyHint,
-          isKnowledgeMutationDisabled,
-          isReadonlyKnowledgeBase,
-          isSnapshotReadonlyKnowledgeBase,
-          modelingSummary,
-          onChangeDetailTab,
-          onChangeFieldFilter,
-          onChangeFieldKeyword,
-          onCloseAssetDetail,
-          onCreateRuleDraft: handleCreateRuleFromAsset,
-          onCreateSqlTemplateDraft: handleCreateSqlTemplateFromAsset,
-          onOpenAssetDetail,
-          onOpenAssetWizard,
-          onOpenModeling,
-          previewFieldCount,
-          ruleList,
-          showKnowledgeAssetsLoading,
-          sqlList,
-        })}
-      />
-
-      {activeWorkbenchSection === 'modeling' ? (
-        <KnowledgeModelingSection
-          {...buildKnowledgeModelingSectionProps({
+      <MainStageContent>
+        <KnowledgeOverviewStage
+          {...buildKnowledgeOverviewStageProps({
+            activeWorkbenchSection,
+            activeDetailAsset,
+            detailAssetFields,
+            detailAssets,
+            detailFieldFilter,
+            detailFieldKeyword,
+            detailTab,
+            historicalSnapshotReadonlyHint,
+            isKnowledgeMutationDisabled,
+            isReadonlyKnowledgeBase,
+            isSnapshotReadonlyKnowledgeBase,
             modelingSummary,
-            modelingWorkspaceKey,
-          })}
-        />
-      ) : null}
-
-      {activeWorkbenchSection === 'sqlTemplates' ? (
-        <KnowledgeSqlTemplatesStage
-          {...buildKnowledgeSqlTemplatesStageProps({
-            createSqlPairLoading,
-            editingSqlPair,
-            editors,
-            isKnowledgeMutationDisabled,
-            sqlList,
-            sqlManageLoading,
-            sqlTemplateForm,
-            updateSqlPairLoading,
-          })}
-        />
-      ) : null}
-
-      {activeWorkbenchSection === 'instructions' ? (
-        <KnowledgeInstructionsStage
-          {...buildKnowledgeInstructionsStageProps({
-            createInstructionLoading,
-            editingInstruction,
-            editors,
-            isKnowledgeMutationDisabled,
-            ruleForm,
+            onChangeDetailTab,
+            onChangeFieldFilter,
+            onChangeFieldKeyword,
+            onCloseAssetDetail,
+            onCreateRuleDraft: handleCreateRuleFromAsset,
+            onCreateSqlTemplateDraft: handleCreateSqlTemplateFromAsset,
+            onOpenAssetDetail,
+            onOpenAssetWizard,
+            onOpenModeling,
+            previewFieldCount,
             ruleList,
-            ruleManageLoading,
-            updateInstructionLoading,
+            showKnowledgeAssetsLoading,
+            sqlList,
           })}
         />
-      ) : null}
 
-      {activeWorkbenchSection === 'businessTerms' ? (
-        <KnowledgeBusinessTermsStage
-          isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
-          runtimeSelector={runtimeSelector}
-        />
-      ) : null}
+        {activeWorkbenchSection === 'modeling' ? (
+          <KnowledgeModelingSection
+            {...buildKnowledgeModelingSectionProps({
+              modelingSummary,
+              modelingWorkspaceKey,
+            })}
+          />
+        ) : null}
 
-      {activeWorkbenchSection === 'externalDependencies' ? (
-        <KnowledgeExternalDependenciesStage
-          isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
-          runtimeSelector={runtimeSelector}
-        />
-      ) : null}
+        {activeWorkbenchSection === 'sqlTemplates' ? (
+          <KnowledgeSqlTemplatesStage
+            {...buildKnowledgeSqlTemplatesStageProps({
+              createSqlPairLoading,
+              editingSqlPair,
+              editors,
+              isKnowledgeMutationDisabled,
+              sqlList,
+              sqlManageLoading,
+              sqlTemplateForm,
+              updateSqlPairLoading,
+            })}
+          />
+        ) : null}
+
+        {activeWorkbenchSection === 'instructions' ? (
+          <KnowledgeInstructionsStage
+            {...buildKnowledgeInstructionsStageProps({
+              createInstructionLoading,
+              editingInstruction,
+              editors,
+              isKnowledgeMutationDisabled,
+              ruleForm,
+              ruleList,
+              ruleManageLoading,
+              updateInstructionLoading,
+            })}
+          />
+        ) : null}
+
+        {activeWorkbenchSection === 'businessTerms' ? (
+          <KnowledgeBusinessTermsStage
+            isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
+            runtimeSelector={runtimeSelector}
+          />
+        ) : null}
+
+        {activeWorkbenchSection === 'externalDependencies' ? (
+          <KnowledgeExternalDependenciesStage
+            isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
+            runtimeSelector={runtimeSelector}
+          />
+        ) : null}
+      </MainStageContent>
     </MainStage>
   );
 }

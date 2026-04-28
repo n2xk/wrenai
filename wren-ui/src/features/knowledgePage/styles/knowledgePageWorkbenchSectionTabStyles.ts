@@ -8,7 +8,7 @@ export const WorkbenchSectionTabs = styled.div`
   padding: 4px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 `;
 

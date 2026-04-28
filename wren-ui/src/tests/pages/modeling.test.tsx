@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ModelingWorkspace from '../../components/pages/modeling/ModelingWorkspace';
+import { Path } from '@/utils/enum';
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
@@ -16,6 +17,7 @@ const mockUseRelationshipModal = jest.fn();
 let capturedSidebarProps: any = null;
 let capturedDiagramProps: any = null;
 let capturedMetadataDrawerProps: any = null;
+let capturedAssistantDrawerProps: any = null;
 
 const setModelingStateOverrides = (overrides: Partial<Record<number, any>>) => {
   let callIndex = 0;
@@ -127,6 +129,20 @@ jest.mock('@/components/modals/RelationModal', () => ({
   default: () => null,
 }));
 
+jest.mock(
+  '@/features/modeling/assistant/ModelingAssistantWorkbenchDrawer',
+  () => ({
+    __esModule: true,
+    default: (props: any) => {
+      capturedAssistantDrawerProps = props;
+      const React = jest.requireActual('react');
+      return props.intent
+        ? React.createElement('div', null, `AssistantDrawer:${props.intent}`)
+        : null;
+    },
+  }),
+);
+
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
   __esModule: true,
   default: () => mockUseProtectedRuntimeScopePage(),
@@ -179,6 +195,7 @@ describe('modeling workspace', () => {
     capturedSidebarProps = null;
     capturedDiagramProps = null;
     capturedMetadataDrawerProps = null;
+    capturedAssistantDrawerProps = null;
 
     mockUseSearchParams.mockReturnValue({
       get: jest.fn().mockReturnValue(null),
@@ -191,6 +208,7 @@ describe('modeling workspace', () => {
       push: jest.fn(),
       replace: jest.fn(),
       pushWorkspace: jest.fn(),
+      replaceWorkspace: jest.fn().mockResolvedValue(true),
       selector: {
         workspaceId: 'ws-1',
         runtimeScopeId: 'scope-1',
@@ -302,6 +320,7 @@ describe('modeling workspace', () => {
       push: jest.fn(),
       replace: jest.fn(),
       pushWorkspace: jest.fn(),
+      replaceWorkspace: jest.fn().mockResolvedValue(true),
       selector: {
         workspaceId: 'ws-1',
         runtimeScopeId: 'scope-1',
@@ -328,8 +347,50 @@ describe('modeling workspace', () => {
       '当前正在查看历史快照，仅支持浏览，不支持编辑或执行。',
     );
     expect(markup).not.toContain('Modeling AI Assistant');
+    expect(markup).not.toContain('data-guideid="modeling-copilot"');
     expect(markup).toContain('SidebarReadonly');
     expect(markup).toContain('DiagramReadonly');
+
+    useStateSpy.mockRestore();
+  });
+
+  it('opens modeling assistant in the embedded workbench instead of redirecting away', async () => {
+    const replaceWorkspace = jest.fn().mockResolvedValue(true);
+    const get = jest.fn((key: string) =>
+      key === 'openAssistant' ? 'relationships' : null,
+    );
+    mockUseSearchParams.mockReturnValue({ get });
+    mockUseRuntimeScopeNavigation.mockReturnValue({
+      push: jest.fn(),
+      replace: jest.fn(),
+      pushWorkspace: jest.fn(),
+      replaceWorkspace,
+      selector: {
+        workspaceId: 'ws-1',
+        runtimeScopeId: 'scope-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+    });
+    const useStateSpy = setModelingStateOverrides({
+      1: {
+        diagram: {
+          models: [],
+          views: [],
+        },
+      },
+    });
+
+    const markup = renderToStaticMarkup(<ModelingWorkspace embedded />);
+
+    expect(markup).toContain('AssistantDrawer:relationships');
+    expect(capturedAssistantDrawerProps?.intent).toBe('relationships');
+
+    await capturedAssistantDrawerProps.onClose();
+
+    expect(replaceWorkspace).toHaveBeenCalledWith(Path.Knowledge, {
+      section: 'modeling',
+    });
 
     useStateSpy.mockRestore();
   });

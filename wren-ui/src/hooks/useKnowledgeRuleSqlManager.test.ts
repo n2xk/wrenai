@@ -28,6 +28,9 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
       summary: '输出规范',
       scope: 'all',
       content: '先输出结论，再解释原因',
+      relatedBusinessTermsText: '',
+      relatedExternalDependenciesText: '',
+      runtimeUsageJson: '',
     });
   });
 
@@ -41,6 +44,9 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
       summary: '月度销售趋势',
       scope: 'matched',
       content: '按月统计销售额',
+      relatedBusinessTermsText: '',
+      relatedExternalDependenciesText: '',
+      runtimeUsageJson: '',
     });
   });
 
@@ -54,6 +60,9 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
       summary: '',
       scope: 'matched',
       content: '',
+      relatedBusinessTermsText: '',
+      relatedExternalDependenciesText: '',
+      runtimeUsageJson: '',
     });
   });
 
