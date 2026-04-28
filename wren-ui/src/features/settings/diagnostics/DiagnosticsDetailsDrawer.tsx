@@ -13,6 +13,7 @@ import type { ApiHistoryResponse } from '@/types/apiHistory';
 import { getAbsoluteTime } from '@/utils/time';
 import { getAskDiagnostics } from '@/components/pages/apiManagement/askDiagnostics';
 import { formatApiTypeLabel } from '@/components/pages/apiManagement/apiTypeLabels';
+import { resolveApiHistoryThreadId } from '@/features/settings/diagnostics/diagnosticsTableFields';
 
 const { Paragraph, Text } = Typography;
 
@@ -95,6 +96,9 @@ export default function DiagnosticsDetailsDrawer({
 }: Props) {
   const askDiagnostics = getAskDiagnostics(defaultValue?.responsePayload);
   const shadowCompare = askDiagnostics?.shadowCompare;
+  const resolvedThreadId = defaultValue
+    ? resolveApiHistoryThreadId(defaultValue)
+    : null;
 
   const requestSummaryItems = [
     {
@@ -109,7 +113,7 @@ export default function DiagnosticsDetailsDrawer({
     {
       key: 'threadId',
       label: '线程 ID',
-      children: renderCopyableValue(defaultValue?.threadId),
+      children: renderCopyableValue(resolvedThreadId),
     },
     {
       key: 'createdAt',

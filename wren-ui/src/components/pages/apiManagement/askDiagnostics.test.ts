@@ -33,4 +33,24 @@ describe('apiManagement askDiagnostics helpers', () => {
     expect(getAskDiagnostics({ askDiagnostics: ['skill'] as any })).toBeNull();
     expect(getAskDiagnostics(undefined)).toBeNull();
   });
+
+  it('falls back to diagnostics nested in serialized thread responses', () => {
+    expect(
+      getAskDiagnostics({
+        askingTask: {
+          diagnostics: {
+            askPath: 'sql_pairs',
+            templateDecision: {
+              mode: 'anchored_template',
+            },
+          },
+        },
+      }),
+    ).toEqual({
+      askPath: 'sql_pairs',
+      templateDecision: {
+        mode: 'anchored_template',
+      },
+    });
+  });
 });

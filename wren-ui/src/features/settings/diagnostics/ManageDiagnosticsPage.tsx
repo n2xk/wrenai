@@ -57,6 +57,10 @@ import {
 import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
 import DiagnosticsDetailsDrawer from '@/features/settings/diagnostics/DiagnosticsDetailsDrawer';
 import DiagnosticsSummaryCell from '@/features/settings/diagnostics/DiagnosticsSummaryCell';
+import {
+  resolveApiHistoryQueryPreview,
+  resolveApiHistoryThreadId,
+} from '@/features/settings/diagnostics/diagnosticsTableFields';
 
 const PAGE_SIZE = 10;
 
@@ -249,19 +253,16 @@ export default function SettingsDiagnosticsPage() {
       title: '问题 / SQL',
       dataIndex: 'requestPayload',
       key: 'requestPayload',
-      render: (payload: Record<string, any>, record: ApiHistoryListItem) => {
-        if (record.apiType === ApiType.RUN_SQL && payload.sql) {
-          return renderQueryPreview(payload.sql);
-        }
-        return renderQueryPreview(payload?.question || payload?.sql || null);
-      },
+      render: (_payload: Record<string, any>, record: ApiHistoryListItem) =>
+        renderQueryPreview(resolveApiHistoryQueryPreview(record)),
     },
     {
       title: '线程 ID',
       dataIndex: 'threadId',
       key: 'threadId',
       width: 200,
-      render: (threadId: string) => {
+      render: (_threadId: string, record: ApiHistoryListItem) => {
+        const threadId = resolveApiHistoryThreadId(record);
         if (!threadId) {
           return <Typography.Text type="secondary">-</Typography.Text>;
         }

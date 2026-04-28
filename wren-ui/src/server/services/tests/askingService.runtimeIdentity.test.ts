@@ -325,5 +325,51 @@ describe('AskingService', () => {
         deployHash: 'deploy-1',
       });
     });
+
+    it('passes pagination options to the scoped thread repository', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        listAllTimeDescOrderByScope: jest.fn().mockResolvedValue([]),
+      };
+
+      await service.listThreads(
+        {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: null,
+          actorUserId: 'user-1',
+        },
+        {
+          limit: 51,
+          keyword: '充值',
+          cursor: {
+            createdAt: '2026-04-01T00:00:00.000Z',
+            id: 100,
+          },
+        },
+      );
+
+      expect(
+        service.threadRepository.listAllTimeDescOrderByScope,
+      ).toHaveBeenCalledWith(
+        {
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: null,
+        },
+        {
+          limit: 51,
+          keyword: '充值',
+          cursor: {
+            createdAt: '2026-04-01T00:00:00.000Z',
+            id: 100,
+          },
+        },
+      );
+    });
   });
 });

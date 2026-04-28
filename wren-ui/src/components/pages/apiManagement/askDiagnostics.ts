@@ -21,6 +21,7 @@ export type AskDiagnosticsPayload = {
   traceId?: string | null;
   askPath?: string | null;
   shadowCompare?: AskShadowCompareDiagnostics | null;
+  templateDecision?: Record<string, any> | null;
 };
 
 const isObjectRecord = (value: unknown): value is Record<string, any> =>
@@ -32,7 +33,8 @@ export const isAskApiHistoryType = (apiType?: ApiType | null) =>
 export const getAskDiagnostics = (
   responsePayload?: Record<string, any> | null,
 ): AskDiagnosticsPayload | null => {
-  const askDiagnostics = responsePayload?.askDiagnostics;
+  const askDiagnostics =
+    responsePayload?.askDiagnostics || responsePayload?.askingTask?.diagnostics;
 
   if (!isObjectRecord(askDiagnostics)) {
     return null;
