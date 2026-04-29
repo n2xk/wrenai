@@ -295,6 +295,37 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     );
   });
 
+  it('validates dialect SQL templates with the requested SQL mode during creation', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select date_add(callback_time, interval 1 day) from orders',
+        question: 'Preview dialect SQL',
+        sqlMode: 'dialect',
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 13, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockValidateSql).toHaveBeenCalledWith(
+      req.body.sql,
+      executionContext,
+      expect.any(Object),
+      'dialect',
+    );
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      expect.objectContaining({
+        sql: req.body.sql,
+        question: 'Preview dialect SQL',
+      }),
+    );
+  });
+
   it('passes explicit sql template metadata during creation', async () => {
     const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
       .default;

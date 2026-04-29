@@ -45,6 +45,7 @@ interface Props {
   onChange?: (value: string) => void;
   autoFocus?: boolean;
   autoComplete?: boolean;
+  height?: number | string;
   toolbar?: React.ReactNode;
 }
 
@@ -72,7 +73,7 @@ const getLangTools = () => {
 };
 
 export default function SQLEditor(props: Props) {
-  const { value, onChange, autoFocus, autoComplete, toolbar } = props;
+  const { value, onChange, autoFocus, autoComplete, height, toolbar } = props;
   const $wrapper = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState<boolean>(false);
 
@@ -129,7 +130,7 @@ export default function SQLEditor(props: Props) {
       <AceEditor
         mode="sql"
         width="100%"
-        height="300px"
+        height={typeof height === 'number' ? `${height}px` : height || '300px'}
         fontSize={14}
         theme="tomorrow"
         value={value || sql}

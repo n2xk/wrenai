@@ -62,6 +62,7 @@ interface CreateSqlPairRequest {
   sql: string;
   question: string;
   skipSqlValidation?: boolean;
+  sqlMode?: 'wren' | 'dialect';
   assetKind?: string;
   approvedAt?: string | null;
   approvedBy?: string | null;
@@ -155,7 +156,8 @@ const handleCreateSqlPair = async (
   executionContext: any,
   startTime: number,
 ) => {
-  const { sql, question, skipSqlValidation } = req.body as CreateSqlPairRequest;
+  const { sql, question, skipSqlValidation, sqlMode } =
+    req.body as CreateSqlPairRequest;
   const runtimeIdentity =
     toCanonicalPersistedRuntimeIdentityFromScope(runtimeScope);
   const actor = buildAuthorizationActorFromRuntimeScope(runtimeScope);
@@ -203,7 +205,11 @@ const handleCreateSqlPair = async (
   // into indexing a dialect-specific example pair (for example TiDB/MySQL
   // templates used as retrieval hints rather than executable Wren SQL).
   if (!skipSqlValidation) {
-    await validateSql(sql, executionContext, queryService);
+    if (sqlMode === 'wren' || sqlMode === 'dialect') {
+      await validateSql(sql, executionContext, queryService, sqlMode);
+    } else {
+      await validateSql(sql, executionContext, queryService);
+    }
   }
 
   // Create the SQL pair

@@ -288,12 +288,14 @@ export const validateSql = async (
     manifest: any;
   },
   queryService: any,
+  sqlMode?: 'wren' | 'dialect',
 ) => {
   try {
     await queryService.preview(prepareSqlForDryRunValidation(sql), {
       manifest: executionContext.manifest,
       project: executionContext.project,
       dryRun: true,
+      ...(sqlMode ? { sqlMode } : {}),
     });
   } catch (err: any) {
     throw new ApiError(

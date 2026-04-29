@@ -91,6 +91,7 @@ interface UpdateSqlPairRequest {
   sql?: string;
   question?: string;
   skipSqlValidation?: boolean;
+  sqlMode?: 'wren' | 'dialect';
   assetKind?: string;
   approvedAt?: string | null;
   approvedBy?: string | null;
@@ -184,7 +185,8 @@ const handleUpdateSqlPair = async (
     context: auditContext,
   });
 
-  const { sql, question, skipSqlValidation } = req.body as UpdateSqlPairRequest;
+  const { sql, question, skipSqlValidation, sqlMode } =
+    req.body as UpdateSqlPairRequest;
 
   // Input validation for provided fields
   if (sql !== undefined) {
@@ -201,7 +203,11 @@ const handleUpdateSqlPair = async (
     // into indexing a dialect-specific example pair (for example TiDB/MySQL
     // templates used as retrieval hints rather than executable Wren SQL).
     if (!skipSqlValidation) {
-      await validateSql(sql, executionContext, queryService);
+      if (sqlMode === 'wren' || sqlMode === 'dialect') {
+        await validateSql(sql, executionContext, queryService, sqlMode);
+      } else {
+        await validateSql(sql, executionContext, queryService);
+      }
     }
   }
 

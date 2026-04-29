@@ -31,6 +31,8 @@ export type ValidateSqlResponse = {
   valid: boolean;
 };
 
+export type SqlPreviewMode = 'wren' | 'dialect';
+
 const buildRunSqlUrl = (selector?: ClientRuntimeScopeSelector) =>
   buildRuntimeScopeUrl('/api/v1/run_sql', {}, selector);
 
@@ -41,11 +43,12 @@ export const previewSql = async (
   selector: ClientRuntimeScopeSelector,
   sql: string,
   limit = 50,
+  sqlMode?: SqlPreviewMode | null,
 ) => {
   const response = await fetch(buildRunSqlUrl(selector), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql, limit }),
+    body: JSON.stringify({ sql, limit, ...(sqlMode ? { sqlMode } : {}) }),
   });
   const payload = (await response.json().catch(() => null)) as
     | RunSqlResponse
@@ -74,11 +77,17 @@ export const previewSql = async (
 export const validateSql = async (
   selector: ClientRuntimeScopeSelector,
   sql: string,
+  sqlMode?: SqlPreviewMode | null,
 ) => {
   const response = await fetch(buildRunSqlUrl(selector), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sql, limit: 1, dryRun: true }),
+    body: JSON.stringify({
+      sql,
+      limit: 1,
+      dryRun: true,
+      ...(sqlMode ? { sqlMode } : {}),
+    }),
   });
   const payload = (await response.json().catch(() => null)) as
     | ValidateSqlResponse

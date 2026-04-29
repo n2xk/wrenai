@@ -2,45 +2,49 @@ import { useEffect, useMemo, useState } from 'react';
 import styled from 'styled-components';
 import { Alert, Button, Form, Input, Modal, Radio, Typography } from 'antd';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
-import SelectOutlined from '@ant-design/icons/SelectOutlined';
 import { appMessage as message } from '@/utils/antdAppBridge';
-import { Logo } from '@/components/Logo';
 import ErrorCollapse from '@/components/ErrorCollapse';
-import ImportConnectionSQLModal, {
-  isSupportSubstitute,
-} from '@/components/modals/ImportConnectionSQLModal';
 import SQLEditor from '@/components/editor/SQLEditor';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import useAuthSession from '@/hooks/useAuthSession';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import useModalAction, { ModalAction } from '@/hooks/useModalAction';
-import { DataSource, DataSourceName } from '@/types/dataSource';
-import { hasExecutableRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { ModalAction } from '@/hooks/useModalAction';
 import {
   SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
   SQL_PAIR_REFERENCE_PRESET,
+  type CreateSqlPairInput,
   type SqlPair,
 } from '@/types/knowledge';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { ERROR_TEXTS } from '@/utils/error';
 import { FORM_MODE } from '@/utils/enum';
-import { getConnectionTypeName } from '@/utils/connectionType';
 import { generateKnowledgeSqlPairQuestion } from '@/utils/knowledgeRuleSqlRest';
-import { fetchSettings, resolveSettingsConnection } from '@/utils/settingsRest';
 import {
   previewSql,
   validateSql,
   type SqlPreviewDataResponse,
+  type SqlPreviewMode,
 } from '@/utils/sqlPreviewRest';
 import { createSQLPairQuestionValidator } from '@/utils/validator';
 import { isWorkspaceOwnerEquivalentRole } from '@/utils/workspaceGovernance';
 
-type Props = ModalAction<SqlPair> & {
-  loading?: boolean;
-  payload?: {
+type SqlPairModalValue = Partial<SqlPair> & {
+  sqlMode?: SqlPreviewMode;
+};
+
+type Props = ModalAction<
+  SqlPairModalValue,
+  {
+    data: CreateSqlPairInput;
+    id?: number;
+  },
+  {
     isCreateMode: boolean;
     responseId?: number;
-  };
+    sqlMode?: SqlPreviewMode;
+  }
+> & {
+  loading?: boolean;
 };
 
 type ModalErrorState = {
@@ -52,7 +56,7 @@ type ModalErrorState = {
 
 const StyledForm = styled(Form)`
   .ant-form-item {
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 
   .adm-question-form-item > div > label {
@@ -65,11 +69,25 @@ const StyledForm = styled(Form)`
     color: #4b5563;
   }
 
+  .ant-form-item-extra {
+    margin-top: 4px;
+    color: #8b95a1;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
   .ant-input {
-    min-height: 40px;
+    min-height: 36px;
     border-radius: 10px;
     border-color: #dbe2ea;
     box-shadow: none;
+  }
+
+  .ant-radio-button-wrapper {
+    height: 30px;
+    padding-inline: 12px;
+    font-size: 12px;
+    line-height: 28px;
   }
 `;
 
@@ -82,18 +100,72 @@ const StyledModal = styled(Modal)`
   }
 
   .ant-modal-header {
-    padding: 18px 20px;
+    padding: 16px 20px 14px;
     border-bottom: 1px solid #eef2f7;
   }
 
   .ant-modal-title {
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 700;
     color: #111827;
   }
 
   .ant-modal-body {
-    padding: 20px;
+    max-height: min(70vh, 680px);
+    overflow-y: auto;
+    padding: 16px 20px 12px;
+  }
+
+  .ant-modal-footer {
+    margin-top: 0;
+    padding: 12px 20px 16px;
+    border-top: 1px solid #eef2f7;
+  }
+`;
+
+const QuestionLabel = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+`;
+
+const QuestionHint = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #7b8491;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+`;
+
+const PreviewPanel = styled.div`
+  margin-top: 2px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+`;
+
+const PreviewHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+`;
+
+const PreviewTitle = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`;
+
+const PreviewResult = styled.div`
+  margin-top: 10px;
+
+  .ant-table {
+    font-size: 12px;
   }
 `;
 
@@ -108,32 +180,11 @@ const FooterHint = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  max-width: 340px;
+  max-width: 430px;
   color: #6b7280;
   font-size: 12px;
-  line-height: 1.7;
+  line-height: 1.55;
 `;
-
-const Toolbar = (props: {
-  connectionType?: DataSourceName;
-  onClick: () => void;
-}) => {
-  const { connectionType, onClick } = props;
-  const name = connectionType
-    ? getConnectionTypeName(connectionType)
-    : '当前连接';
-  return (
-    <div className="d-flex justify-space-between align-center px-1">
-      <span className="d-flex align-center gx-2">
-        <Logo size={16} />
-        Nova SQL
-      </span>
-      <Button className="px-0" type="link" size="small" onClick={onClick}>
-        <SelectOutlined />从 {name} SQL 导入
-      </Button>
-    </div>
-  );
-};
 
 export default function QuestionSQLPairModal(props: Props) {
   const {
@@ -148,31 +199,8 @@ export default function QuestionSQLPairModal(props: Props) {
 
   // pass payload?.isCreateMode to prevent formMode from being set to Update when passing defaultValue, for the 'Add a SQL pair from an existing answer' scenario use.
   const isCreateMode = formMode === FORM_MODE.CREATE || payload?.isCreateMode;
-  const importConnectionSQLModal = useModalAction();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const { data: authSession } = useAuthSession({ includeWorkspaceQuery: true });
-  const [settings, setSettings] = useState<Awaited<
-    ReturnType<typeof fetchSettings>
-  > | null>(null);
-  const normalizedSettingsConnection = useMemo<DataSource | undefined>(() => {
-    const connection = resolveSettingsConnection(settings);
-    if (!connection?.type) {
-      return undefined;
-    }
-
-    return {
-      type: connection.type,
-      properties: connection.properties || {},
-      sampleDataset: connection.sampleDataset || undefined,
-    };
-  }, [settings]);
-  const connectionContext = useMemo(
-    () => ({
-      isSupportSubstitute: isSupportSubstitute(normalizedSettingsConnection),
-      type: normalizedSettingsConnection?.type || undefined,
-    }),
-    [normalizedSettingsConnection],
-  );
 
   const [form] = Form.useForm();
   const [error, setError] = useState<ModalErrorState>(null);
@@ -201,7 +229,9 @@ export default function QuestionSQLPairModal(props: Props) {
     ],
   );
 
-  const resolveSaveMode = (sqlPair?: SqlPair | null) =>
+  const resolveSaveMode = (
+    sqlPair?: Pick<SqlPair, 'templateMode' | 'assetKind'> | null,
+  ) =>
     sqlPair?.templateMode === 'anchored_template' ||
     sqlPair?.templateMode === 'executable_template' ||
     sqlPair?.assetKind === 'sql_template'
@@ -212,23 +242,6 @@ export default function QuestionSQLPairModal(props: Props) {
 
   useEffect(() => {
     if (visible) {
-      if (!hasExecutableRuntimeScopeSelector(runtimeScopeNavigation.selector)) {
-        setSettings(null);
-      } else {
-        void fetchSettings(runtimeScopeNavigation.selector)
-          .then((payload) => {
-            setSettings(payload);
-          })
-          .catch((error) => {
-            const errorMessage = resolveAbortSafeErrorMessage(
-              error,
-              '加载系统设置失败，请稍后重试。',
-            );
-            if (errorMessage) {
-              message.error(errorMessage);
-            }
-          });
-      }
       form.setFieldsValue({
         question: defaultValue?.question,
         sql: defaultValue?.sql,
@@ -243,7 +256,6 @@ export default function QuestionSQLPairModal(props: Props) {
     defaultValue,
     form,
     preserveExistingBusinessSaveMode,
-    runtimeScopeNavigation.selector,
     visible,
   ]);
 
@@ -254,8 +266,10 @@ export default function QuestionSQLPairModal(props: Props) {
     form.resetFields();
   };
 
+  const sqlMode = defaultValue?.sqlMode || payload?.sqlMode;
+
   const onValidateSQL = async () => {
-    await validateSql(runtimeScopeNavigation.selector, sqlValue);
+    await validateSql(runtimeScopeNavigation.selector, sqlValue, sqlMode);
   };
 
   const handleError = (error: unknown) => {
@@ -277,7 +291,12 @@ export default function QuestionSQLPairModal(props: Props) {
     try {
       await onValidateSQL();
       setShowPreview(true);
-      const data = await previewSql(runtimeScopeNavigation.selector, sqlValue);
+      const data = await previewSql(
+        runtimeScopeNavigation.selector,
+        sqlValue,
+        50,
+        sqlMode,
+      );
       setPreviewData(data);
     } catch (error) {
       setShowPreview(false);
@@ -307,6 +326,7 @@ export default function QuestionSQLPairModal(props: Props) {
               data: {
                 ...draft,
                 ...templateMetadata,
+                ...(sqlMode ? { sqlMode } : {}),
               },
               id: defaultValue?.id,
             });
@@ -365,7 +385,7 @@ export default function QuestionSQLPairModal(props: Props) {
         mask={{ closable: false }}
         onCancel={onClose}
         open={visible}
-        width={640}
+        width={760}
         cancelButtonProps={{ disabled: confirmLoading }}
         okButtonProps={{ disabled: previewing }}
         afterClose={() => handleReset()}
@@ -374,16 +394,25 @@ export default function QuestionSQLPairModal(props: Props) {
             <FooterHint>
               <InfoCircleOutlined className="mt-1" />
               <Typography.Text type="secondary" className="text-left">
-                这里使用的<b>SQL</b>是基于 ANSI
-                SQL，并针对当前语义引擎做了优化。{` `}
-                <Typography.Link
-                  type="secondary"
-                  href="https://docs.getwren.ai/oss/guide/home/wren_sql"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  了解语法说明。
-                </Typography.Link>
+                {sqlMode === 'dialect' ? (
+                  <>
+                    当前 SQL
+                    会按数据源方言预览与校验，适合从问数结果沉淀为参考/业务模板。
+                  </>
+                ) : (
+                  <>
+                    这里使用的<b>SQL</b>是基于 ANSI
+                    SQL，并针对当前语义引擎做了优化。{` `}
+                    <Typography.Link
+                      type="secondary"
+                      href="https://docs.getwren.ai/oss/guide/home/wren_sql"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      了解语法说明。
+                    </Typography.Link>
+                  </>
+                )}
               </Typography.Text>
             </FooterHint>
             <div style={{ display: 'flex', gap: 12 }}>
@@ -403,15 +432,11 @@ export default function QuestionSQLPairModal(props: Props) {
           <Form.Item
             className="adm-question-form-item"
             label={
-              <div
-                className="d-flex justify-space-between"
-                style={{ width: '100%' }}
-              >
+              <QuestionLabel>
                 <span>问题</span>
-                <div className="gray-8 text-sm">
-                  让 AI 为这条 SQL 自动生成匹配的问题描述。
+                <QuestionHint>
+                  <span>让 AI 生成匹配的问题描述</span>
                   <Button
-                    className="ml-2"
                     size="small"
                     loading={generatingQuestion}
                     onClick={onGenerateQuestion}
@@ -419,8 +444,8 @@ export default function QuestionSQLPairModal(props: Props) {
                   >
                     <span className="text-sm">生成问题</span>
                   </Button>
-                </div>
-              </div>
+                </QuestionHint>
+              </QuestionLabel>
             }
             name="question"
             required
@@ -474,46 +499,37 @@ export default function QuestionSQLPairModal(props: Props) {
               },
             ]}
           >
-            <SQLEditor
-              toolbar={
-                connectionContext.isSupportSubstitute && (
-                  <Toolbar
-                    connectionType={connectionContext.type}
-                    onClick={() =>
-                      importConnectionSQLModal.openModal({
-                        connectionType:
-                          connectionContext.type || DataSourceName.BIG_QUERY,
-                      })
-                    }
-                  />
-                )
-              }
-              autoComplete
-              autoFocus
-            />
+            <SQLEditor autoComplete autoFocus height={220} />
           </Form.Item>
         </StyledForm>
-        <div className="my-3">
-          <Typography.Text className="d-block gray-7 mb-2">
-            数据预览（50 行）
-          </Typography.Text>
-          <Button
-            onClick={onPreviewData}
-            loading={previewing}
-            disabled={disabled}
-          >
-            预览数据
-          </Button>
+        <PreviewPanel>
+          <PreviewHeader>
+            <PreviewTitle>
+              <Typography.Text className="gray-8">数据预览</Typography.Text>
+              <Typography.Text type="secondary" className="text-sm">
+                默认读取前 50 行，用于确认 SQL 可以在当前数据源执行。
+              </Typography.Text>
+            </PreviewTitle>
+            <Button
+              onClick={onPreviewData}
+              loading={previewing}
+              disabled={disabled}
+            >
+              预览数据
+            </Button>
+          </PreviewHeader>
           {showPreview && (
-            <div className="my-3">
+            <PreviewResult>
               <PreviewData
                 loading={previewing}
                 previewData={previewData}
                 copyable={false}
+                showExport={false}
+                tableScrollY={180}
               />
-            </div>
+            </PreviewResult>
           )}
-        </div>
+        </PreviewPanel>
         {!!error && (
           <Alert
             showIcon
@@ -523,15 +539,6 @@ export default function QuestionSQLPairModal(props: Props) {
           />
         )}
       </StyledModal>
-      {connectionContext.isSupportSubstitute && (
-        <ImportConnectionSQLModal
-          {...importConnectionSQLModal.state}
-          onClose={importConnectionSQLModal.closeModal}
-          onSubmit={async (convertedSql: string) => {
-            form.setFieldsValue({ sql: convertedSql });
-          }}
-        />
-      )}
     </>
   );
 }

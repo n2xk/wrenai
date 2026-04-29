@@ -11,6 +11,7 @@ export type CreateSqlPairInput = {
   question: string;
   sql: string;
   skipSqlValidation?: boolean;
+  sqlMode?: 'wren' | 'dialect';
   assetKind?: SqlPairAssetKind;
   approvedAt?: string | null;
   approvedBy?: string | null;

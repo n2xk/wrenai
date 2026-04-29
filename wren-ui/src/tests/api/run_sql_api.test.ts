@@ -184,6 +184,29 @@ describe('pages/api/v1/run_sql', () => {
       }),
     );
   });
+
+  it('passes SQL execution mode to query preview when provided', async () => {
+    const handler = (await import('../../pages/api/v1/run_sql')).default;
+    const req = createReq({
+      body: {
+        sql: 'select date_add(callback_time, interval 1 day) from orders',
+        limit: 50,
+        sqlMode: 'dialect',
+      },
+    });
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(mockQueryPreview).toHaveBeenCalledWith(req.body.sql, {
+      project: executionContext.project,
+      limit: 50,
+      manifest: executionContext.manifest,
+      modelingOnly: false,
+      dryRun: false,
+      sqlMode: 'dialect',
+    });
+  });
 });
 
 export {};

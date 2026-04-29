@@ -75,6 +75,7 @@ interface RunSqlRequest {
   threadId?: string;
   limit?: number;
   dryRun?: boolean;
+  sqlMode?: 'wren' | 'dialect';
   workspaceId?: string;
   knowledgeBaseId?: string;
   kbSnapshotId?: string;
@@ -90,6 +91,7 @@ export default async function handler(
     threadId,
     limit = 1000,
     dryRun = false,
+    sqlMode,
   } = req.body as RunSqlRequest;
   const startTime = Date.now();
   let runtimeScope;
@@ -122,6 +124,7 @@ export default async function handler(
         manifest,
         modelingOnly: false,
         dryRun,
+        ...(sqlMode === 'wren' || sqlMode === 'dialect' ? { sqlMode } : {}),
       });
 
       if (dryRun) {
