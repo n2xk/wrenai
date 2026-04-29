@@ -138,17 +138,19 @@ export const getScheduleText = (schedule: Schedule): string => {
   switch (frequency) {
     case FREQUENCY.DAILY: {
       const time = convertTime(schedule);
-      return `缓存每天 ${time} 自动刷新`;
+      return `缓存刷新：每天 ${time}`;
     }
     case FREQUENCY.WEEKLY: {
       const time = convertTime(schedule);
-      return `缓存每周${getDayOfWeekText(schedule.day as CacheScheduleDayEnum)} ${time} 自动刷新`;
+      return `缓存刷新：每周${getDayOfWeekText(
+        schedule.day as CacheScheduleDayEnum,
+      )} ${time}`;
     }
     case FREQUENCY.CUSTOM: {
-      return '缓存按自定义计划刷新';
+      return '缓存刷新：自定义计划';
     }
     case FREQUENCY.NEVER: {
-      return '缓存仅支持手动刷新';
+      return '缓存刷新：手动';
     }
     default: {
       return '';

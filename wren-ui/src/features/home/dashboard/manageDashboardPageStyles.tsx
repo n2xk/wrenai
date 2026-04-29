@@ -326,7 +326,7 @@ export const DashboardStageCanvas = styled.div<{ $empty?: boolean }>`
   flex-direction: column;
   min-width: 0;
   min-height: ${(props) => (props.$empty ? 'max(620px, 100%)' : '100%')};
-  border-radius: 18px;
+  border-radius: 14px;
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--nova-shadow-soft);

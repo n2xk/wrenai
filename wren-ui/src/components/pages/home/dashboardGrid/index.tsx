@@ -11,6 +11,7 @@ import React, {
 import styled from 'styled-components';
 
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
+import { DashboardItemType } from '@/types/home';
 import type {
   DashboardGridItemData,
   DashboardItemLayoutInput,
@@ -56,9 +57,14 @@ const StyledDashboardGrid = styled.div`
       rgba(248, 246, 251, 0.98) 100%
     );
     height: 100%;
-    border-radius: 22px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 12px;
     border: 1px solid var(--nova-outline-soft);
     box-shadow: 0 20px 40px -28px rgba(31, 35, 50, 0.28);
+    overflow: hidden;
     transition:
       border-color 0.2s ease,
       transform 0.2s ease,
@@ -75,7 +81,8 @@ const StyledDashboardGrid = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 16px 0 18px;
+    flex: 0 0 auto;
+    padding: 14px 14px 0 16px;
 
     * {
       min-width: 0;
@@ -96,16 +103,23 @@ const StyledDashboardGrid = styled.div`
   }
 
   .adm-pinned-content {
-    height: calc(100% - 40px);
-    padding: 16px 16px 18px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 12px 14px 14px;
+    box-sizing: border-box;
 
     &-overflow {
+      flex: 1 1 auto;
       overflow: auto;
-      height: calc(100% - 18px);
-      padding: 8px 12px;
+      min-height: 0;
+      padding: 6px 10px;
     }
 
     &-info {
+      flex: 0 0 auto;
+      margin-top: 4px;
       font-size: 12px;
       color: var(--gray-6);
       text-align: right;
@@ -115,15 +129,19 @@ const StyledDashboardGrid = styled.div`
 
   .adm-pinned-item-chart {
     height: 100%;
+    min-height: 168px;
   }
 
   .react-grid-placeholder {
     background-color: rgba(141, 101, 225, 0.22);
-    border-radius: 20px;
+    border-radius: 12px;
   }
 `;
 
 export type DashboardGridItem = DashboardGridItemData;
+
+const getItemMinHeight = (item: DashboardGridItem) =>
+  item.type === DashboardItemType.NUMBER ? 2 : 2;
 
 const getLayoutToUpdateItem = (layout: Layout) => ({
   itemId: Number(layout.i),
@@ -211,7 +229,19 @@ const DashboardGrid = forwardRef(
       [items],
     );
 
-    const layouts = useMemo(() => resolveDashboardGridLayouts(items), [items]);
+    const layouts = useMemo(
+      () =>
+        resolveDashboardGridLayouts(items).map((layout) => {
+          const item = items.find((item) => item.id.toString() === layout.i);
+          return item
+            ? {
+                ...layout,
+                minH: getItemMinHeight(item),
+              }
+            : layout;
+        }),
+      [items],
+    );
 
     const gridItems = items.map((item) => (
       <div

@@ -8,6 +8,7 @@ import { getScheduleText } from '@/components/pages/home/dashboardGrid/CacheSett
 import type { Schedule } from '@/components/pages/home/dashboardGrid/CacheSettingsDrawer';
 
 interface Props {
+  dashboardName?: string;
   isSupportCached: boolean;
   readOnly?: boolean;
   nextScheduleTime?: string;
@@ -40,13 +41,19 @@ const HeaderMeta = styled.div`
 `;
 
 const HeaderHint = styled.span`
-  color: var(--nova-text-secondary);
-  font-size: 12px;
+  min-width: 0;
+  color: #252b3a;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export default function DashboardHeader(props: Props) {
   const {
+    dashboardName,
     isSupportCached,
     readOnly = false,
     nextScheduleTime,
@@ -69,7 +76,9 @@ export default function DashboardHeader(props: Props) {
 
   return (
     <StyledHeader>
-      <HeaderHint>拖拽卡片可直接调整布局</HeaderHint>
+      <HeaderHint title={dashboardName || '数据看板'}>
+        {dashboardName || '数据看板'}
+      </HeaderHint>
       <div>
         {schedule && (
           <HeaderMeta>

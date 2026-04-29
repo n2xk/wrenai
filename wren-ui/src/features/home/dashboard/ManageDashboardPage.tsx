@@ -442,6 +442,13 @@ export default function Dashboard() {
               loading: cacheSettingsSubmitting,
               onClose: cacheSettingsDrawer.closeDrawer,
             }}
+            dashboardName={
+              visibleDashboardDetail?.name || activeDashboard?.name
+                ? resolveDashboardDisplayName(
+                    visibleDashboardDetail?.name || activeDashboard?.name,
+                  )
+                : undefined
+            }
             dashboardGridRef={dashboardGridRef}
             dashboardItems={dashboardItems}
             isDashboardReadonly={isDashboardReadonly}

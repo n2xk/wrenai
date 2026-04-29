@@ -18,6 +18,7 @@ import {
 
 export const DashboardWorkbenchStage = (props: {
   cacheSettingsDrawerProps: DrawerAction<any> & { loading?: boolean };
+  dashboardName?: string;
   dashboardGridRef: React.RefObject<DashboardGridHandle | null>;
   dashboardItems: DashboardGridItem[];
   isDashboardReadonly: boolean;
@@ -38,6 +39,7 @@ export const DashboardWorkbenchStage = (props: {
 }) => {
   const {
     cacheSettingsDrawerProps,
+    dashboardName,
     dashboardGridRef,
     dashboardItems,
     isDashboardReadonly,
@@ -59,6 +61,7 @@ export const DashboardWorkbenchStage = (props: {
       <DashboardStageCanvas $empty={dashboardItems.length === 0}>
         <EmptyDashboard show={dashboardItems.length === 0}>
           <DashboardHeader
+            dashboardName={dashboardName}
             isSupportCached={isSupportCached}
             readOnly={isDashboardReadonly}
             schedule={readOnlySchedule}
