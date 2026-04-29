@@ -6,6 +6,7 @@ import { ThreadResponse } from '../repositories/threadResponseRepository';
 import { AskingDetailTaskInput } from '../services/askingService';
 import { TelemetryEvent } from '../telemetry/telemetry';
 import { DetailedThread } from './askingControllerTypes';
+import { assertAskingTaskIsUnbound } from '../services/askingTaskBindingGuard';
 import {
   assertKnowledgeBaseReadAccess,
   ensureAskingTaskScope,
@@ -41,6 +42,7 @@ const resolveThreadInput = async (
   if (!askingTask) {
     throw new Error(`Asking task ${data.taskId} not found`);
   }
+  assertAskingTaskIsUnbound(askingTask);
 
   return {
     question: askingTask.question,
@@ -70,6 +72,7 @@ const resolveThreadResponseInput = async (
   if (!askingTask) {
     throw new Error(`Asking task ${data.taskId} not found`);
   }
+  assertAskingTaskIsUnbound(askingTask);
 
   return {
     question: askingTask.question,

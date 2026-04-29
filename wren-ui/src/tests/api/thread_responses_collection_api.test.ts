@@ -169,4 +169,43 @@ describe('pages/api/v1/threads/[...path] route', () => {
       }),
     );
   });
+
+  it('rejects creating another response from an already bound asking task', async () => {
+    const handler = (await import('../../pages/api/v1/threads/[...path]'))
+      .default;
+    const req = createReq({
+      query: { path: ['12', 'responses'] },
+      body: { taskId: 'ask-bound' },
+    });
+    const res = createRes();
+
+    mockGetAskingTask.mockResolvedValue({
+      queryId: 'ask-bound',
+      question: '已绑定的问题',
+      taskId: 88,
+      threadId: 11,
+      threadResponseId: 101,
+      response: [],
+    });
+
+    await handler(req, res);
+
+    expect(mockAssertAskingTaskScope).toHaveBeenCalledWith(
+      'ask-bound',
+      expect.objectContaining({
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+      }),
+    );
+    expect(mockCreateThreadResponseScoped).not.toHaveBeenCalled();
+    expect(mockHandleApiError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'ASKING_TASK_ALREADY_BOUND',
+          statusCode: 409,
+        }),
+      }),
+    );
+    expect(res.statusCode).toBe(409);
+  });
 });

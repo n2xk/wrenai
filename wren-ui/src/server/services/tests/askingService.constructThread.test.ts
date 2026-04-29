@@ -179,6 +179,40 @@ describe('AskingService', () => {
         },
       );
     });
+
+    it('does not create a new thread when the asking task is already bound', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        createOne: jest.fn(),
+      };
+      service.threadResponseRepository = {
+        createOne: jest.fn(),
+      };
+      service.askingTaskTracker = {
+        bindThreadResponse: jest.fn(),
+      };
+
+      await expect(
+        service.createThread({
+          question: 'what happened yesterday',
+          trackedAskingResult: {
+            taskId: 9,
+            queryId: 'query-9',
+            threadId: 101,
+            threadResponseId: 202,
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'ASKING_TASK_ALREADY_BOUND',
+        statusCode: 409,
+      });
+
+      expect(service.threadRepository.createOne).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.createOne).not.toHaveBeenCalled();
+      expect(
+        service.askingTaskTracker.bindThreadResponse,
+      ).not.toHaveBeenCalled();
+    });
   });
 
   describe('createThreadResponse', () => {
@@ -252,6 +286,44 @@ describe('AskingService', () => {
         id: 202,
         sql: 'select * from refreshed_response',
       });
+    });
+
+    it('does not create a response when the asking task is already bound', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn(),
+      };
+      service.threadResponseRepository = {
+        createOne: jest.fn(),
+        findOneBy: jest.fn(),
+      };
+      service.askingTaskTracker = {
+        bindThreadResponse: jest.fn(),
+      };
+
+      await expect(
+        service.createThreadResponse(
+          {
+            question: 'follow up',
+            trackedAskingResult: {
+              taskId: 9,
+              queryId: 'query-9',
+              threadId: 101,
+              threadResponseId: 202,
+            },
+          },
+          303,
+        ),
+      ).rejects.toMatchObject({
+        code: 'ASKING_TASK_ALREADY_BOUND',
+        statusCode: 409,
+      });
+
+      expect(service.threadRepository.findOneBy).not.toHaveBeenCalled();
+      expect(service.threadResponseRepository.createOne).not.toHaveBeenCalled();
+      expect(
+        service.askingTaskTracker.bindThreadResponse,
+      ).not.toHaveBeenCalled();
     });
   });
 

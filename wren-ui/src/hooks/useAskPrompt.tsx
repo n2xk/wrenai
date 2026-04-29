@@ -77,6 +77,7 @@ export default function useAskPrompt(
   > | null>(null);
   const instantRecommendPollingSessionRef = useRef(0);
   const lastTaskIdRef = useRef<string | null>(null);
+  const previousThreadIdRef = useRef<number | undefined>(threadId);
   const [fetchAskingStreamTask, askingStreamTaskResult] =
     useAskingStreamTask(runtimeScopeSelector);
 
@@ -233,6 +234,27 @@ export default function useAskPrompt(
     },
     [askingStreamTaskResult.data, fetchAskingStreamTask],
   );
+
+  useEffect(() => {
+    if (previousThreadIdRef.current === threadId) {
+      return;
+    }
+
+    previousThreadIdRef.current = threadId;
+    setOriginalQuestion('');
+    setThreadQuestions([]);
+    setAskingTask(null);
+    setRecommendedQuestions(null);
+    lastTaskIdRef.current = null;
+    askingStreamTaskResult.reset();
+    stopAskingTaskPolling();
+    stopInstantRecommendPolling();
+  }, [
+    askingStreamTaskResult,
+    stopAskingTaskPolling,
+    stopInstantRecommendPolling,
+    threadId,
+  ]);
 
   useEffect(() => {
     if (getIsFinished(askingTask?.status)) {

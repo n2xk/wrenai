@@ -207,6 +207,8 @@ export type AskingTask = {
   status: AskingTaskStatus;
   thinking?: ThinkingTrace | null;
   traceId?: string | null;
+  threadId?: number | null;
+  threadResponseId?: number | null;
   type?: AskingTaskType | null;
 };
 

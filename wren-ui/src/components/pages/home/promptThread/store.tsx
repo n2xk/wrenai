@@ -6,6 +6,7 @@ import type {
 } from '@/types/home';
 import type { ComposerDraftIntent } from '@/types/homeIntent';
 import type { WorkbenchArtifactKind } from '@/features/home/thread/threadWorkbenchState';
+import type { SqlPreviewMode } from '@/utils/sqlPreviewRest';
 
 import { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
 
@@ -60,8 +61,12 @@ export type IPromptThreadStore = {
     },
   ) => void;
   onOpenSaveToKnowledgeModal: (
-    data: { sql: string; question: string },
-    payload: { isCreateMode: boolean; responseId?: number },
+    data: { sql: string; question: string; sqlMode?: SqlPreviewMode },
+    payload: {
+      isCreateMode: boolean;
+      responseId?: number;
+      sqlMode?: SqlPreviewMode;
+    },
   ) => void;
   onOpenAdjustReasoningStepsModal: (data: {
     responseId: number;

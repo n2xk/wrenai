@@ -15,6 +15,7 @@ import {
 } from './askingServiceShared';
 import { normalizeRuntimeScope } from './askingServiceRuntimeSupport';
 import { buildThreadResponseIntentState } from './threadResponseIntentState';
+import { assertAskingTaskIsUnbound } from './askingTaskBindingGuard';
 
 interface AskingServiceThreadLike {
   threadRepository: Pick<
@@ -48,6 +49,8 @@ export const createThreadAction = async (
   input: AskingDetailTaskInput,
   runtimeIdentity: PersistedRuntimeIdentity,
 ): Promise<Thread> => {
+  assertAskingTaskIsUnbound(input.trackedAskingResult);
+
   const persistedRuntimeIdentity =
     service.buildPersistedRuntimeIdentityPatch(runtimeIdentity);
   const normalizedKnowledgeBaseIds = Array.from(
@@ -329,6 +332,8 @@ export const createThreadResponseAction = async (
   threadId: number,
   runtimeIdentity: PersistedRuntimeIdentity,
 ): Promise<ThreadResponse> => {
+  assertAskingTaskIsUnbound(input.trackedAskingResult);
+
   const thread = await service.threadRepository.findOneBy({ id: threadId });
   if (!thread) {
     throw new Error(`Thread ${threadId} not found`);

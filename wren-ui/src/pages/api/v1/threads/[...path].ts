@@ -15,6 +15,7 @@ import {
   buildAuthorizationContextFromRequest,
 } from '@server/authz';
 import { serializeThreadResponsePayload } from '@/server/api/threadPayloadSerializers';
+import { assertAskingTaskIsUnbound } from '@/server/services/askingTaskBindingGuard';
 
 const logger = getLogger('API_THREAD_RESPONSE_COLLECTION');
 logger.level = 'debug';
@@ -122,6 +123,7 @@ const buildCreateThreadResponseInput = async ({
     if (!askingTask) {
       throw new Error(`Asking task ${payload.taskId} not found`);
     }
+    assertAskingTaskIsUnbound(askingTask);
 
     return {
       question: askingTask.question,

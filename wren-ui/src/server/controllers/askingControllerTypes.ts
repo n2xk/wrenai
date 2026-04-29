@@ -46,6 +46,8 @@ export interface AskingTask {
   thinking?: ThinkingTrace | null;
   traceId?: string;
   queryId?: string;
+  threadId?: number;
+  threadResponseId?: number;
 }
 
 export interface DetailedThread {

@@ -264,5 +264,7 @@ export const transformAskingTask = async (
     traceId: askingTask.traceId,
     diagnostics: buildAskDiagnostics(askingTask),
     thinking: askingTask.thinking,
+    threadId: askingTask.threadId,
+    threadResponseId: askingTask.threadResponseId,
   };
 };

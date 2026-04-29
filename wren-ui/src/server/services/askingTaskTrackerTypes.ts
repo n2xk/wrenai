@@ -9,6 +9,7 @@ export interface TrackedTask {
   question?: string;
   result?: AskResult;
   isFinalized: boolean;
+  threadId?: number;
   threadResponseId?: number;
   rerunFromCancelled?: boolean;
   runtimeIdentity?: PersistedRuntimeIdentity;
@@ -18,6 +19,8 @@ export type TrackedAskingResult = AskResult & {
   taskId?: number;
   queryId: string;
   question: string;
+  threadId?: number;
+  threadResponseId?: number;
 };
 
 export type CreateAskingTaskInput = AskInput & {

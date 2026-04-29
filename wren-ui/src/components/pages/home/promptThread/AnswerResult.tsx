@@ -47,6 +47,7 @@ import {
 import { resolveConversationAidOwnerResponseId } from '@/features/home/thread/conversationAidVisibility';
 import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
 import { resolveTemplateDecisionPresentation } from '@/features/home/thread/templateDecisionPresentation';
+import { resolveThreadResponseSqlPreviewMode } from '@/features/home/thread/threadResponseSqlMode';
 
 const adjustmentType = {
   [ThreadResponseAdjustmentType.APPLY_SQL]: '已应用手动 SQL',
@@ -542,6 +543,20 @@ export default function AnswerResult(props: Props) {
       sourceResponseId: id,
     });
   }, [data.responses, id, isChartFollowUp, threadResponse]);
+  const sourceThreadResponse = useMemo(
+    () =>
+      threadResponse.sourceResponseId
+        ? data.responses.find(
+            (response) => response.id === threadResponse.sourceResponseId,
+          ) || null
+        : null,
+    [data.responses, threadResponse.sourceResponseId],
+  );
+  const sqlPreviewMode = useMemo(
+    () =>
+      resolveThreadResponseSqlPreviewMode(threadResponse, sourceThreadResponse),
+    [sourceThreadResponse, threadResponse],
+  );
 
   const questionForSaveAsView = useMemo(() => {
     if (isOpeningQuestion) return question;
@@ -656,8 +671,16 @@ export default function AnswerResult(props: Props) {
                   type="text"
                   onClick={() => {
                     onOpenSaveToKnowledgeModal(
-                      { question: rephrasedQuestion, sql: sqlText },
-                      { isCreateMode: true, responseId: id },
+                      {
+                        question: rephrasedQuestion,
+                        sql: sqlText,
+                        ...(sqlPreviewMode ? { sqlMode: sqlPreviewMode } : {}),
+                      },
+                      {
+                        isCreateMode: true,
+                        responseId: id,
+                        ...(sqlPreviewMode ? { sqlMode: sqlPreviewMode } : {}),
+                      },
                     );
                   }}
                 />

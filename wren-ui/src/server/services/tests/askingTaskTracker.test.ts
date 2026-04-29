@@ -317,6 +317,63 @@ describe('AskingTaskTracker', () => {
     });
   });
 
+  it('exposes persisted thread binding metadata when loading asking results', async () => {
+    const tracker = createTracker();
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+
+    askingTaskRepository.findByQueryId.mockResolvedValue({
+      id: 79,
+      queryId: 'query-bound',
+      question: 'persisted task',
+      detail: {
+        status: AskResultStatus.FINISHED,
+        type: 'TEXT_TO_SQL',
+        response: [{ sql: 'SELECT 42' }],
+      },
+      threadId: 101,
+      threadResponseId: 202,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(tracker.getAskingResult('query-bound')).resolves.toEqual(
+      expect.objectContaining({
+        queryId: 'query-bound',
+        taskId: 79,
+        threadId: 101,
+        threadResponseId: 202,
+      }),
+    );
+  });
+
+  it('rejects rebinding a task that is already attached to a response', async () => {
+    const tracker = createTracker();
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+
+    askingTaskRepository.findOneBy.mockResolvedValue({
+      id: 79,
+      queryId: 'query-persisted',
+      question: 'persisted task',
+      detail: {
+        status: AskResultStatus.FINISHED,
+        type: 'TEXT_TO_SQL',
+        response: [{ sql: 'SELECT 42' }],
+      },
+      threadId: 101,
+      threadResponseId: 202,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      tracker.bindThreadResponse(79, 'query-persisted', 303, 404),
+    ).rejects.toMatchObject({
+      code: 'ASKING_TASK_ALREADY_BOUND',
+      statusCode: 409,
+    });
+    expect(askingTaskRepository.updateOne).not.toHaveBeenCalled();
+  });
+
   it('persists GENERAL asking results to the database instead of leaving them in understanding state', async () => {
     const tracker = createTracker();
     const wrenAIAdaptor = (tracker as any).wrenAIAdaptor;

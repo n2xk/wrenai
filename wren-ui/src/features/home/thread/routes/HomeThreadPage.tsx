@@ -520,14 +520,21 @@ export default function HomeThread() {
       pendingThreadResponseSeedRef.current?.taskId === taskId
         ? pendingThreadResponseSeedRef.current
         : null;
+    if (!pendingSeed) {
+      autoCreateResponseTaskIdRef.current = null;
+      return;
+    }
 
     autoCreateResponseTaskIdRef.current = taskId;
     void onCreateResponse({
-      question: pendingSeed?.question || askPrompt.data?.originalQuestion || '',
+      question: pendingSeed.question,
       taskId,
-      sourceResponseId: pendingSeed?.sourceResponseId ?? undefined,
+      sourceResponseId: pendingSeed.sourceResponseId ?? undefined,
     }).then((createdResponse) => {
       if (createdResponse) {
+        if (pendingThreadResponseSeedRef.current?.taskId === taskId) {
+          pendingThreadResponseSeedRef.current = null;
+        }
         return;
       }
 
@@ -535,13 +542,7 @@ export default function HomeThread() {
         autoCreateResponseTaskIdRef.current = null;
       }
     });
-  }, [
-    askPrompt.data?.askingTask,
-    askPrompt.data?.originalQuestion,
-    onCreateResponse,
-    responses,
-    thread?.id,
-  ]);
+  }, [askPrompt.data?.askingTask, onCreateResponse, responses, thread?.id]);
 
   useEffect(() => {
     if (!displayThread) {

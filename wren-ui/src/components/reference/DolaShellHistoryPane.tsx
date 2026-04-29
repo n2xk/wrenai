@@ -21,6 +21,11 @@ import {
 
 const { Text } = Typography;
 
+export const normalizeHistoryDisplayTitle = (title: string) => {
+  const normalizedTitle = title.replace(/(?:\s*(?:\.{2,}|…|⋯|。{2,}))+$/u, '');
+  return normalizedTitle.trimEnd() || title;
+};
+
 type Props = {
   collapsed: boolean;
   historyLoading: boolean;
@@ -113,7 +118,8 @@ const HistoryScroller = styled.div<{ $stale?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-right: 1px;
+  margin-right: calc(0px - var(--dola-shell-sidebar-inline-pad) - 8px);
+  padding-right: calc(var(--dola-shell-sidebar-inline-pad) + 5px);
   opacity: ${(props) => (props.$stale ? 0.62 : 1)};
   transition: opacity 0.16s ease;
   scrollbar-width: thin;
@@ -137,10 +143,10 @@ const HistoryItem = styled.div<{ $active?: boolean; $disabled?: boolean }>`
   min-height: 29px;
   border: 0;
   border-radius: 8px;
-  padding: 4px 5px 4px 8px;
+  padding: 4px 1px 4px 8px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 1px;
   text-align: left;
   background: ${(props) =>
     props.$active ? 'rgba(123, 87, 232, 0.07)' : 'transparent'};
@@ -192,15 +198,17 @@ const HistoryItemSelectButton = styled.button.attrs({ type: 'button' })`
 const HistoryMoreButton = styled(Button)<{ $active?: boolean }>`
   && {
     flex: 0 0 auto;
-    width: 22px;
+    width: 18px;
     height: 22px;
-    min-width: 22px;
+    min-width: 18px;
     padding: 0;
     border: none;
     box-shadow: none;
-    background: transparent;
-    color: ${(props) => (props.$active ? '#6d4aff' : '#94a3b8')};
-    opacity: ${(props) => (props.$active ? 0.72 : 0)};
+    border-radius: 6px;
+    background: ${(props) =>
+      props.$active ? 'rgba(123, 87, 232, 0.08)' : 'transparent'};
+    color: ${(props) => (props.$active ? '#6d4aff' : '#9aa6b5')};
+    opacity: ${(props) => (props.$active ? 0.82 : 0.34)};
     transition:
       opacity 0.16s ease,
       color 0.16s ease,
@@ -211,11 +219,13 @@ const HistoryMoreButton = styled(Button)<{ $active?: boolean }>`
   ${HistoryItem}:focus-within &&,
   &&.ant-dropdown-open {
     opacity: 1;
+    background: ${(props) =>
+      props.$active ? 'rgba(123, 87, 232, 0.1)' : 'rgba(148, 163, 184, 0.1)'};
   }
 
   &&:hover,
   &&:focus-visible {
-    background: rgba(99, 102, 241, 0.08);
+    background: rgba(99, 102, 241, 0.1);
     color: #5b45c8;
   }
 `;
@@ -420,61 +430,65 @@ export default function DolaShellHistoryPane({
               {shouldVirtualizeHistory && topSpacerHeight > 0 ? (
                 <div style={{ height: topSpacerHeight }} aria-hidden />
               ) : null}
-              {visibleHistoryItems.map((item) => (
-                <HistoryItem
-                  key={item.id}
-                  $active={item.active}
-                  $disabled={historyStale}
-                  onMouseEnter={() => {
-                    if (!historyStale) {
-                      onHistoryPrefetch(item);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (!historyStale) {
-                      onHistoryPrefetch(item);
-                    }
-                  }}
-                >
-                  <HistoryItemSelectButton
-                    disabled={historyStale}
-                    aria-current={item.active ? 'page' : undefined}
-                    onClick={() => activateHistoryItem(item)}
+              {visibleHistoryItems.map((item) => {
+                const displayTitle = normalizeHistoryDisplayTitle(item.title);
+
+                return (
+                  <HistoryItem
+                    key={item.id}
+                    $active={item.active}
+                    $disabled={historyStale}
+                    onMouseEnter={() => {
+                      if (!historyStale) {
+                        onHistoryPrefetch(item);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!historyStale) {
+                        onHistoryPrefetch(item);
+                      }
+                    }}
                   >
-                    <HistoryTextStack>
-                      <HistoryPrimaryText title={item.title}>
-                        {item.title}
-                      </HistoryPrimaryText>
-                      {item.subtitle ? (
-                        <HistorySecondaryText title={item.subtitle}>
-                          {item.subtitle}
-                        </HistorySecondaryText>
-                      ) : null}
-                    </HistoryTextStack>
-                  </HistoryItemSelectButton>
-                  {hasHistoryActions ? (
-                    <Dropdown
-                      menu={{
-                        items: buildHistoryMenuItems(item),
-                        onClick: ({ domEvent }) => domEvent.stopPropagation(),
-                      }}
-                      placement="bottomRight"
-                      trigger={['click']}
+                    <HistoryItemSelectButton
                       disabled={historyStale}
+                      aria-current={item.active ? 'page' : undefined}
+                      onClick={() => activateHistoryItem(item)}
                     >
-                      <HistoryMoreButton
-                        type="text"
-                        aria-label={`更多操作：${item.title}`}
-                        $active={item.active}
-                        icon={<MoreOutlined />}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                      <HistoryTextStack>
+                        <HistoryPrimaryText title={item.title}>
+                          {displayTitle}
+                        </HistoryPrimaryText>
+                        {item.subtitle ? (
+                          <HistorySecondaryText title={item.subtitle}>
+                            {item.subtitle}
+                          </HistorySecondaryText>
+                        ) : null}
+                      </HistoryTextStack>
+                    </HistoryItemSelectButton>
+                    {hasHistoryActions ? (
+                      <Dropdown
+                        menu={{
+                          items: buildHistoryMenuItems(item),
+                          onClick: ({ domEvent }) => domEvent.stopPropagation(),
                         }}
-                      />
-                    </Dropdown>
-                  ) : null}
-                </HistoryItem>
-              ))}
+                        placement="bottomRight"
+                        trigger={['click']}
+                        disabled={historyStale}
+                      >
+                        <HistoryMoreButton
+                          type="text"
+                          aria-label={`更多操作：${item.title}`}
+                          $active={item.active}
+                          icon={<MoreOutlined />}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        />
+                      </Dropdown>
+                    ) : null}
+                  </HistoryItem>
+                );
+              })}
               {shouldVirtualizeHistory && bottomSpacerHeight > 0 ? (
                 <div style={{ height: bottomSpacerHeight }} aria-hidden />
               ) : null}

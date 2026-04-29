@@ -162,6 +162,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
         queryId,
         question: trackedTask.question || '',
         taskId: trackedTask.taskId,
+        threadId: trackedTask.threadId,
+        threadResponseId: trackedTask.threadResponseId,
       };
     }
 
@@ -241,6 +243,30 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       throw new Error(`Task ${queryId} not found`);
     }
 
+    const existingThreadResponseId = task.threadResponseId;
+    if (
+      existingThreadResponseId &&
+      existingThreadResponseId !== threadResponseId
+    ) {
+      const error = new Error(
+        `Asking task ${queryId} is already bound to thread response ${existingThreadResponseId}.`,
+      ) as Error & { code?: string; statusCode?: number };
+      error.code = 'ASKING_TASK_ALREADY_BOUND';
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const existingThreadId = task.threadId;
+    if (existingThreadId && existingThreadId !== threadId) {
+      const error = new Error(
+        `Asking task ${queryId} is already bound to thread ${existingThreadId}.`,
+      ) as Error & { code?: string; statusCode?: number };
+      error.code = 'ASKING_TASK_ALREADY_BOUND';
+      error.statusCode = 409;
+      throw error;
+    }
+
+    task.threadId = threadId;
     task.threadResponseId = threadResponseId;
     this.trackedTasksById.set(id, task);
     await this.askingTaskRepository.updateOne(id, {
@@ -493,6 +519,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       question: taskRecord.question || '',
       result: detail,
       isFinalized: this.isTaskFinalized(detail.status),
+      threadId: taskRecord.threadId || undefined,
       threadResponseId: taskRecord.threadResponseId || undefined,
       runtimeIdentity: toPersistedRuntimeIdentityPatch({
         projectId: taskRecord.projectId ?? null,
@@ -554,6 +581,8 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       queryId: queryId || taskRecord?.queryId,
       question: taskRecord?.question || '',
       taskId: taskRecord?.id,
+      threadId: taskRecord?.threadId || undefined,
+      threadResponseId: taskRecord?.threadResponseId || undefined,
     };
   }
 
