@@ -28,6 +28,7 @@ import {
 import { normalizeCanonicalPersistedRuntimeIdentity } from '@server/utils/persistedRuntimeIdentity';
 import {
   CreateDashboardItemInput,
+  DashboardItemCreateResult,
   DashboardRuntimeBinding,
   DashboardServiceDependencies,
   IDashboardService,
@@ -51,6 +52,23 @@ logger.level = 'debug';
 
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+const DASHBOARD_ITEM_SOURCE_RESPONSE_UNIQUE_INDEX =
+  'dashboard_item_source_response_unique';
+
+const isUniqueConstraintViolation = (error: unknown, constraintName: string) =>
+  typeof error === 'object' &&
+  error !== null &&
+  (error as { code?: unknown }).code === '23505' &&
+  (!(error as { constraint?: unknown }).constraint ||
+    (error as { constraint?: unknown }).constraint === constraintName);
+
+const markExistingDashboardItem = (
+  item: DashboardItem,
+): DashboardItemCreateResult => ({
+  ...item,
+  alreadyExists: true,
+});
 
 const toDashboardItemRuntimeIdentity = (
   runtimeIdentity?: CreateDashboardItemInput['sourceRuntimeIdentity'],
@@ -532,7 +550,7 @@ export class DashboardService implements IDashboardService {
 
   public async createDashboardItem(
     input: CreateDashboardItemInput,
-  ): Promise<DashboardItem> {
+  ): Promise<DashboardItemCreateResult> {
     if (input.type === DashboardItemType.TABLE) {
       throw new Error(
         'Table results should be saved as Spreadsheet assets instead of dashboard items.',
@@ -547,7 +565,7 @@ export class DashboardService implements IDashboardService {
           input.type,
         );
       if (existingDashboardItem) {
-        return existingDashboardItem;
+        return markExistingDashboardItem(existingDashboardItem);
       }
     }
 
@@ -555,26 +573,48 @@ export class DashboardService implements IDashboardService {
       this.dashboardItemRepository,
       input.dashboardId,
     );
-    return await this.dashboardItemRepository.createOne({
-      dashboardId: input.dashboardId,
-      type: input.type,
-      detail: {
-        sql: input.sql,
-        sqlMode: input.sqlMode,
-        chartSchema: input.chartSchema,
-        renderHints: input.renderHints,
-        canonicalizationVersion: input.canonicalizationVersion ?? null,
-        chartDataProfile: input.chartDataProfile || undefined,
-        validationErrors: input.validationErrors || [],
-        runtimeIdentity: toDashboardItemRuntimeIdentity(
-          input.sourceRuntimeIdentity,
-        ),
-        sourceResponseId: input.sourceResponseId ?? null,
-        sourceThreadId: input.sourceThreadId ?? null,
-        sourceQuestion: input.sourceQuestion ?? null,
-      },
-      layout,
-    });
+    try {
+      return await this.dashboardItemRepository.createOne({
+        dashboardId: input.dashboardId,
+        type: input.type,
+        detail: {
+          sql: input.sql,
+          sqlMode: input.sqlMode,
+          chartSchema: input.chartSchema,
+          renderHints: input.renderHints,
+          canonicalizationVersion: input.canonicalizationVersion ?? null,
+          chartDataProfile: input.chartDataProfile || undefined,
+          validationErrors: input.validationErrors || [],
+          runtimeIdentity: toDashboardItemRuntimeIdentity(
+            input.sourceRuntimeIdentity,
+          ),
+          sourceResponseId: input.sourceResponseId ?? null,
+          sourceThreadId: input.sourceThreadId ?? null,
+          sourceQuestion: input.sourceQuestion ?? null,
+        },
+        layout,
+      });
+    } catch (error) {
+      if (
+        input.sourceResponseId != null &&
+        isUniqueConstraintViolation(
+          error,
+          DASHBOARD_ITEM_SOURCE_RESPONSE_UNIQUE_INDEX,
+        )
+      ) {
+        const existingDashboardItem =
+          await this.dashboardItemRepository.findByDashboardIdAndSourceResponseId(
+            input.dashboardId,
+            input.sourceResponseId,
+            input.type,
+          );
+        if (existingDashboardItem) {
+          return markExistingDashboardItem(existingDashboardItem);
+        }
+      }
+
+      throw error;
+    }
   }
 
   public async updateDashboardItem(

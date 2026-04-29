@@ -12,6 +12,7 @@ const mockPushWorkspace = jest.fn();
 const mockMessageSuccess = jest.fn();
 const mockMessageError = jest.fn();
 const mockMessageWarning = jest.fn();
+const mockMessageInfo = jest.fn();
 let mockWatchedChartType: string | null = 'LINE';
 let mockChartSpecOptionValues: { chartType: string | null } = {
   chartType: 'LINE',
@@ -67,6 +68,7 @@ jest.mock('antd', () => {
       success: (...args: any[]) => mockMessageSuccess(...args),
       error: (...args: any[]) => mockMessageError(...args),
       warning: (...args: any[]) => mockMessageWarning(...args),
+      info: (...args: any[]) => mockMessageInfo(...args),
     },
   };
 });
@@ -625,6 +627,49 @@ describe('ChartAnswer', () => {
     await capturedChartProps.onPin();
 
     expect(mockMessageSuccess).toHaveBeenCalledWith('已固定到看板「默认看板」');
+
+    useStateSpy.mockRestore();
+  });
+
+  it('shows a light existing-asset hint when the chart is already pinned', async () => {
+    const useStateSpy = setStateOverrides({
+      // 8th state: dashboardOptions
+      8: [{ id: 11, name: 'Dashboard' }],
+    });
+    mockCreateDashboardItem.mockResolvedValueOnce({
+      id: 902,
+      dashboardId: 11,
+      alreadyExists: true,
+    });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: 'Dashboard' },
+    ]);
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 94,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedChartProps.onPin();
+
+    expect(mockMessageInfo).toHaveBeenCalledWith(
+      '这个图表已在看板「默认看板」中，无需重复固定。',
+    );
+    expect(mockMessageSuccess).not.toHaveBeenCalled();
 
     useStateSpy.mockRestore();
   });

@@ -30,6 +30,10 @@ export interface CreateSpreadsheetInput {
   createdBy?: string | null;
 }
 
+export type CreateSpreadsheetResult = SpreadsheetDetail & {
+  alreadyExists?: boolean;
+};
+
 export interface UpdateSpreadsheetSettingInput {
   hiddenColumns?: string[];
   pinnedColumns?: string[];
@@ -53,7 +57,9 @@ export interface ISpreadsheetService {
     id: number,
     runtimeIdentity: PersistedRuntimeIdentity,
   ): Promise<SpreadsheetDetail | null>;
-  createSpreadsheet(input: CreateSpreadsheetInput): Promise<SpreadsheetDetail>;
+  createSpreadsheet(
+    input: CreateSpreadsheetInput,
+  ): Promise<CreateSpreadsheetResult>;
   updateSpreadsheet(
     id: number,
     runtimeIdentity: PersistedRuntimeIdentity,
@@ -81,6 +87,22 @@ export interface ISpreadsheetService {
 }
 
 const DEFAULT_SPREADSHEET_NAME = '未命名数据表';
+const SPREADSHEET_SOURCE_RESPONSE_ACTOR_UNIQUE_INDEX =
+  'spreadsheet_source_response_actor_unique';
+
+const isUniqueConstraintViolation = (error: unknown, constraintName: string) =>
+  typeof error === 'object' &&
+  error !== null &&
+  (error as { code?: unknown }).code === '23505' &&
+  (!(error as { constraint?: unknown }).constraint ||
+    (error as { constraint?: unknown }).constraint === constraintName);
+
+const markExistingSpreadsheet = (
+  spreadsheet: SpreadsheetDetail,
+): CreateSpreadsheetResult => ({
+  ...spreadsheet,
+  alreadyExists: true,
+});
 
 const trimText = (value?: string | null) => String(value || '').trim();
 
@@ -192,7 +214,7 @@ export class SpreadsheetService implements ISpreadsheetService {
 
   public async createSpreadsheet(
     input: CreateSpreadsheetInput,
-  ): Promise<SpreadsheetDetail> {
+  ): Promise<CreateSpreadsheetResult> {
     const runtimeIdentity = normalizeRuntimeIdentity(input.runtimeIdentity);
     const sourceResponseId = input.sourceResponseId ?? null;
     if (sourceResponseId != null) {
@@ -202,7 +224,9 @@ export class SpreadsheetService implements ISpreadsheetService {
           runtimeIdentity,
         );
       if (existing) {
-        return await this.resolveSpreadsheetDetail(existing);
+        return markExistingSpreadsheet(
+          await this.resolveSpreadsheetDetail(existing),
+        );
       }
     }
 
@@ -260,6 +284,25 @@ export class SpreadsheetService implements ISpreadsheetService {
       return { ...spreadsheet, setting, history: [history] };
     } catch (error) {
       await this.spreadsheetRepository.rollback(tx);
+      if (
+        sourceResponseId != null &&
+        isUniqueConstraintViolation(
+          error,
+          SPREADSHEET_SOURCE_RESPONSE_ACTOR_UNIQUE_INDEX,
+        )
+      ) {
+        const existing =
+          await this.spreadsheetRepository.findBySourceResponseIdVisibleByRuntimeIdentity(
+            sourceResponseId,
+            runtimeIdentity,
+          );
+        if (existing) {
+          return markExistingSpreadsheet(
+            await this.resolveSpreadsheetDetail(existing),
+          );
+        }
+      }
+
       throw error;
     }
   }

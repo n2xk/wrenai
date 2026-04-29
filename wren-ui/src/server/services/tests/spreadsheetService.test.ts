@@ -163,6 +163,66 @@ describe('SpreadsheetService', () => {
     expect(result.history).toHaveLength(1);
   });
 
+  it('returns the existing spreadsheet when a concurrent save hits the unique index', async () => {
+    const {
+      spreadsheetService,
+      mockSpreadsheetRepository,
+      mockSpreadsheetSettingRepository,
+      mockSpreadsheetHistoryRepository,
+      mockTransaction,
+    } = createSpreadsheetServiceHarness();
+    mockSpreadsheetRepository.findBySourceResponseIdVisibleByRuntimeIdentity
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 8,
+        name: '销售日报',
+        sql: 'select * from sales_daily',
+        currentVersion: 1,
+        sourceResponseId: 99,
+      });
+    mockSpreadsheetRepository.createOne.mockRejectedValue(
+      Object.assign(new Error('duplicate key value'), {
+        code: '23505',
+        constraint: 'spreadsheet_source_response_actor_unique',
+      }),
+    );
+    mockSpreadsheetSettingRepository.findOneBySpreadsheetId.mockResolvedValue({
+      id: 18,
+      spreadsheetId: 8,
+      hiddenColumns: [],
+      pinnedColumns: [],
+      unpinnedColumns: [],
+      columnWidths: {},
+    });
+    mockSpreadsheetHistoryRepository.findAllBySpreadsheetId.mockResolvedValue([
+      {
+        id: 28,
+        spreadsheetId: 8,
+        version: 1,
+        type: 'INITIALIZE',
+        sql: 'select * from sales_daily',
+        payload: {},
+      },
+    ]);
+
+    const result = await spreadsheetService.createSpreadsheet({
+      runtimeIdentity: { workspaceId: 'workspace-1', actorUserId: 'user-1' },
+      name: '销售日报',
+      sql: 'select * from sales_daily',
+      sourceResponseId: 99,
+    });
+
+    expect(mockSpreadsheetRepository.rollback).toHaveBeenCalledWith(
+      mockTransaction,
+    );
+    expect(
+      mockSpreadsheetRepository.findBySourceResponseIdVisibleByRuntimeIdentity,
+    ).toHaveBeenCalledTimes(2);
+    expect(result.id).toBe(8);
+    expect(result.alreadyExists).toBe(true);
+    expect(result.history).toHaveLength(1);
+  });
+
   it('persists sanitized column settings', async () => {
     const {
       spreadsheetService,

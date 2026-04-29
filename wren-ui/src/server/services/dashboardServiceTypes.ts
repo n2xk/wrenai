@@ -13,6 +13,10 @@ import {
   SetDashboardCacheData,
 } from '@server/models/dashboard';
 
+export type DashboardItemCreateResult = DashboardItem & {
+  alreadyExists?: boolean;
+};
+
 export interface CreateDashboardItemInput {
   dashboardId: number;
   type: DashboardItemType;
@@ -91,7 +95,9 @@ export interface IDashboardService {
   ): Promise<Dashboard>;
   getDashboardItem(dashboardItemId: number): Promise<DashboardItem>;
   getDashboardItems(dashboardId: number): Promise<DashboardItem[]>;
-  createDashboardItem(input: CreateDashboardItemInput): Promise<DashboardItem>;
+  createDashboardItem(
+    input: CreateDashboardItemInput,
+  ): Promise<DashboardItemCreateResult>;
   updateDashboardItem(
     dashboardItemId: number,
     input: UpdateDashboardItemInput,

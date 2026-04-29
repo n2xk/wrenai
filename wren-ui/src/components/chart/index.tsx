@@ -215,8 +215,13 @@ export default function Chart(props: VegaLiteProps) {
   );
   const [parsedError, setParsedError] = useState<ParsedError | null>(null);
   const [isShowTopCategories, setIsShowTopCategories] = useState(false);
+  const [resizeTick, setResizeTick] = useState(0);
   const $view = useRef<Result | null>(null);
   const $container = useRef<HTMLDivElement>(null);
+  const lastContainerSizeRef = useRef<{
+    height: number;
+    width: number;
+  } | null>(null);
   const renderWidth = normalizeChartRenderDimension(width);
   const renderHeight = normalizeChartRenderDimension(height);
   const domWidth = normalizeChartDomDimension(width);
@@ -296,11 +301,63 @@ export default function Chart(props: VegaLiteProps) {
     renderWidth,
   ]);
 
+  useEffect(() => {
+    const container = $container.current;
+    if (!container || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    let animationFrame: number | null = null;
+    const bumpResizeTickIfSizeChanged = () => {
+      const nextSize = {
+        width: Math.round(container.clientWidth),
+        height: Math.round(container.clientHeight),
+      };
+      const previousSize = lastContainerSizeRef.current;
+      if (nextSize.width <= 0 || nextSize.height <= 0) {
+        return;
+      }
+      if (
+        previousSize &&
+        previousSize.width === nextSize.width &&
+        previousSize.height === nextSize.height
+      ) {
+        return;
+      }
+
+      lastContainerSizeRef.current = nextSize;
+      setResizeTick((value) => value + 1);
+    };
+
+    const scheduleResizeCheck = () => {
+      if (animationFrame != null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = null;
+        bumpResizeTickIfSizeChanged();
+      });
+    };
+
+    bumpResizeTickIfSizeChanged();
+    const resizeObserver = new ResizeObserver(scheduleResizeCheck);
+    resizeObserver.observe(container);
+    window.addEventListener('resize', scheduleResizeCheck);
+    return () => {
+      if (animationFrame != null) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', scheduleResizeCheck);
+    };
+  }, [parsedSpec]);
+
   // initial vega view
   useEffect(() => {
     let cancelled = false;
 
     if ($container.current && parsedSpec) {
+      $container.current.innerHTML = '';
       const renderer = resolvePreferredRenderer({
         spec,
         values,
@@ -335,15 +392,26 @@ export default function Chart(props: VegaLiteProps) {
 
     return () => {
       cancelled = true;
-      if ($view.current) $view.current.finalize();
+      if ($view.current) {
+        $view.current.finalize();
+        $view.current = null;
+      }
     };
-  }, [forceUpdate, isPinned, parsedSpec, preferredRenderer, spec, values]);
+  }, [
+    forceUpdate,
+    isPinned,
+    parsedSpec,
+    preferredRenderer,
+    resizeTick,
+    spec,
+    values,
+  ]);
 
   useEffect(() => {
     if ($container.current) {
       setDonutInner($container.current.clientHeight * 0.15);
     }
-  }, [forceUpdate]);
+  }, [forceUpdate, resizeTick]);
 
   const onShowTopCategories = () => {
     setIsShowTopCategories((previous) => !previous);

@@ -391,13 +391,24 @@ export default function ChartAnswer(props: AnswerResultProps) {
     const targetDashboard = dashboardOptions.find(
       (dashboard) => dashboard.id === payload.dashboardId,
     );
-    appMessage.success(
-      targetDashboardName
-        ? `已固定到看板「${resolveDashboardDisplayName(targetDashboardName)}」`
-        : targetDashboard
-          ? `已固定到看板「${resolveDashboardDisplayName(targetDashboard.name)}」`
+    const dashboardName = targetDashboardName
+      ? resolveDashboardDisplayName(targetDashboardName)
+      : targetDashboard
+        ? resolveDashboardDisplayName(targetDashboard.name)
+        : null;
+    if (payload.alreadyExists) {
+      appMessage.info(
+        dashboardName
+          ? `这个图表已在看板「${dashboardName}」中，无需重复固定。`
+          : '这个图表已在当前工作空间的默认看板中，无需重复固定。',
+      );
+    } else {
+      appMessage.success(
+        dashboardName
+          ? `已固定到看板「${dashboardName}」`
           : '已固定到当前工作空间的默认看板。',
-    );
+      );
+    }
     setIsPinPopoverOpen(false);
     setIsCreatePinModalOpen(false);
   };

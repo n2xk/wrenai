@@ -52,6 +52,7 @@ export type SpreadsheetListItem = {
 };
 
 export type SpreadsheetDetailData = SpreadsheetListItem & {
+  alreadyExists?: boolean;
   setting: SpreadsheetSettingData | null;
   history: SpreadsheetHistoryData[];
 };

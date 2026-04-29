@@ -464,6 +464,7 @@ export const createDashboardItem = async (
     body: JSON.stringify(data),
   });
   return parseRestJsonResponse<{
+    alreadyExists?: boolean;
     id: number;
     dashboardId: number;
   }>(response, '固定到看板失败，请稍后重试。');

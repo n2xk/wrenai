@@ -100,6 +100,49 @@ describe('DashboardService', () => {
     );
   });
 
+  it('returns the existing dashboard item when a concurrent pin hits the unique index', async () => {
+    mockDashboardItemRepository.findByDashboardIdAndSourceResponseId
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 89,
+        dashboardId: 7,
+        type: 'BAR',
+        detail: {
+          sql: 'select 1',
+          sourceResponseId: 62,
+        },
+        layout: { x: 0, y: 0, w: 3, h: 4 },
+      });
+    mockDashboardItemRepository.findAllBy.mockResolvedValue([]);
+    mockDashboardItemRepository.createOne.mockRejectedValue(
+      Object.assign(new Error('duplicate key value'), {
+        code: '23505',
+        constraint: 'dashboard_item_source_response_unique',
+      }),
+    );
+
+    const result = await dashboardService.createDashboardItem({
+      dashboardId: 7,
+      type: 'BAR' as any,
+      sql: 'select 1',
+      chartSchema: { mark: 'bar' },
+      sourceResponseId: 62,
+      sourceThreadId: 50,
+      sourceQuestion: '统计 990001 平台下各渠道的折扣比例，并生成柱状图',
+    });
+
+    expect(
+      mockDashboardItemRepository.findByDashboardIdAndSourceResponseId,
+    ).toHaveBeenCalledTimes(2);
+    expect(result).toEqual(
+      expect.objectContaining({
+        alreadyExists: true,
+        id: 89,
+        dashboardId: 7,
+      }),
+    );
+  });
+
   it('rejects creating table dashboard items because table results are spreadsheet assets', async () => {
     await expect(
       dashboardService.createDashboardItem({

@@ -38,7 +38,13 @@ export default function ResponseSpreadsheetSaveButton({
       const spreadsheet = await createSpreadsheet(responseRuntimeSelector, {
         responseId: response.id,
       });
-      appMessage.success(`已保存为数据表「${spreadsheet.name}」`);
+      if (spreadsheet.alreadyExists) {
+        appMessage.info(
+          `这个结果已保存为数据表「${spreadsheet.name}」，已为你打开。`,
+        );
+      } else {
+        appMessage.success(`已保存为数据表「${spreadsheet.name}」`);
+      }
       await runtimeScopeNavigation.push(
         `/home/spreadsheets/${spreadsheet.id}`,
         {},
