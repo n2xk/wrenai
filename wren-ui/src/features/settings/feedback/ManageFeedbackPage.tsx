@@ -49,7 +49,7 @@ const textMutedStyle = {
 const codeBlockStyle = {
   marginBottom: 0,
   padding: 12,
-  borderRadius: 8,
+  borderRadius: 'var(--nova-radius-card)',
   background: 'var(--ant-color-fill-quaternary)',
   fontFamily:
     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',

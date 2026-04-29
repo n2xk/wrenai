@@ -7,7 +7,7 @@ export const ReferenceModal = styled(Modal)`
   }
 
   .ant-modal-content {
-    border-radius: 16px;
+    border-radius: var(--nova-radius-modal);
     padding: 0;
     overflow: hidden;
     border: 1px solid #e5e7eb;
@@ -51,7 +51,7 @@ export const ModalIntro = styled.div`
 export const ModalCloseButton = styled.button`
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 0;
   background: transparent;
   color: #313445;
@@ -87,7 +87,7 @@ export const ModalForm = styled(Form)`
   .ant-input,
   .ant-input-affix-wrapper,
   .ant-select-selector {
-    border-radius: 10px !important;
+    border-radius: var(--nova-radius-control) !important;
     border-color: rgba(15, 23, 42, 0.1) !important;
     border-style: solid !important;
     border-width: 1px !important;
@@ -164,7 +164,7 @@ export const ManageCreateCard = styled.button`
   width: 180px;
   height: 98px;
   border: 1px solid rgba(111, 71, 255, 0.28);
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   background: #fbf9ff;
   color: #6f47ff;
   display: inline-flex;
@@ -199,7 +199,7 @@ export const ManageEntryList = styled.div`
 
 export const ManageEntryCard = styled.div`
   border: 1px solid #edf0f5;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-card);
   background: #fff;
   padding: 10px 12px;
   display: flex;
@@ -244,7 +244,7 @@ export const LightButton = styled(Button)`
     min-width: 88px;
     height: 36px;
     border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     background: rgba(255, 255, 255, 0.88);
     color: #4b5563;
     font-size: 13px;
@@ -264,7 +264,7 @@ export const DarkButton = styled(Button)`
     min-width: 88px;
     height: 40px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--nova-radius-control);
     background: #111827;
     color: #fff;
     font-weight: 500;

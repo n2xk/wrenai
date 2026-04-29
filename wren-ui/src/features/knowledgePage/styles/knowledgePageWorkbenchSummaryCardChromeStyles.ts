@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 export const SummaryCard = styled.div`
-  border-radius: 20px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid var(--nova-outline-soft);
   background: linear-gradient(
     180deg,

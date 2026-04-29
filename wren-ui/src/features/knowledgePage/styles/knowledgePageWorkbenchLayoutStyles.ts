@@ -40,7 +40,7 @@ export const SidePanel = styled.div`
   min-width: 0;
   min-height: 100%;
   height: 100%;
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--nova-shadow-soft);

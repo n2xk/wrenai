@@ -14,7 +14,7 @@ export const _TopBar = styled.div`
   justify-content: space-between;
   gap: 18px;
   padding: 0 24px;
-  border-radius: 12px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: #fff;
 `;
@@ -28,7 +28,7 @@ export const _WorkspaceShell = styled.div`
 `;
 
 export const _Rail = styled.aside`
-  border-radius: 12px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   padding: 16px;
   display: flex;
@@ -44,7 +44,7 @@ export const RailTabs = styled.div`
     width: 100%;
     background: #f3f4f6;
     padding: 2px;
-    border-radius: 8px;
+    border-radius: var(--nova-radius-control);
     gap: 2px;
   }
 
@@ -53,7 +53,7 @@ export const RailTabs = styled.div`
     line-height: 26px;
     text-align: center;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--nova-radius-control);
     background: transparent;
     color: #6b7280;
     font-size: 12px;
@@ -91,7 +91,7 @@ export const KbCreateButton = styled(Button)`
   &.ant-btn {
     width: 100%;
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     border: 1px dashed rgba(111, 71, 255, 0.35);
     color: #6f47ff;
     background: rgba(111, 71, 255, 0.04);
@@ -138,7 +138,7 @@ export const KbItem = styled.button<{ $active?: boolean; $disabled?: boolean }>`
       : props.$active
         ? 'rgba(141, 101, 225, 0.08)'
         : 'transparent'};
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   padding: 5px 6px 5px 8px;
   display: flex;
   align-items: center;
@@ -182,7 +182,7 @@ export const KbItemName = styled.span`
 export const CountBadge = styled.span`
   min-width: 17px;
   height: 17px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: var(--nova-primary);
   color: #fff;
   display: inline-flex;
@@ -208,7 +208,7 @@ export const InfoRow = styled.div`
 
 export const Pill = styled.div`
   height: 26px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: #fafbfc;
   border: 1px solid #edf1f5;
   color: #6b7280;
@@ -240,7 +240,7 @@ export const _CardsGrid = styled.div`
 export const AssetIconBox = styled.div<{ $kind: 'model' | 'view' }>`
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   background: ${(props) => (props.$kind === 'model' ? '#eef2ff' : '#f5f3ff')};
   color: #5b4bdb;
   display: inline-flex;
@@ -252,7 +252,7 @@ export const AssetIconBox = styled.div<{ $kind: 'model' | 'view' }>`
 
 export const _AssetCard = styled(Card)`
   &.ant-card {
-    border-radius: 12px;
+    border-radius: var(--nova-radius-card);
     border-color: #e5e7eb;
     box-shadow: none;
     overflow: hidden;
@@ -279,7 +279,7 @@ export const EmptyStage = styled.div`
   align-items: center;
   justify-content: center;
   min-height: 420px;
-  border-radius: 12px;
+  border-radius: var(--nova-radius-panel);
   background: transparent;
 `;
 
@@ -317,7 +317,7 @@ export const AssetsLoadingGrid = styled.div`
 `;
 
 export const AssetsLoadingCard = styled.div`
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid #e5e7eb;
   background: #fff;
   padding: 16px;
@@ -333,14 +333,14 @@ export const AssetsLoadingLine = styled.div<{
 }>`
   width: ${(props) => props.$width || '100%'};
   height: ${(props) => `${props.$height || 12}px`};
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: ${(props) => (props.$muted ? '#f3f4f6' : '#eceff4')};
 `;
 
 export const PrimaryBlackButton = styled.button`
   height: 36px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   background: #111827;
   color: #fff;
   font-size: 14px;
@@ -364,7 +364,7 @@ export const MetricPill = styled.div`
   gap: 4px;
   max-width: 100%;
   height: 18px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 0;
   background: #f6f7fb;
   color: #8a92a5;

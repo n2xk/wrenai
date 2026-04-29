@@ -57,7 +57,7 @@ const adjustmentType = {
 const ResponseCard = styled.div<{ $selected?: boolean }>`
   position: relative;
   padding: 2px 0 6px;
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   transition: background 0.18s ease;
 
   &:hover {
@@ -79,7 +79,7 @@ const ArtifactTeaserGrid = styled.div`
 
 const ArtifactTeaserCard = styled.div`
   border: 1px solid rgba(15, 23, 42, 0.055);
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.9) 0%,
@@ -137,7 +137,7 @@ const TemplateDecisionBanner = styled.div`
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid rgba(111, 71, 255, 0.08);
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   background: linear-gradient(
     180deg,
     rgba(250, 247, 255, 0.82) 0%,
@@ -174,7 +174,7 @@ const HelpfulBubble = styled.div`
   align-items: center;
   gap: 6px;
   padding: 0 2px 0 0;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 0;
   background: transparent;
   color: #667085;
@@ -193,7 +193,7 @@ const HelpfulIconButton = styled(Button)<{ $selected?: boolean }>`
     height: 28px;
     min-width: 28px;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     color: ${(props) => (props.$selected ? '#6f47ff' : '#667085')};
     background: ${(props) =>
       props.$selected ? 'rgba(111, 71, 255, 0.12)' : 'transparent'};
@@ -214,7 +214,7 @@ const FooterIconActionButton = styled(Button)`
     width: 28px;
     height: 28px;
     min-width: 28px;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     color: #4b5563;
   }
 `;
@@ -232,7 +232,8 @@ const QuestionBubble = styled.div<{ $selected?: boolean }>`
   width: fit-content;
   max-width: min(100%, 76%);
   padding: 12px 15px;
-  border-radius: 18px 18px 6px 18px;
+  border-radius: var(--nova-radius-panel) var(--nova-radius-panel)
+    var(--nova-radius-control) var(--nova-radius-panel);
   border: 1px solid
     ${(props) =>
       props.$selected ? 'rgba(111, 71, 255, 0.16)' : 'rgba(15, 23, 42, 0.06)'};
@@ -277,7 +278,7 @@ const AssistantSection = styled.div<{ $selected?: boolean }>`
 const AssistantAvatar = styled.div<{ $selected?: boolean }>`
   width: 30px;
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -322,7 +323,7 @@ const AssistantIdentityMeta = styled.span`
   align-items: center;
   min-height: 20px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid rgba(15, 23, 42, 0.05);
   background: rgba(15, 23, 42, 0.025);
   color: #98a2b3;
@@ -345,7 +346,7 @@ const ConversationAidChip = styled.button`
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #fff;
   color: #344054;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   min-height: 32px;
   padding: 0 12px;
   font-size: 12.5px;

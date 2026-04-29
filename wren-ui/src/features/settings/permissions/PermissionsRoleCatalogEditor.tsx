@@ -80,7 +80,7 @@ const EDITOR_FOOTER_STYLE = {
 const EDITOR_FILTER_BAR_STYLE = {
   padding: '4px 8px',
   border: '1px solid var(--ant-color-border-secondary)',
-  borderRadius: 8,
+  borderRadius: 'var(--nova-radius-control)',
   background: 'var(--ant-color-fill-quaternary)',
 } as const;
 

@@ -5,7 +5,7 @@ export const WorkbenchEditorCard = styled.div<{ $active?: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(91, 75, 219, 0.2)' : 'rgba(15, 23, 42, 0.06)'};
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   background: ${(props) => (props.$active ? '#fbf8ff' : '#ffffff')};
   padding: 14px;
   text-align: left;
@@ -59,7 +59,7 @@ export const WorkbenchMiniIconButton = styled.button<{
 }>`
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) =>
       props.$danger ? 'rgba(220, 38, 38, 0.14)' : 'rgba(15, 23, 42, 0.08)'};

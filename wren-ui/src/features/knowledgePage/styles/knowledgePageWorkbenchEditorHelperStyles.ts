@@ -14,7 +14,7 @@ export const WorkbenchHelperGrid = styled.div`
 export const WorkbenchStatCard = styled.div`
   flex: 1 1 0;
   min-width: 0;
-  border-radius: 18px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid var(--nova-outline-soft);
   background: linear-gradient(
     180deg,

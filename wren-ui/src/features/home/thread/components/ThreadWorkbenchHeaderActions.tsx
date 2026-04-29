@@ -29,7 +29,7 @@ const HeaderActionShell = styled.div`
     height: 30px;
     min-width: 30px;
     color: #4b5563;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
   }
 `;
 

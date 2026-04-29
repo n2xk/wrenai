@@ -146,11 +146,15 @@ export default function KnowledgeExternalDependenciesStage({
 
   const openDrawer = useCallback(
     (dependency?: ExternalDependency) => {
+      if (!dependency && isKnowledgeMutationDisabled) {
+        message.info('当前知识库为只读状态，不支持新建外部数据依赖。');
+        return;
+      }
       setEditingDependency(dependency || null);
       form.setFieldsValue(toFormValues(dependency));
       setDrawerOpen(true);
     },
-    [form],
+    [form, isKnowledgeMutationDisabled],
   );
 
   const closeDrawer = useCallback(() => {
@@ -160,6 +164,10 @@ export default function KnowledgeExternalDependenciesStage({
   }, [form]);
 
   const handleSubmit = useCallback(async () => {
+    if (isKnowledgeMutationDisabled) {
+      message.info('当前知识库为只读状态，不支持保存外部数据依赖。');
+      return;
+    }
     const values = await form.validateFields();
     let payload: CreateExternalDependencyInput;
     try {
@@ -188,10 +196,21 @@ export default function KnowledgeExternalDependenciesStage({
     } finally {
       setSaving(false);
     }
-  }, [closeDrawer, editingDependency, form, loadDependencies, runtimeSelector]);
+  }, [
+    closeDrawer,
+    editingDependency,
+    form,
+    isKnowledgeMutationDisabled,
+    loadDependencies,
+    runtimeSelector,
+  ]);
 
   const handleDelete = useCallback(
     async (dependency: ExternalDependency) => {
+      if (isKnowledgeMutationDisabled) {
+        message.info('当前知识库为只读状态，不支持删除外部数据依赖。');
+        return;
+      }
       try {
         await deleteKnowledgeExternalDependency(runtimeSelector, dependency.id);
         message.success('已删除外部数据依赖');
@@ -200,7 +219,7 @@ export default function KnowledgeExternalDependenciesStage({
         message.error(error?.message || '删除外部数据依赖失败，请稍后重试。');
       }
     },
-    [loadDependencies, runtimeSelector],
+    [isKnowledgeMutationDisabled, loadDependencies, runtimeSelector],
   );
 
   const columns = useMemo<ColumnsType<ExternalDependency>>(
@@ -247,7 +266,7 @@ export default function KnowledgeExternalDependenciesStage({
         render: (_, dependency) => (
           <Space>
             <Button type="link" onClick={() => openDrawer(dependency)}>
-              编辑
+              {isKnowledgeMutationDisabled ? '查看' : '编辑'}
             </Button>
             {!isKnowledgeMutationDisabled ? (
               <Popconfirm
@@ -282,13 +301,19 @@ export default function KnowledgeExternalDependenciesStage({
             声明系统没有内置数据源的指标，并配置缺失时的追问或阻塞策略。
           </Text>
         </div>
-        <Button
-          type="primary"
-          disabled={isKnowledgeMutationDisabled || !canLoad}
-          onClick={() => openDrawer()}
-        >
-          新建外部依赖
-        </Button>
+        {isKnowledgeMutationDisabled ? (
+          <Text type="secondary">
+            当前知识库只读，可查看已预置外部数据依赖，不支持新建或编辑。
+          </Text>
+        ) : (
+          <Button
+            type="primary"
+            disabled={!canLoad}
+            onClick={() => openDrawer()}
+          >
+            新建外部依赖
+          </Button>
+        )}
       </Space>
       <Table
         rowKey="id"
@@ -299,21 +324,30 @@ export default function KnowledgeExternalDependenciesStage({
       />
       <Drawer
         size="large"
-        title={editingDependency ? '编辑外部数据依赖' : '新建外部数据依赖'}
+        title={
+          isKnowledgeMutationDisabled
+            ? '查看外部数据依赖'
+            : editingDependency
+              ? '编辑外部数据依赖'
+              : '新建外部数据依赖'
+        }
         open={drawerOpen}
         onClose={closeDrawer}
         extra={
-          <Space>
-            <Button onClick={closeDrawer}>取消</Button>
-            <Button
-              type="primary"
-              loading={saving}
-              disabled={isKnowledgeMutationDisabled}
-              onClick={() => void handleSubmit()}
-            >
-              保存
-            </Button>
-          </Space>
+          isKnowledgeMutationDisabled ? (
+            <Button onClick={closeDrawer}>关闭</Button>
+          ) : (
+            <Space>
+              <Button onClick={closeDrawer}>取消</Button>
+              <Button
+                type="primary"
+                loading={saving}
+                onClick={() => void handleSubmit()}
+              >
+                保存
+              </Button>
+            </Space>
+          )
         }
       >
         <Form

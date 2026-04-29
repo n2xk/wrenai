@@ -12,7 +12,12 @@ export const antdTheme: ThemeConfig = {
     colorSuccess: '#52c41a',
     colorWarning: '#faad14',
     colorError: '#ff4d4f',
-    borderRadius: 8,
+    borderRadius: 6,
     fontSize: 14,
+  },
+  components: {
+    Table: {
+      headerBorderRadius: 6,
+    },
   },
 };

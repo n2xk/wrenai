@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 export const WorkbenchSectionPanel = styled.div`
-  border-radius: 20px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.95);
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
@@ -51,7 +51,7 @@ export const WorkbenchProcessCard = styled.div<{
   $active?: boolean;
   $done?: boolean;
 }>`
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid
     ${(props) =>
       props.$active || props.$done
@@ -81,7 +81,7 @@ export const WorkbenchProcessBadge = styled.span<{
 }>`
   width: 24px;
   height: 24px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   display: inline-flex;
   align-items: center;
   justify-content: center;

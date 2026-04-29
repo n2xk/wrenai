@@ -26,6 +26,9 @@ describe('threadWorkbenchMessages', () => {
     expect(getThreadWorkbenchMessages('en-US').footer.helpfulPrompt).toBe(
       'Was this result helpful?',
     );
+    expect(getThreadWorkbenchMessages('zh-CN').footer.helpfulPrompt).toBe(
+      '这个结果有帮助吗？',
+    );
     expect(
       getThreadWorkbenchMessages('zh-CN').recommendation.triggerLabel,
     ).toBe('推荐几个问题给我');
@@ -33,7 +36,7 @@ describe('threadWorkbenchMessages', () => {
       getThreadWorkbenchMessages('en-US').recommendation.categories.chartRefine,
     ).toBe('Refine chart');
     expect(getThreadWorkbenchMessages('zh-CN').headerActions.spreadsheet).toBe(
-      'Spreadsheet',
+      '保存为数据表',
     );
     expect(getThreadWorkbenchMessages('en-US').headerActions.pinDashboard).toBe(
       'Pin to dashboard',

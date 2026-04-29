@@ -35,7 +35,7 @@ export const AssetGalleryCard = styled.button<{ $active?: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(91, 75, 219, 0.2)' : 'rgba(15, 23, 42, 0.08)'};
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   background: #fff;
   padding: 0;
   text-align: left;

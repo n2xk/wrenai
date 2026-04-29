@@ -21,7 +21,7 @@ const SELECTOR_PANEL_STYLE: CSSProperties = {
   flexDirection: 'column',
   minHeight: 340,
   border: '1px solid rgba(15, 23, 42, 0.08)',
-  borderRadius: 14,
+  borderRadius: 'var(--nova-radius-panel)',
   background: '#fff',
   overflow: 'hidden',
 };
@@ -63,7 +63,7 @@ const FILTER_GROUP_STYLE: CSSProperties = {
 };
 
 const FILTER_CHIP_STYLE = (active: boolean): CSSProperties => ({
-  borderRadius: 999,
+  borderRadius: 'var(--nova-radius-chip)',
   padding: '4px 10px',
   border: active
     ? '1px solid rgba(91, 75, 219, 0.28)'
@@ -101,7 +101,7 @@ const buildTableRowStyle = ({
   justifyContent: 'space-between',
   gap: 12,
   padding: '10px 12px',
-  borderRadius: 12,
+  borderRadius: 'var(--nova-radius-control)',
   border:
     checked && disabled
       ? '1px solid rgba(91, 75, 219, 0.16)'
@@ -456,7 +456,7 @@ export default function AssetWizardTableSelector({
                           justifyContent: 'space-between',
                           gap: 12,
                           padding: '10px 12px',
-                          borderRadius: 12,
+                          borderRadius: 'var(--nova-radius-card)',
                           border: '1px solid rgba(15, 23, 42, 0.08)',
                           background: '#f8fafc',
                         }}
@@ -501,7 +501,7 @@ export default function AssetWizardTableSelector({
                           justifyContent: 'space-between',
                           gap: 12,
                           padding: '10px 12px',
-                          borderRadius: 12,
+                          borderRadius: 'var(--nova-radius-card)',
                           border: '1px solid rgba(91, 75, 219, 0.16)',
                           background: 'rgba(123, 85, 232, 0.04)',
                         }}

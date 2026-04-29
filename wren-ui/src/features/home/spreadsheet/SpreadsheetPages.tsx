@@ -79,7 +79,7 @@ const SQLCodeBlock = dynamic(() => import('@/components/code/SQLCodeBlock'), {
 const { Text, Title } = Typography;
 
 const HeaderCard = styled(Card)`
-  border-radius: 14px;
+  border-radius: var(--nova-radius-panel);
   border-color: rgba(15, 23, 42, 0.06);
   box-shadow: none;
 
@@ -114,7 +114,7 @@ const MetaLine = styled.div`
 
   .ant-tag {
     margin-inline-end: 0;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     font-size: 10px;
     line-height: 17px;
     padding-inline: 7px;
@@ -125,7 +125,7 @@ const ContentCard = styled(Card)`
   flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: var(--nova-radius-panel);
   border-color: rgba(15, 23, 42, 0.06);
   box-shadow: none;
 
@@ -138,7 +138,7 @@ const ContentCard = styled(Card)`
 `;
 
 const ToolbarCard = styled(Card)`
-  border-radius: 14px;
+  border-radius: var(--nova-radius-panel);
   border-color: rgba(15, 23, 42, 0.06);
   box-shadow: none;
 
@@ -169,7 +169,7 @@ const ToolGroupLabel = styled.span<{ $accent?: boolean }>`
   gap: 5px;
   height: 24px;
   padding: ${(props) => (props.$accent ? '0 8px' : '0')};
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   background: ${(props) =>
     props.$accent ? 'rgba(111, 71, 255, 0.1)' : 'transparent'};
   color: ${(props) => (props.$accent ? '#5d3ce0' : '#8a93a5')};
@@ -191,7 +191,7 @@ const HeaderActions = styled.div`
 
   .ant-btn {
     height: 30px;
-    border-radius: 9px;
+    border-radius: var(--nova-radius-control);
     font-size: 12px;
   }
 `;
@@ -299,7 +299,7 @@ const SpreadsheetPreviewShell = styled.div`
 
 const RailCard = styled(DashboardRailCard)`
   &.ant-card {
-    border-radius: 14px;
+    border-radius: var(--nova-radius-panel);
     box-shadow: none;
   }
 
@@ -311,7 +311,7 @@ const RailCard = styled(DashboardRailCard)`
 
 const RailItem = styled(DashboardRailItem)`
   padding: 7px 8px;
-  border-radius: 9px;
+  border-radius: var(--nova-radius-control);
   border-color: ${(props) =>
     props.$active ? 'rgba(111, 71, 255, 0.14)' : 'transparent'};
   background: ${(props) =>
@@ -374,7 +374,7 @@ const SpreadsheetRailTagRow = styled.div`
 
   .ant-tag {
     margin-inline-end: 0;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     font-size: 9px;
     line-height: 15px;
     padding-inline: 5px;

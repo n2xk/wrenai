@@ -1,7 +1,7 @@
 import styled from 'styled-components';
 
 export const WorkbenchCompactPanel = styled.div`
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: linear-gradient(
     180deg,
@@ -38,7 +38,7 @@ export const WorkbenchCompactChip = styled.span<{
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: ${(props) =>
     props.$tone === 'accent' ? 'rgba(91, 75, 219, 0.08)' : '#f3f5f8'};
   color: ${(props) => (props.$tone === 'accent' ? '#5b4bdb' : '#6b7280')};
@@ -48,7 +48,7 @@ export const WorkbenchCompactChip = styled.span<{
 `;
 
 export const WorkbenchCompactItem = styled.div`
-  border-radius: 14px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(251, 252, 254, 0.96);
   padding: 11px 12px;

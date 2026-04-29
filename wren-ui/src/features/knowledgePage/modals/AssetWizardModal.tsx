@@ -61,7 +61,7 @@ const ImportSummaryGrid = styled.div`
 
 const ImportSummaryCard = styled.div`
   border: 1px solid rgba(109, 74, 255, 0.12);
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   background: #fbfaff;
   padding: 14px 16px;
   display: flex;
@@ -533,7 +533,10 @@ function AssetWizardModal({
 
             <List
               bordered
-              style={{ borderRadius: 16, overflow: 'hidden' }}
+              style={{
+                borderRadius: 'var(--nova-radius-card)',
+                overflow: 'hidden',
+              }}
               dataSource={assetDraftPreviewList}
               locale={{
                 emptyText: isDemoSource
@@ -623,7 +626,10 @@ function AssetWizardModal({
 
             <List
               bordered
-              style={{ borderRadius: 16, overflow: 'hidden' }}
+              style={{
+                borderRadius: 'var(--nova-radius-card)',
+                overflow: 'hidden',
+              }}
               dataSource={assetDraftPreviewList}
               locale={{ emptyText: '暂无待保存资产' }}
               renderItem={(asset) => {

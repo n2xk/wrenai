@@ -119,7 +119,7 @@ const FILTER_BAR_STYLE = {
   flexWrap: 'wrap',
   padding: '6px 8px',
   border: '1px solid var(--ant-color-border-secondary)',
-  borderRadius: 8,
+  borderRadius: 'var(--nova-radius-control)',
   background: 'var(--ant-color-fill-quaternary)',
 } as const;
 
@@ -167,7 +167,7 @@ const getRoleListItemStyle = (selected: boolean) =>
     border: selected
       ? '1px solid var(--ant-color-primary-border)'
       : '1px solid var(--ant-color-border-secondary)',
-    borderRadius: 8,
+    borderRadius: 'var(--nova-radius-card)',
     cursor: 'pointer',
     background: selected
       ? 'var(--ant-color-primary-bg)'
@@ -182,7 +182,7 @@ const getPermissionOptionStyle = (checked: boolean) =>
     border: checked
       ? '1px solid var(--ant-color-primary)'
       : '1px solid var(--ant-color-border)',
-    borderRadius: 8,
+    borderRadius: 'var(--nova-radius-card)',
     padding: 7,
     background: 'var(--ant-color-bg-container)',
     cursor: 'pointer',
@@ -1230,7 +1230,7 @@ export default function ManagePlatformPermissionsPage() {
                               }
                               styles={{ body: { padding: 8 } }}
                               style={{
-                                borderRadius: 8,
+                                borderRadius: 'var(--nova-radius-card)',
                               }}
                             >
                               <Row gutter={[8, 8]}>

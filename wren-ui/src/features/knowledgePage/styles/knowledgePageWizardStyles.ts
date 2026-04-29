@@ -76,7 +76,7 @@ export const SegmentedButton = styled.button<{
   height: 36px;
   min-width: 104px;
   padding: 0 16px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'var(--nova-primary)' : '#e5e7eb')};
   background: ${(props) =>
@@ -115,7 +115,7 @@ export const SourceGrid = styled.div`
 export const SourceCard = styled.button<{ $active?: boolean }>`
   min-height: 58px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(91, 75, 219, 0.24)' : 'rgba(15, 23, 42, 0.08)'};
@@ -173,7 +173,7 @@ export const FieldCluster = styled.div`
 `;
 
 export const WizardNote = styled.div`
-  border-radius: 8px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid #e5e7eb;
   background: #f8fafc;
   padding: 14px 16px;

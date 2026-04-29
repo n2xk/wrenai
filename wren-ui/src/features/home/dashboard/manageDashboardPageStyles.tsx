@@ -36,7 +36,7 @@ export const DashboardRailCard = styled(Card)`
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    border-radius: 18px;
+    border-radius: var(--nova-radius-panel);
     border: 1px solid var(--nova-outline-soft);
     background: rgba(255, 255, 255, 0.96);
     box-shadow: var(--nova-shadow-soft);
@@ -89,7 +89,7 @@ export const DashboardRailSectionCount = styled.span`
   min-width: 16px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: #f5f6fa;
   color: #7a8294;
   font-size: 10px;
@@ -116,7 +116,7 @@ export const DashboardRailItem = styled.div.attrs({
   justify-content: space-between;
   gap: 6px;
   padding: 5px 6px 5px 8px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.16)' : 'transparent')};
   background: ${(props) =>
@@ -178,7 +178,7 @@ export const DashboardRailTitle = styled.span`
     height: 17px;
     margin-inline-end: 0;
     padding-inline: 5px;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     font-size: 9px;
     line-height: 15px;
     font-weight: 600;
@@ -191,7 +191,7 @@ export const DashboardRailInlineMeta = styled.span`
   align-items: center;
   height: 17px;
   padding: 0 6px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: rgba(111, 71, 255, 0.06);
   color: #7657d8;
   font-size: 9px;
@@ -233,7 +233,7 @@ export const DashboardRailCreateButton = styled(Button)`
   &.ant-btn {
     width: 100%;
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     border: 1px dashed rgba(111, 71, 255, 0.3);
     color: #7357e6;
     background: rgba(111, 71, 255, 0.025);
@@ -253,7 +253,7 @@ export const DashboardRailCreateButton = styled(Button)`
 `;
 
 export const DashboardDetailCard = styled.div`
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: linear-gradient(180deg, #fcfcff 0%, #f8f8fe 100%);
   padding: 10px;
@@ -326,7 +326,7 @@ export const DashboardStageCanvas = styled.div<{ $empty?: boolean }>`
   flex-direction: column;
   min-width: 0;
   min-height: ${(props) => (props.$empty ? 'max(620px, 100%)' : '100%')};
-  border-radius: 14px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--nova-shadow-soft);
@@ -340,7 +340,7 @@ export const DashboardStageCanvas = styled.div<{ $empty?: boolean }>`
 export const WorkbenchActionButton = styled(Button)`
   && {
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     padding-inline: 12px;
     font-weight: 500;
     box-shadow: none;

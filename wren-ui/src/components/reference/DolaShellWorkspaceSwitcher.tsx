@@ -35,7 +35,7 @@ const WorkspaceTrigger = styled.button<{
   min-height: 42px;
   box-sizing: border-box;
   border: 0;
-  border-radius: 13px;
+  border-radius: var(--nova-radius-control);
   background: ${(props) =>
     props.$open ? 'rgba(123, 87, 232, 0.055)' : 'transparent'};
   display: flex;
@@ -104,7 +104,7 @@ const WorkspaceOption = styled.button<{ $active?: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(79, 70, 229, 0.24)' : 'rgba(15, 23, 42, 0.06)'};
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   background: ${(props) =>
     props.$active ? 'rgba(79, 70, 229, 0.06)' : '#ffffff'};
   padding: 10px 12px;

@@ -42,7 +42,7 @@ export const Sidebar = styled(Sider)`
       line-height: 32px;
       margin: 0;
       padding-inline: 9px !important;
-      border-radius: 9px;
+      border-radius: var(--nova-radius-control);
       color: #4b5563;
       font-size: 13px;
       font-weight: 500;
@@ -131,7 +131,7 @@ export const Sidebar = styled(Sider)`
       line-height: 31px;
       margin: 0;
       padding-inline: 8px !important;
-      border-radius: 9px;
+      border-radius: var(--nova-radius-control);
       color: #4b5563;
       font-size: 13px;
       font-weight: 500;

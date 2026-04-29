@@ -11,7 +11,6 @@ import React, {
 import styled from 'styled-components';
 
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
-import { DashboardItemType } from '@/types/home';
 import type {
   DashboardGridItemData,
   DashboardItemLayoutInput,
@@ -20,9 +19,10 @@ import type {
 import { DashboardGridPinnedItem } from './DashboardGridPinnedItem';
 import type { DashboardGridPinnedItemHandle } from './dashboardGridTypes';
 import {
-  calculateDashboardGridColumnSize,
   DASHBOARD_GRID_COLUMN_COUNT,
   DASHBOARD_GRID_GUTTER,
+  DASHBOARD_GRID_ROW_HEIGHT,
+  resolveDashboardGridItemMinHeight,
   resolveDashboardGridLayouts,
   resolveDashboardGridWidth,
 } from './dashboardGridLayout';
@@ -61,7 +61,7 @@ const StyledDashboardGrid = styled.div`
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    border-radius: 12px;
+    border-radius: var(--nova-radius-card);
     border: 1px solid var(--nova-outline-soft);
     box-shadow: 0 20px 40px -28px rgba(31, 35, 50, 0.28);
     overflow: hidden;
@@ -129,19 +129,16 @@ const StyledDashboardGrid = styled.div`
 
   .adm-pinned-item-chart {
     height: 100%;
-    min-height: 168px;
+    min-height: 128px;
   }
 
   .react-grid-placeholder {
     background-color: rgba(141, 101, 225, 0.22);
-    border-radius: 12px;
+    border-radius: var(--nova-radius-card);
   }
 `;
 
 export type DashboardGridItem = DashboardGridItemData;
-
-const getItemMinHeight = (item: DashboardGridItem) =>
-  item.type === DashboardItemType.NUMBER ? 2 : 2;
 
 const getLayoutToUpdateItem = (layout: Layout) => ({
   itemId: Number(layout.i),
@@ -236,7 +233,7 @@ const DashboardGrid = forwardRef(
           return item
             ? {
                 ...layout,
-                minH: getItemMinHeight(item),
+                minH: resolveDashboardGridItemMinHeight(item),
               }
             : layout;
         }),
@@ -299,7 +296,7 @@ const DashboardGrid = forwardRef(
             cols={DASHBOARD_GRID_COLUMN_COUNT}
             margin={[DASHBOARD_GRID_GUTTER, DASHBOARD_GRID_GUTTER]}
             containerPadding={[0, 0]}
-            rowHeight={calculateDashboardGridColumnSize(gridWidth)}
+            rowHeight={DASHBOARD_GRID_ROW_HEIGHT}
             width={gridWidth}
             isDraggable={!readOnly}
             isResizable={!readOnly}

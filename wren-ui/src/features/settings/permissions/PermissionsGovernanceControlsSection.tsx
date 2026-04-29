@@ -41,7 +41,7 @@ import type {
 const STACK_ITEM_STYLE = {
   padding: '12px 14px',
   border: '1px solid var(--ant-color-border-secondary)',
-  borderRadius: 8,
+  borderRadius: 'var(--nova-radius-card)',
   background: 'var(--ant-color-bg-container)',
 } as const;
 

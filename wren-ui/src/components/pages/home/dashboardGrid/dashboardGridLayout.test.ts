@@ -1,5 +1,6 @@
 import {
-  calculateDashboardGridColumnSize,
+  DASHBOARD_GRID_ROW_HEIGHT,
+  resolveDashboardGridItemMinHeight,
   resolveDashboardGridLayouts,
   resolveDashboardGridWidth,
 } from './dashboardGridLayout';
@@ -10,8 +11,26 @@ describe('dashboard grid layout helpers', () => {
     expect(resolveDashboardGridWidth(0)).toBe(0);
   });
 
-  it('derives column size from the measured grid width', () => {
-    expect(calculateDashboardGridColumnSize(712)).toBeCloseTo(112);
+  it('uses a fixed row height so resizing is not coupled to chart width', () => {
+    expect(DASHBOARD_GRID_ROW_HEIGHT).toBe(108);
+  });
+
+  it('allows compact KPI cards while keeping charts and tables readable', () => {
+    expect(
+      resolveDashboardGridItemMinHeight({
+        type: 'NUMBER',
+      } as any),
+    ).toBe(1);
+    expect(
+      resolveDashboardGridItemMinHeight({
+        type: 'BAR',
+      } as any),
+    ).toBe(2);
+    expect(
+      resolveDashboardGridItemMinHeight({
+        type: 'TABLE',
+      } as any),
+    ).toBe(2);
   });
 
   it('preserves stored layout for a single dashboard item', () => {

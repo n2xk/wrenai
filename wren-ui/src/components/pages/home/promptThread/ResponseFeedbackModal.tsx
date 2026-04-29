@@ -40,7 +40,7 @@ const ReasonButton = styled.button<{ $selected?: boolean }>`
   border: 1px solid
     ${(props) =>
       props.$selected ? 'rgba(111, 71, 255, 0.36)' : 'rgba(15, 23, 42, 0.08)'};
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: ${(props) =>
     props.$selected ? 'rgba(111, 71, 255, 0.1)' : '#fff'};
   color: ${(props) => (props.$selected ? '#5b36d7' : '#344054')};

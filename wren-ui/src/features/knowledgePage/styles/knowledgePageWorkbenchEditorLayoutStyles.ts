@@ -31,7 +31,7 @@ export const WorkbenchRailTop = styled.div`
 
   .ant-input-affix-wrapper {
     min-height: 34px;
-    border-radius: 12px;
+    border-radius: var(--nova-radius-control);
   }
 
   @media (max-width: 980px) {
@@ -54,7 +54,7 @@ export const WorkbenchFilterRow = styled.div`
 
 export const WorkbenchFilterChip = styled.button<{ $active?: boolean }>`
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(91, 75, 219, 0.18)' : 'rgba(15, 23, 42, 0.08)'};

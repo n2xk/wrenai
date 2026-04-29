@@ -11,7 +11,7 @@ export const TitleGroup = styled.div`
 export const DetailIconButton = styled.button`
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #fff;
   color: #62697a;
@@ -28,7 +28,7 @@ export const DetailIconButton = styled.button`
 
 export const _DetailTableWrap = styled.div`
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   overflow: hidden;
   background: #fff;
 
@@ -50,7 +50,7 @@ export const EmptyPill = styled.span`
   min-width: 68px;
   height: 30px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #fafbfe;
   color: #666d80;
@@ -97,7 +97,7 @@ export const AssetDetailSidebarList = styled.div`
 
 export const AssetDetailSidebarItem = styled.button<{ $active?: boolean }>`
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(123, 85, 232, 0.22)' : 'transparent')};
   background: ${(props) =>
@@ -148,7 +148,7 @@ export const AssetDetailMetaPill = styled.span`
   align-items: center;
   height: 22px;
   padding: 0 7px;
-  border-radius: 6px;
+  border-radius: var(--nova-radius-control);
   background: #fff;
   border: 1px solid #e5e7eb;
   color: #4b5563;
@@ -164,7 +164,7 @@ export const AssetDetailToolbar = styled.div`
   .ant-btn {
     height: 32px;
     padding-inline: 12px;
-    border-radius: 8px;
+    border-radius: var(--nova-radius-control);
     font-size: 12px;
     box-shadow: none;
   }
@@ -173,13 +173,13 @@ export const AssetDetailToolbar = styled.div`
 export const AssetDetailIconButton = styled(DetailIconButton)`
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   background: #fff;
 `;
 
 export const AssetDetailTableWrap = styled.div`
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   overflow: hidden;
   background: #fff;
 
@@ -209,7 +209,7 @@ export const AssetDetailTableWrap = styled.div`
 
   .ant-tag {
     padding: 0 6px;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
   }
 `;
 
@@ -229,7 +229,7 @@ export const AssetDetailTabs = styled.div`
 
 export const AssetDetailTab = styled.button<{ $active?: boolean }>`
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(123, 85, 232, 0.22)' : 'transparent')};
   background: ${(props) =>
@@ -250,14 +250,14 @@ export const AssetDetailSummaryGrid = styled.div`
 `;
 
 export const AssetDetailSummaryCard = styled.div`
-  border-radius: 8px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid #e5e7eb;
   background: #fff;
   padding: 14px 16px;
 `;
 
 export const AssetDetailSection = styled.div`
-  border-radius: 12px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid #e5e7eb;
   background: #fff;
   padding: 16px 18px;
@@ -279,12 +279,12 @@ export const AssetDetailFilterRow = styled.div`
     min-height: 32px;
     padding-top: 4px;
     padding-bottom: 4px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
   }
 
   .ant-input-search-button {
     height: 32px;
-    border-radius: 0 10px 10px 0;
+    border-radius: 0 var(--nova-radius-control) var(--nova-radius-control) 0;
   }
 `;
 
@@ -297,7 +297,7 @@ export const AssetDetailFilterPills = styled.div`
 export const AssetDetailFilterPill = styled.button<{ $active?: boolean }>`
   height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(111, 71, 255, 0.18)' : 'rgba(15, 23, 42, 0.08)'};
@@ -312,7 +312,7 @@ export const AssetDetailFilterPill = styled.button<{ $active?: boolean }>`
 export const AssetDetailSqlPreview = styled.pre`
   margin: 0;
   padding: 14px 16px;
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   background: #131722;
   color: #d7def0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -350,7 +350,7 @@ export const DetailForm = styled(ModalForm)`
 export const LargeTextArea = styled(Input.TextArea)`
   &.ant-input {
     min-height: 300px;
-    border-radius: 12px !important;
+    border-radius: var(--nova-radius-control) !important;
     border-color: rgba(31, 35, 50, 0.1) !important;
     background: #fff !important;
     resize: none;
@@ -366,7 +366,7 @@ export const BackTitle = styled.div`
 export const BackButton = styled.button`
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   border: 0;
   background: transparent;
   color: #24283a;
@@ -397,14 +397,14 @@ export const ScopeSelect = styled(Select)`
   }
 
   .ant-select-selector {
-    border-radius: 10px !important;
+    border-radius: var(--nova-radius-control) !important;
   }
 `;
 
 export const CodeEditorShell = styled.div`
   position: relative;
   border: 1px solid rgba(31, 35, 50, 0.26);
-  border-radius: 12px;
+  border-radius: var(--nova-radius-panel);
   background: #fff;
   overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);

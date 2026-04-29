@@ -46,7 +46,7 @@ const AccountRow = styled.div`
 const AccountAvatar = styled.div`
   width: 25px;
   height: 25px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -71,7 +71,7 @@ const AccountName = styled.div`
 const AccountButton = styled.button<{ $collapsed?: boolean }>`
   width: 100%;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   background: transparent;
   min-height: ${(props) => (props.$collapsed ? '31px' : '36px')};
   display: inline-flex;

@@ -160,12 +160,12 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
     },
     close: '关闭结果区',
     headerActions: {
-      spreadsheet: 'Spreadsheet',
+      spreadsheet: '保存为数据表',
       pinDashboard: '固定到看板',
     },
     titleLabel: '结果工作台',
     footer: {
-      helpfulPrompt: 'Was this result helpful?',
+      helpfulPrompt: '这个结果有帮助吗？',
       helpfulPositive: '有帮助',
       helpfulNegative: '没有帮助',
       saveSqlTemplate: '保存为 SQL 模板',

@@ -36,7 +36,7 @@ export const Toolbar = styled.div`
 export const ResultActionButton = styled(Button)`
   && {
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     padding-inline: 12px;
     font-weight: 500;
   }

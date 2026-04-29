@@ -191,7 +191,7 @@ export default function AssetWizardSourceStep({
                 alignItems: 'center',
                 justifyContent: 'center',
                 border: '1px solid rgba(15, 23, 42, 0.08)',
-                borderRadius: 14,
+                borderRadius: 'var(--nova-radius-panel)',
                 background: '#fff',
               }}
             >
@@ -223,7 +223,7 @@ export default function AssetWizardSourceStep({
             <div
               style={{
                 border: '1px dashed rgba(15, 23, 42, 0.12)',
-                borderRadius: 14,
+                borderRadius: 'var(--nova-radius-panel)',
                 background: '#fff',
                 padding: 18,
               }}

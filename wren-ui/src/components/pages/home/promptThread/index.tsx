@@ -29,7 +29,7 @@ const StyledPromptThread = styled.div`
 
   .ant-typography pre {
     border: none;
-    border-radius: 4px;
+    border-radius: var(--nova-radius-control);
   }
 
   button {
@@ -40,7 +40,7 @@ const StyledPromptThread = styled.div`
 const ThreadLoadMoreButton = styled.button`
   width: 100%;
   border: 1px dashed #d9e0ea;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   height: 36px;
   background: #f9fbfd;
   color: #6b7280;

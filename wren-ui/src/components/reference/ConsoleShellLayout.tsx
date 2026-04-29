@@ -76,9 +76,37 @@ const consoleLayoutStyles = `
   }
 
   .console-table .ant-table-container {
-    border-radius: 16px;
+    border-radius: var(--nova-radius-card) !important;
     overflow: hidden;
     border: 1px solid #e5e7eb;
+  }
+
+  .console-table .ant-table,
+  .console-table .ant-table-content {
+    border-radius: var(--nova-radius-card) !important;
+  }
+
+  .console-table .ant-table-content table {
+    border-radius: var(--nova-radius-card) var(--nova-radius-card) 0 0 !important;
+    overflow: hidden;
+  }
+
+  .console-table .ant-table-thead > tr:first-child > th {
+    border-radius: 0 !important;
+  }
+
+  .console-table .ant-table-thead > tr:first-child > th:first-child {
+    border-top-left-radius: var(--nova-radius-card) !important;
+    border-start-start-radius: var(--nova-radius-card) !important;
+  }
+
+  .console-table .ant-table-thead > tr:first-child > th:last-child {
+    border-top-right-radius: var(--nova-radius-card) !important;
+    border-start-end-radius: var(--nova-radius-card) !important;
+  }
+
+  .console-table .ant-table-thead > tr:first-child > th:only-child {
+    border-radius: var(--nova-radius-card) var(--nova-radius-card) 0 0 !important;
   }
 
   .console-table .ant-table-thead > tr > th {
@@ -98,7 +126,7 @@ const consoleLayoutStyles = `
   }
 
   .console-alert.ant-alert {
-    border-radius: 14px;
+    border-radius: var(--nova-radius-panel);
   }
 `;
 
@@ -226,7 +254,7 @@ export default function ConsoleShellLayout({
       style={{
         ...contentWrapperStyle(stretchContent),
         border: '1px solid #e5e7eb',
-        borderRadius: 16,
+        borderRadius: 'var(--nova-radius-panel)',
         boxShadow: '0 1px 2px rgba(16, 24, 40, 0.04)',
       }}
       styles={{
@@ -315,7 +343,7 @@ export default function ConsoleShellLayout({
                         display: 'inline-flex',
                         alignItems: 'center',
                         padding: '4px 10px',
-                        borderRadius: 999,
+                        borderRadius: 'var(--nova-radius-chip)',
                         background: '#f3f4ff',
                         color: '#6d4aff',
                         fontSize: 12,

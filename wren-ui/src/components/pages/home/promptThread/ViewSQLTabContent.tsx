@@ -34,12 +34,12 @@ const { Text } = Typography;
 const StyledPre = styled.pre`
   margin-bottom: 0;
   border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 14px;
+  border-radius: var(--nova-radius-card);
   overflow: hidden;
 
   .adm_code-block {
     border-top: none;
-    border-radius: 0 0 14px 14px;
+    border-radius: 0 0 var(--nova-radius-card) var(--nova-radius-card);
   }
 `;
 

@@ -48,7 +48,7 @@ const getRoleListItemStyle = (selected: boolean) =>
     border: selected
       ? '1px solid var(--ant-color-primary-border)'
       : '1px solid var(--ant-color-border-secondary)',
-    borderRadius: 8,
+    borderRadius: 'var(--nova-radius-card)',
     cursor: 'pointer',
     background: selected
       ? 'var(--ant-color-primary-bg)'

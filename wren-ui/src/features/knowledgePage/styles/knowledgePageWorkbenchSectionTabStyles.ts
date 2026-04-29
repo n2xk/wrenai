@@ -6,7 +6,7 @@ export const WorkbenchSectionTabs = styled.div`
   gap: 6px;
   width: fit-content;
   padding: 4px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
@@ -15,7 +15,7 @@ export const WorkbenchSectionTabs = styled.div`
 export const WorkbenchSectionTab = styled.button<{ $active?: boolean }>`
   height: 32px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(91, 75, 219, 0.18)' : 'transparent')};
   background: ${(props) => (props.$active ? '#ffffff' : 'transparent')};

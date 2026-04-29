@@ -89,7 +89,7 @@ const PromptButton = styled(Button)<{
     min-width: 32px;
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: var(--nova-radius-control);
     display: inline-flex;
     align-items: center;
     justify-content: center;

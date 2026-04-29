@@ -48,7 +48,7 @@ export const ThreadSplitStage = styled(Splitter)`
     width: 3px;
     height: 100%;
     margin: 0 auto;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     background: linear-gradient(
       180deg,
       rgba(148, 163, 184, 0.24) 0%,
@@ -127,7 +127,7 @@ export const ComposerSelectedScopeRow = styled.div`
 
 export const ComposerSelectedKnowledgeChip = styled.div`
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   background: #ffffff;
   color: #4b5563;
   border: 1px solid #e5e7eb;
@@ -154,7 +154,7 @@ export const ComposerDock = styled.div<{ $withWorkbench?: boolean }>`
 `;
 
 export const ComposerFrame = styled.div`
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
@@ -193,7 +193,7 @@ export const SpeakerRow = styled.div`
 export const SpeakerBadge = styled.div<{ $tone: 'user' | 'assistant' }>`
   width: 34px;
   height: 34px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -206,7 +206,7 @@ export const SpeakerBadge = styled.div<{ $tone: 'user' | 'assistant' }>`
 
 export const Bubble = styled.div<{ $muted?: boolean }>`
   flex: 1;
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: ${(props) =>
     props.$muted ? 'rgba(251, 252, 255, 0.9)' : 'rgba(255, 255, 255, 0.96)'};
@@ -236,7 +236,7 @@ export const InsightBlock = styled.div`
 
 export const InlinePreviewCard = styled.div`
   margin-left: 46px;
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.96);
   padding: 14px 16px;
@@ -255,7 +255,7 @@ export const InlineCardMeta = styled.div`
 
 export const SubtleBadge = styled.span`
   min-height: 30px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: rgba(15, 23, 42, 0.06);
   color: #4a5263;
   padding: 6px 12px;
@@ -268,7 +268,7 @@ export const SubtleBadge = styled.span`
 
 export const SuggestionShell = styled.div`
   margin-top: 4px;
-  border-radius: 20px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.96);
   padding: 16px;
@@ -286,7 +286,7 @@ export const SuggestionChip = styled.button`
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: #fff;
   color: #3f4657;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   height: 34px;
   padding: 0 12px;
   font-size: 13px;

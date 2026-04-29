@@ -15,8 +15,10 @@
   --nova-primary-strong: #6847d7;
   --nova-primary-soft: rgba(123, 87, 232, 0.08);
   --nova-primary-ring: rgba(123, 87, 232, 0.14);
+  --nova-radius-control: 6px;
   --nova-radius-panel: 8px;
-  --nova-radius-card: 8px;
+  --nova-radius-card: 6px;
+  --nova-radius-modal: 10px;
   --nova-radius-chip: 999px;
   --nova-shadow-soft: 0 4px 12px rgba(31, 35, 50, 0.04);
   --nova-shadow: 0 8px 20px rgba(31, 35, 50, 0.05);
@@ -44,6 +46,7 @@ a,
   color: inherit;
 }
 .ant-btn {
+  border-radius: var(--nova-radius-control) !important;
   box-shadow: none !important;
   transition:
     transform 0.18s ease,
@@ -82,7 +85,7 @@ a,
 .ant-picker,
 .ant-select-selector {
   border: 1px solid #dfe3ee !important;
-  border-radius: 8px !important;
+  border-radius: var(--nova-radius-control) !important;
   background: #fff !important;
   box-shadow: none !important;
 }
@@ -108,9 +111,11 @@ a,
   box-shadow: none !important;
 }
 .ant-card,
-.ant-modal-content,
 .ant-dropdown-menu {
   border-radius: var(--nova-radius-card) !important;
+}
+.ant-modal-content {
+  border-radius: var(--nova-radius-modal) !important;
 }
 .ant-modal-content {
   background: #fff !important;
@@ -122,7 +127,7 @@ a,
 .ant-select-dropdown,
 .ant-picker-dropdown .ant-picker-panel-container,
 .ant-dropdown-menu {
-  border-radius: 8px !important;
+  border-radius: var(--nova-radius-card) !important;
   box-shadow: var(--nova-shadow-soft) !important;
 }
 .ant-table-wrapper .ant-table,
@@ -249,7 +254,7 @@ a,
   gap: 6px;
   background: white;
   border: 1px solid #d9d9d9;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   padding: 0 8px;
   cursor: pointer;
   width: 28px;

@@ -2,7 +2,7 @@ import { Button, Form } from 'antd';
 import styled from 'styled-components';
 
 export const WorkbenchEditorPanel = styled.div`
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.9);
   padding: 18px;
@@ -26,7 +26,7 @@ export const WorkbenchEditorForm = styled(Form)`
   .ant-input,
   .ant-input-affix-wrapper,
   .ant-select-selector {
-    border-radius: 10px !important;
+    border-radius: var(--nova-radius-control) !important;
     border-color: rgba(15, 23, 42, 0.1) !important;
     border-style: solid !important;
     border-width: 1px !important;
@@ -72,7 +72,7 @@ export const WorkbenchEditorActions = styled.div`
 
 export const WorkbenchDraftBanner = styled.div`
   margin-top: 12px;
-  border-radius: 12px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid rgba(91, 75, 219, 0.16);
   background: rgba(247, 244, 255, 0.9);
   color: #5b4bdb;
@@ -100,7 +100,7 @@ export const PurpleButton = styled(Button)`
     min-width: 88px;
     height: 40px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--nova-radius-control);
     background: var(--nova-primary);
     color: #fff;
     font-weight: 500;

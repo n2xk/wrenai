@@ -26,7 +26,7 @@ export const Stage = styled.div`
     width: min(960px, 118vw);
     height: clamp(360px, 54vh, 500px);
     transform: translateX(-50%);
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     background: radial-gradient(
       ellipse at 50% 26%,
       rgba(123, 87, 232, 0.08) 0%,
@@ -72,7 +72,7 @@ export const HeroTitle = styled(Title)`
 `;
 
 export const ComposerCard = styled.div`
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid #e7ecf3;
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.055);
@@ -87,7 +87,7 @@ export const ComposerShell = styled.div<{ $dropdownOpen?: boolean }>`
 
 export const SourceChip = styled.div`
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   background: #ffffff;
   color: #4b5563;
   border: 1px solid #e5e7eb;
@@ -103,7 +103,7 @@ export const SourceChipRemove = styled.button`
   width: 16px;
   height: 16px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--nova-radius-control);
   padding: 0;
   background: transparent;
   color: #9ca3af;
@@ -129,7 +129,7 @@ export const KnowledgePickerList = styled.div`
 
 export const KnowledgePickerCard = styled.button<{ $active?: boolean }>`
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-card);
   border: 1px solid
     ${(props) =>
       props.$active ? 'rgba(141, 101, 225, 0.24)' : 'var(--nova-outline-soft)'};
@@ -173,7 +173,7 @@ export const RecommendationRow = styled.div`
 export const RecommendationCard = styled.button<{ $accent: string }>`
   border: 1px solid #e8edf4;
   background: rgba(255, 255, 255, 0.92);
-  border-radius: 15px;
+  border-radius: var(--nova-radius-card);
   padding: 14px 15px;
   text-align: left;
   cursor: pointer;
@@ -211,7 +211,7 @@ export const RecommendationBadge = styled.span<{ $primary?: boolean }>`
   display: inline-flex;
   align-items: center;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   color: ${(props) => (props.$primary ? 'var(--nova-primary)' : '#7b5f49')};
   background: ${(props) =>
     props.$primary
@@ -249,7 +249,7 @@ export const RecommendationAssetName = styled.span`
 export const RecommendationIcon = styled.div<{ $accent: string }>`
   width: 23px;
   height: 23px;
-  border-radius: 7px;
+  border-radius: var(--nova-radius-control);
   background: color-mix(in srgb, ${(props) => props.$accent} 70%, #ffffff);
   color: #6366f1;
   display: inline-flex;
@@ -274,7 +274,7 @@ export const KnowledgeDropdownPanel = styled.div`
   right: 0;
   z-index: 8;
   border: 1px solid #e7ecf3;
-  border-radius: 18px;
+  border-radius: var(--nova-radius-panel);
   background: #ffffff;
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
   padding: 12px;
@@ -313,7 +313,7 @@ export const KnowledgeDropdownSearch = styled.input`
 
 export const ComposerScopeChip = styled.button`
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid #e7ecf3;
   background: #f8fafc;
   color: #4b5563;
@@ -338,7 +338,7 @@ export const ComposerScopeChip = styled.button`
 
 export const ComposerPassiveChip = styled.div`
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid #eef2f7;
   background: #fbfcfe;
   color: #6b7280;
@@ -353,7 +353,7 @@ export const ComposerPassiveChip = styled.div`
 export const ComposerAtMark = styled.span`
   width: 18px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: rgba(123, 87, 232, 0.1);
   color: var(--nova-primary);
   display: inline-flex;
@@ -390,13 +390,13 @@ export const ComposerPrompt = styled(Prompt)`
   .prompt-send-button.ant-btn {
     width: 32px;
     height: 32px;
-    border-radius: 999px;
+    border-radius: var(--nova-radius-control);
   }
 `;
 
 export const ComposerToolButton = styled.button<{ $active?: boolean }>`
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(123, 87, 232, 0.22)' : '#eef2f7')};
   background: ${(props) =>
@@ -451,7 +451,7 @@ export const ExploreTitle = styled.div`
 
 export const ExploreTemplateTag = styled.span`
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: #f7f8fb;
   border: 1px solid #edf1f6;
   color: #4b5563;
@@ -489,7 +489,7 @@ export const KnowledgeOptionRow = styled.button<{ $active?: boolean }>`
       props.$active ? 'rgba(123, 87, 232, 0.18)' : 'rgba(15, 23, 42, 0.06)'};
   background: ${(props) =>
     props.$active ? 'rgba(123, 87, 232, 0.04)' : '#ffffff'};
-  border-radius: 14px;
+  border-radius: var(--nova-radius-card);
   padding: 11px 14px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

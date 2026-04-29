@@ -64,7 +64,7 @@ const PromptStyle = styled.div<{ $variant: 'fixed' | 'sticky' | 'embedded' }>`
   gap: 12px;
   background: #fff;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 20px;
+  border-radius: var(--nova-radius-panel);
   padding: 14px 16px;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
 

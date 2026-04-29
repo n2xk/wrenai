@@ -20,7 +20,7 @@ export const WorkbenchEditorStatusChip = styled.span<{
   align-items: center;
   min-height: 20px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: ${(props) =>
     props.$tone === 'accent'
       ? 'rgba(91, 75, 219, 0.10)'

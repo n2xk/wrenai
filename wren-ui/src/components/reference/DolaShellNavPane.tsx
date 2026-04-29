@@ -49,7 +49,7 @@ const CollapseToggleButton = styled(Button)<{ $collapsed?: boolean }>`
   && {
     width: 32px;
     height: 32px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     color: #6b7280;
     display: inline-flex;
     align-items: center;
@@ -74,7 +74,7 @@ const BrandIdentity = styled.div`
 const BrandMarkFrame = styled.div`
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -113,7 +113,7 @@ const SidebarBackButton = styled(Button)<{ $collapsed?: boolean }>`
   && {
     width: 100%;
     height: 34px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     display: inline-flex;
     align-items: center;
     justify-content: ${(props) => (props.$collapsed ? 'center' : 'flex-start')};

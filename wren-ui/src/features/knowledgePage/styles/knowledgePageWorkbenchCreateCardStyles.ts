@@ -4,7 +4,7 @@ export const WorkbenchCreateCard = styled.button`
   width: 100%;
   min-height: 126px;
   border: 1px dashed rgba(91, 75, 219, 0.22);
-  border-radius: 16px;
+  border-radius: var(--nova-radius-card);
   background: linear-gradient(180deg, #fcfbff 0%, #ffffff 100%);
   padding: 18px 16px;
   text-align: left;
@@ -36,7 +36,7 @@ export const WorkbenchCreateCardTop = styled.div`
 export const WorkbenchCreateCardIcon = styled.span`
   width: 32px;
   height: 32px;
-  border-radius: 10px;
+  border-radius: var(--nova-radius-control);
   background: rgba(91, 75, 219, 0.1);
   color: #5b4bdb;
   display: inline-flex;

@@ -58,7 +58,7 @@ const getPermissionOptionStyle = (checked: boolean, disabled: boolean) =>
     border: checked
       ? '1px solid var(--ant-color-primary)'
       : '1px solid var(--ant-color-border-secondary)',
-    borderRadius: 8,
+    borderRadius: 'var(--nova-radius-card)',
     padding: '6px 7px',
     background: 'var(--ant-color-bg-container)',
     cursor: disabled ? 'default' : 'pointer',

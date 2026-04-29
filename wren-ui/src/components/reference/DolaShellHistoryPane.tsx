@@ -63,7 +63,7 @@ const SearchInput = styled(Input)`
     --ant-input-active-shadow: 0 0 0 2px rgba(99, 102, 241, 0.08);
 
     height: 30px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     border-color: transparent !important;
     background: #f8fafc !important;
     padding-inline: 10px;
@@ -130,7 +130,7 @@ const HistoryScroller = styled.div<{ $stale?: boolean }>`
   }
 
   &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
+    border-radius: var(--nova-radius-chip);
     background: rgba(148, 163, 184, 0.28);
   }
 
@@ -142,7 +142,7 @@ const HistoryScroller = styled.div<{ $stale?: boolean }>`
 const HistoryItem = styled.div<{ $active?: boolean; $disabled?: boolean }>`
   min-height: 29px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--nova-radius-control);
   padding: 4px 1px 4px 8px;
   display: flex;
   align-items: center;
@@ -204,7 +204,7 @@ const HistoryMoreButton = styled(Button)<{ $active?: boolean }>`
     padding: 0;
     border: none;
     box-shadow: none;
-    border-radius: 6px;
+    border-radius: var(--nova-radius-control);
     background: ${(props) =>
       props.$active ? 'rgba(123, 87, 232, 0.08)' : 'transparent'};
     color: ${(props) => (props.$active ? '#6d4aff' : '#9aa6b5')};

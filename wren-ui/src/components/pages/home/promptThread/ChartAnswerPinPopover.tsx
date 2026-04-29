@@ -15,7 +15,7 @@ const PopoverShell = styled.div`
 
 const PopoverList = styled.div`
   border: 1px solid var(--nova-outline-soft);
-  border-radius: 10px;
+  border-radius: var(--nova-radius-card);
   padding: 3px;
   max-height: 252px;
   overflow: auto;
@@ -31,7 +31,7 @@ const PopoverRow = styled.button<{ $active?: boolean; $disabled?: boolean }>`
   justify-content: space-between;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 7px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.18)' : 'transparent')};
   background: ${(props) =>
@@ -90,7 +90,7 @@ const PopoverDefaultMeta = styled.span`
   min-width: 16px;
   height: 16px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--nova-radius-chip);
   background: #f4f5f8;
   font-size: 10px;
   line-height: 1;
@@ -103,7 +103,7 @@ const CreateAndPinButton = styled(Button)`
     width: 100%;
     margin-top: 5px;
     height: 30px;
-    border-radius: 9px;
+    border-radius: var(--nova-radius-control);
     border: 1px dashed rgba(111, 71, 255, 0.35);
     color: #6f47ff;
     background: rgba(111, 71, 255, 0.04);

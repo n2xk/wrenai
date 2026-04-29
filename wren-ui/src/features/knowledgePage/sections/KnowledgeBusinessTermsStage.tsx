@@ -131,11 +131,15 @@ export default function KnowledgeBusinessTermsStage({
 
   const openDrawer = useCallback(
     (term?: BusinessTerm) => {
+      if (!term && isKnowledgeMutationDisabled) {
+        message.info('当前知识库为只读状态，不支持新建业务词。');
+        return;
+      }
       setEditingTerm(term || null);
       form.setFieldsValue(toFormValues(term));
       setDrawerOpen(true);
     },
-    [form],
+    [form, isKnowledgeMutationDisabled],
   );
 
   const closeDrawer = useCallback(() => {
@@ -145,6 +149,10 @@ export default function KnowledgeBusinessTermsStage({
   }, [form]);
 
   const handleSubmit = useCallback(async () => {
+    if (isKnowledgeMutationDisabled) {
+      message.info('当前知识库为只读状态，不支持保存业务词。');
+      return;
+    }
     const values = await form.validateFields();
     const payload = toPayload(values);
     setSaving(true);
@@ -167,10 +175,21 @@ export default function KnowledgeBusinessTermsStage({
     } finally {
       setSaving(false);
     }
-  }, [closeDrawer, editingTerm, form, loadTerms, runtimeSelector]);
+  }, [
+    closeDrawer,
+    editingTerm,
+    form,
+    isKnowledgeMutationDisabled,
+    loadTerms,
+    runtimeSelector,
+  ]);
 
   const handleDelete = useCallback(
     async (term: BusinessTerm) => {
+      if (isKnowledgeMutationDisabled) {
+        message.info('当前知识库为只读状态，不支持删除业务词。');
+        return;
+      }
       try {
         await deleteKnowledgeBusinessTerm(runtimeSelector, term.id);
         message.success('已删除业务词典');
@@ -179,7 +198,7 @@ export default function KnowledgeBusinessTermsStage({
         message.error(error?.message || '删除业务词典失败，请稍后重试。');
       }
     },
-    [loadTerms, runtimeSelector],
+    [isKnowledgeMutationDisabled, loadTerms, runtimeSelector],
   );
 
   const columns = useMemo<ColumnsType<BusinessTerm>>(
@@ -226,7 +245,7 @@ export default function KnowledgeBusinessTermsStage({
         render: (_, term) => (
           <Space>
             <Button type="link" onClick={() => openDrawer(term)}>
-              编辑
+              {isKnowledgeMutationDisabled ? '查看' : '编辑'}
             </Button>
             {!isKnowledgeMutationDisabled ? (
               <Popconfirm
@@ -261,13 +280,19 @@ export default function KnowledgeBusinessTermsStage({
             维护业务概念、同义词、关联规则与模板，驱动问数理解和模板匹配。
           </Text>
         </div>
-        <Button
-          type="primary"
-          disabled={isKnowledgeMutationDisabled || !canLoad}
-          onClick={() => openDrawer()}
-        >
-          新建业务词
-        </Button>
+        {isKnowledgeMutationDisabled ? (
+          <Text type="secondary">
+            当前知识库只读，可查看已预置业务词，不支持新建或编辑。
+          </Text>
+        ) : (
+          <Button
+            type="primary"
+            disabled={!canLoad}
+            onClick={() => openDrawer()}
+          >
+            新建业务词
+          </Button>
+        )}
       </Space>
       <Table
         rowKey="id"
@@ -278,21 +303,30 @@ export default function KnowledgeBusinessTermsStage({
       />
       <Drawer
         size="large"
-        title={editingTerm ? '编辑业务词典' : '新建业务词典'}
+        title={
+          isKnowledgeMutationDisabled
+            ? '查看业务词典'
+            : editingTerm
+              ? '编辑业务词典'
+              : '新建业务词典'
+        }
         open={drawerOpen}
         onClose={closeDrawer}
         extra={
-          <Space>
-            <Button onClick={closeDrawer}>取消</Button>
-            <Button
-              type="primary"
-              loading={saving}
-              disabled={isKnowledgeMutationDisabled}
-              onClick={() => void handleSubmit()}
-            >
-              保存
-            </Button>
-          </Space>
+          isKnowledgeMutationDisabled ? (
+            <Button onClick={closeDrawer}>关闭</Button>
+          ) : (
+            <Space>
+              <Button onClick={closeDrawer}>取消</Button>
+              <Button
+                type="primary"
+                loading={saving}
+                onClick={() => void handleSubmit()}
+              >
+                保存
+              </Button>
+            </Space>
+          )
         }
       >
         <Form

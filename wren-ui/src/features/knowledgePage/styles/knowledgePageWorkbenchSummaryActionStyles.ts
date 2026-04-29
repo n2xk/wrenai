@@ -11,7 +11,7 @@ export const SummaryActions = styled.div`
 export const SummaryIconAction = styled.button<{ $primary?: boolean }>`
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) =>
       props.$primary ? 'rgba(91, 75, 219, 0.18)' : 'rgba(15, 23, 42, 0.08)'};

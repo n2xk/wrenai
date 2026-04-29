@@ -31,7 +31,7 @@ const StyledSkeleton = styled(Skeleton)`
 const ResultActionButton = styled(Button)`
   && {
     height: 32px;
-    border-radius: 10px;
+    border-radius: var(--nova-radius-control);
     padding-inline: 10px;
     font-weight: 500;
   }
