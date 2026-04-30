@@ -54,6 +54,8 @@ class BusinessResult:
     content: str | None = None
     error: str | None = None
     query_id: str | None = None
+    raw_payload: dict[str, Any] | None = None
+    generated_sql: str | None = None
     automated_verdict: str = "pass"
     automated_notes: list[str] | None = None
 
@@ -108,6 +110,12 @@ class BusinessResult:
     @property
     def content_text(self) -> str:
         return self.content or ""
+
+    @property
+    def decision_reason(self) -> str | None:
+        return self.template_decision.get(
+            "decision_reason"
+        ) or self.template_decision.get("decisionReason")
 
 
 def load_cases(csv_path: Path) -> list[BusinessCase]:
@@ -235,6 +243,8 @@ def run_case(
             if isinstance(payload.get("error"), dict)
             else payload.get("error"),
             query_id=query_id,
+            raw_payload=payload,
+            generated_sql=extract_result_sql(payload),
         )
     except Exception as exc:  # noqa: BLE001 - diagnostics script captures all cases
         result = BusinessResult(
@@ -276,6 +286,36 @@ def _contains_any(text: str, values: list[str]) -> bool:
     return any(value in text for value in values)
 
 
+def _iter_payload_values(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
+def extract_result_sql(payload: dict[str, Any]) -> str | None:
+    """Best-effort SQL extraction from ask result payloads.
+
+    Different ask paths expose SQL either under `response`, `responses`,
+    `result`, or a direct `sql` field. The route runner keeps this tolerant so
+    YAML assertions can start checking SQL shape without coupling to one UI
+    response envelope.
+    """
+
+    candidates: list[Any] = [payload]
+    for key in ("response", "responses", "result", "results", "data"):
+        candidates.extend(_iter_payload_values(payload.get(key)))
+
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        sql = candidate.get("sql")
+        if isinstance(sql, str) and sql.strip():
+            return sql.strip()
+    return None
+
+
 def evaluate_structured_assertion(
     result: BusinessResult,
     assertion: dict[str, Any] | None,
@@ -287,6 +327,33 @@ def evaluate_structured_assertion(
     expected_route = assertion.get("expected_route")
     if expected_route and result.route != expected_route:
         notes.append(f"route={result.route}, expected_route={expected_route}")
+
+    expected_ask_type = assertion.get("expected_ask_type")
+    if expected_ask_type and result.ask_type != expected_ask_type:
+        notes.append(
+            f"ask_type={result.ask_type}, expected_ask_type={expected_ask_type}"
+        )
+
+    expected_sql_source = assertion.get("expected_sql_source")
+    if expected_sql_source and result.sql_source != expected_sql_source:
+        notes.append(
+            f"sql_source={result.sql_source}, expected_sql_source={expected_sql_source}"
+        )
+
+    expected_template_mode = assertion.get("expected_template_mode")
+    if expected_template_mode and result.mode != expected_template_mode:
+        notes.append(
+            f"mode={result.mode}, expected_template_mode={expected_template_mode}"
+        )
+
+    expected_fallback_reason = assertion.get("expected_fallback_reason")
+    if expected_fallback_reason and result.fallback_reason != expected_fallback_reason:
+        notes.append(
+            "fallback_reason={actual}, expected_fallback_reason={expected}".format(
+                actual=result.fallback_reason,
+                expected=expected_fallback_reason,
+            )
+        )
 
     forbidden_templates = {
         str(value) for value in assertion.get("forbidden_templates") or []
@@ -302,6 +369,20 @@ def evaluate_structured_assertion(
 
     if assertion.get("forbid_hard_template") and result.hard_template_sql_applied:
         notes.append("结构化断言禁止硬套模板，但实际已硬套")
+
+    required_missing_parameters = {
+        str(value) for value in assertion.get("required_missing_parameters") or []
+    }
+    missing_parameters = {str(value) for value in result.missing_parameters}
+    missing_slots = {
+        str(value) for value in result.semantic_plan.get("missing_slots") or []
+    }
+    missing_slots.update(
+        str(value) for value in result.clarification_state.get("pending_slots") or []
+    )
+    missing_all = missing_parameters | missing_slots
+    for value in sorted(required_missing_parameters - missing_all):
+        notes.append(f"missing_parameters 缺少 {value}")
 
     if "expected_clarification" in assertion:
         expected = bool(assertion.get("expected_clarification"))
@@ -325,6 +406,18 @@ def evaluate_structured_assertion(
     for value in assertion.get("required_content") or []:
         if str(value) not in result.content_text:
             notes.append(f"content 缺少 {value}")
+    for value in assertion.get("forbidden_content") or []:
+        if str(value) in result.content_text:
+            notes.append(f"content 不应包含 {value}")
+
+    for value in assertion.get("expected_sql_contains") or []:
+        if not result.generated_sql or str(value) not in result.generated_sql:
+            notes.append(f"SQL 缺少 {value}")
+    for value in assertion.get("forbid_sql_contains") or []:
+        if result.generated_sql and str(value) in result.generated_sql:
+            notes.append(f"SQL 不应包含 {value}")
+    if assertion.get("require_sql") and not result.generated_sql:
+        notes.append("预期返回 SQL，但未能从 payload 中提取")
 
     diagnostics_text = json.dumps(
         {
@@ -415,11 +508,21 @@ def evaluate_result(
     if notes:
         return "fail", notes
 
-    if any(
-        marker in result.case.pass_criteria
-        for marker in ["数值", "对账", "图表", "保存", "诊断页面"]
-    ):
-        return "needs_manual", ["该用例仍需 UI/数值/诊断页面人工或端到端验证"]
+    manual_markers = {
+        "数值": "needs_numeric",
+        "对账": "needs_numeric",
+        "图表": "needs_ui",
+        "保存": "needs_artifactization",
+        "导出": "needs_artifactization",
+        "诊断页面": "needs_diagnostics_page",
+    }
+    manual_reasons = [
+        reason
+        for marker, reason in manual_markers.items()
+        if marker in result.case.pass_criteria
+    ]
+    if manual_reasons:
+        return "needs_manual", sorted(set(manual_reasons))
 
     return "pass", []
 

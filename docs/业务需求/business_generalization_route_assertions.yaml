@@ -10,10 +10,47 @@
 # docs/业务需求/问数回归测试计划.md 中做全量端到端回归。
 
 cases:
+  - case_id: OQ01
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
+    forbidden_templates:
+      - T01
+    diagnostics_must_include:
+      - template_guard_plain_sql_requested
+
+  - case_id: OQ06
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
+    forbidden_templates:
+      - T01
+
+  - case_id: OQ08
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
+    forbidden_templates:
+      - T03
+      - T08
+
+  - case_id: PX01
+    expected_route: template_answer
+    expected_template_mode: anchored_template
+
+  - case_id: PX10
+    expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
+
+  - case_id: PX11
+    expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
+
   - case_id: LING01
     expected_route: clarification_required
     expected_clarification: true
     forbid_hard_template: true
+    required_missing_parameters:
+      - tenant_plat_id
     required_content:
       - 租户平台
     diagnostics_must_include:
@@ -24,15 +61,43 @@ cases:
     diagnostics_must_include:
       - blocked_missing_external_data
 
+  - case_id: LING07
+    expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
+
+  - case_id: LING08
+    expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
+
   - case_id: LING10
     expected_route: clarification_required
     expected_clarification: true
     forbid_hard_template: true
 
   - case_id: ROUTE01
-    expected_route: clarification_required
-    expected_clarification: true
+    expected_route: template_answer
+    expected_template_mode: anchored_template
+
+  - case_id: ROUTE02
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
 
   - case_id: ROUTE03
     expected_route: clarification_required
     expected_clarification: true
+
+  - case_id: ROUTE04
+    expected_external_blocking: true
+
+  - case_id: ROUTE06
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
+    forbidden_templates:
+      - T01
+
+  - case_id: ROUTE11
+    diagnostics_must_include:
+      - semantic_plan
+      - template_decision
