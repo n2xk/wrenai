@@ -1,0 +1,38 @@
+# 业务泛化路由结构化断言种子
+#
+# 用法：
+#   python verify_business_generalization_regression.py \
+#     --mdl-hash <deployHash> \
+#     --assertions-yaml business_generalization_route_assertions.yaml \
+#     --strict
+#
+# 该文件只覆盖可通过 /v1/asks 自动判断的路由契约；数值、图表、保存等仍在
+# docs/业务需求/问数回归测试计划.md 中做全量端到端回归。
+
+cases:
+  - case_id: LING01
+    expected_route: clarification_required
+    expected_clarification: true
+    forbid_hard_template: true
+    required_content:
+      - 租户平台
+    diagnostics_must_include:
+      - tenant_plat_id
+
+  - case_id: LING05
+    expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
+
+  - case_id: LING10
+    expected_route: clarification_required
+    expected_clarification: true
+    forbid_hard_template: true
+
+  - case_id: ROUTE01
+    expected_route: clarification_required
+    expected_clarification: true
+
+  - case_id: ROUTE03
+    expected_route: clarification_required
+    expected_clarification: true

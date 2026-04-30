@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -49,6 +50,7 @@ class BusinessResult:
     ask_type: str | None
     template_decision: dict[str, Any]
     semantic_plan: dict[str, Any]
+    clarification_state: dict[str, Any]
     content: str | None = None
     error: str | None = None
     query_id: str | None = None
@@ -79,6 +81,13 @@ class BusinessResult:
         return str(value) if value is not None else None
 
     @property
+    def missing_parameters(self) -> list[Any]:
+        value = self.template_decision.get(
+            "missing_parameters"
+        ) or self.template_decision.get("missingParameters")
+        return value if isinstance(value, list) else []
+
+    @property
     def route(self) -> str | None:
         decision = self.semantic_plan.get("decision") or {}
         return decision.get("route")
@@ -87,6 +96,13 @@ class BusinessResult:
     def hard_template_applied(self) -> bool:
         return self.mode in HARD_TEMPLATE_MODES or self.sql_source in (
             HARD_TEMPLATE_SQL_SOURCES
+        )
+
+    @property
+    def hard_template_sql_applied(self) -> bool:
+        return (
+            self.sql_source in HARD_TEMPLATE_SQL_SOURCES
+            and len(self.missing_parameters) == 0
         )
 
     @property
@@ -112,7 +128,86 @@ def load_cases(csv_path: Path) -> list[BusinessCase]:
         ]
 
 
-def run_case(args: argparse.Namespace, case: BusinessCase) -> BusinessResult:
+def _parse_assertion_scalar(value: str) -> Any:
+    value = value.strip()
+    if value in {"", "null", "None", "~"}:
+        return None
+    if value in {"true", "True"}:
+        return True
+    if value in {"false", "False"}:
+        return False
+    if (
+        (value.startswith('"') and value.endswith('"'))
+        or (value.startswith("'") and value.endswith("'"))
+    ):
+        return value[1:-1]
+    return value
+
+
+def _parse_minimal_yaml_cases(text: str) -> list[dict[str, Any]]:
+    """Parse the small YAML subset used by docs assertion seed files."""
+
+    cases: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    current_list_key: str | None = None
+    for raw_line in text.splitlines():
+        stripped = raw_line.split("#", 1)[0].strip()
+        if not stripped or stripped == "cases:":
+            continue
+        if stripped.startswith("- "):
+            item = stripped[2:].strip()
+            if ":" in item:
+                key, value = item.split(":", 1)
+                if current is not None:
+                    cases.append(current)
+                current = {key.strip(): _parse_assertion_scalar(value)}
+                current_list_key = None
+            elif current is not None and current_list_key:
+                current.setdefault(current_list_key, []).append(
+                    _parse_assertion_scalar(item)
+                )
+            continue
+        if current is not None and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            key = key.strip()
+            value = value.strip()
+            if value:
+                current[key] = _parse_assertion_scalar(value)
+                current_list_key = None
+            else:
+                current[key] = []
+                current_list_key = key
+    if current is not None:
+        cases.append(current)
+    return cases
+
+
+def load_structured_assertions(path: Path | None) -> dict[str, dict[str, Any]]:
+    if not path:
+        return {}
+
+    text = path.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(text)
+        raw_cases = payload.get("cases") if isinstance(payload, dict) else payload
+    except json.JSONDecodeError:
+        raw_cases = _parse_minimal_yaml_cases(text)
+
+    assertions: dict[str, dict[str, Any]] = {}
+    for raw_case in raw_cases or []:
+        if not isinstance(raw_case, dict):
+            continue
+        case_id = raw_case.get("case_id")
+        if case_id:
+            assertions[str(case_id)] = raw_case
+    return assertions
+
+
+def run_case(
+    args: argparse.Namespace,
+    case: BusinessCase,
+    assertions: dict[str, dict[str, Any]],
+) -> BusinessResult:
     query_id: str | None = None
     try:
         query_id = post_business_ask(args=args, case=case)
@@ -132,6 +227,9 @@ def run_case(args: argparse.Namespace, case: BusinessCase) -> BusinessResult:
             semantic_plan=payload.get("semantic_plan")
             or payload.get("semanticPlan")
             or {},
+            clarification_state=payload.get("clarification_state")
+            or payload.get("clarificationState")
+            or {},
             content=payload.get("content"),
             error=(payload.get("error") or {}).get("message")
             if isinstance(payload.get("error"), dict)
@@ -145,11 +243,15 @@ def run_case(args: argparse.Namespace, case: BusinessCase) -> BusinessResult:
             ask_type=None,
             template_decision={},
             semantic_plan={},
+            clarification_state={},
             error=str(exc),
             query_id=query_id,
         )
 
-    result.automated_verdict, result.automated_notes = evaluate_result(result)
+    result.automated_verdict, result.automated_notes = evaluate_result(
+        result,
+        assertions.get(case.case_id),
+    )
     return result
 
 
@@ -174,7 +276,76 @@ def _contains_any(text: str, values: list[str]) -> bool:
     return any(value in text for value in values)
 
 
-def evaluate_result(result: BusinessResult) -> tuple[str, list[str]]:
+def evaluate_structured_assertion(
+    result: BusinessResult,
+    assertion: dict[str, Any] | None,
+) -> list[str]:
+    if not assertion:
+        return []
+
+    notes: list[str] = []
+    expected_route = assertion.get("expected_route")
+    if expected_route and result.route != expected_route:
+        notes.append(f"route={result.route}, expected_route={expected_route}")
+
+    forbidden_templates = {
+        str(value) for value in assertion.get("forbidden_templates") or []
+    }
+    if result.template_id and result.template_id in forbidden_templates:
+        notes.append(f"命中禁止模板 {result.template_id}")
+
+    allowed_template_id = assertion.get("allowed_template_id")
+    if allowed_template_id and result.template_id != str(allowed_template_id):
+        notes.append(
+            f"template_id={result.template_id}, allowed_template_id={allowed_template_id}"
+        )
+
+    if assertion.get("forbid_hard_template") and result.hard_template_sql_applied:
+        notes.append("结构化断言禁止硬套模板，但实际已硬套")
+
+    if "expected_clarification" in assertion:
+        expected = bool(assertion.get("expected_clarification"))
+        actual = (
+            result.route == "clarification_required"
+            or result.clarification_state.get("status") == "needs_clarification"
+        )
+        if actual != expected:
+            notes.append(
+                f"clarification={actual}, expected_clarification={expected}"
+            )
+
+    if assertion.get("expected_external_blocking"):
+        blocked = result.route == "blocked_missing_external_data" or _contains_any(
+            result.content_text,
+            ["外部", "投放金额", "PV", "UV", "不能编造", "请补充"],
+        )
+        if not blocked:
+            notes.append("预期外部数据阻断/补充，但未观察到")
+
+    for value in assertion.get("required_content") or []:
+        if str(value) not in result.content_text:
+            notes.append(f"content 缺少 {value}")
+
+    diagnostics_text = json.dumps(
+        {
+            "template_decision": result.template_decision,
+            "semantic_plan": result.semantic_plan,
+            "clarification_state": result.clarification_state,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    for value in assertion.get("diagnostics_must_include") or []:
+        if str(value) not in diagnostics_text:
+            notes.append(f"diagnostics 缺少 {value}")
+
+    return notes
+
+
+def evaluate_result(
+    result: BusinessResult,
+    assertion: dict[str, Any] | None = None,
+) -> tuple[str, list[str]]:
     notes: list[str] = []
     case_id = result.case.case_id
     text = result.content_text
@@ -238,6 +409,8 @@ def evaluate_result(result: BusinessResult) -> tuple[str, list[str]]:
 
     if result.error:
         notes.append(f"error={result.error}")
+
+    notes.extend(evaluate_structured_assertion(result, assertion))
 
     if notes:
         return "fail", notes
@@ -309,6 +482,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--case-timeout", type=float, default=180)
     parser.add_argument("--output", type=Path)
     parser.add_argument(
+        "--assertions-yaml",
+        type=Path,
+        help="可选结构化路由断言文件（支持最小 YAML 子集或 JSON）。",
+    )
+    parser.add_argument(
         "--ignore-sql-generation-reasoning",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -341,10 +519,12 @@ def main() -> int:
             print(f"未知 case id: {', '.join(sorted(missing))}", file=sys.stderr)
             return 2
 
+    assertions = load_structured_assertions(args.assertions_yaml)
+
     results: list[BusinessResult] = []
     for case in cases:
         print(f"[business] {case.case_id} {case.question}", flush=True)
-        result = run_case(args, case)
+        result = run_case(args, case, assertions)
         results.append(result)
         print(
             "  -> verdict={verdict} status={status} type={ask_type} route={route} "
@@ -356,8 +536,7 @@ def main() -> int:
                 mode=result.mode or "-",
                 template_id=result.template_id or "-",
                 fallback_reason=result.fallback_reason or "-",
-            )
-            ,
+            ),
             flush=True,
         )
         if args.output:
