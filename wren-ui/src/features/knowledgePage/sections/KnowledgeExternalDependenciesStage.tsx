@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
+  Collapse,
   Drawer,
   Form,
   Input,
@@ -438,16 +439,6 @@ manual_upload
 user_input`}
             />
           </Form.Item>
-          <Form.Item label="生命周期" name="lifecycle">
-            <Select
-              disabled={isKnowledgeMutationDisabled}
-              options={[
-                { label: '每次问数 per_question', value: 'per_question' },
-                { label: '会话内 session', value: 'session' },
-                { label: '知识库内 knowledge_base', value: 'knowledge_base' },
-              ]}
-            />
-          </Form.Item>
           <Form.Item label="所需粒度" name="requiredGrainText">
             <Input.TextArea
               disabled={isKnowledgeMutationDisabled}
@@ -481,47 +472,85 @@ ROI 需要投放金额
 不涉及成本的基础汇总`}
             />
           </Form.Item>
-          <Form.Item label="依赖业务概念 ID" name="requiredByTermsText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="roi"
-            />
-          </Form.Item>
-          <Form.Item label="依赖 SQL 模板 ID" name="requiredByTemplatesText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="T05"
-            />
-          </Form.Item>
-          <Form.Item label="关联分析规则 ID" name="relatedRulesText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="R13"
-            />
-          </Form.Item>
           <Form.Item label="缺失时追问话术" name="askUserPrompt">
             <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={3} />
           </Form.Item>
-          <Form.Item label="validation JSON" name="validationJson">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={5}
-              placeholder={'{\n  "value_type": "number",\n  "min": 0\n}'}
-            />
-          </Form.Item>
-          <Form.Item label="状态" name="status">
-            <Select
-              disabled={isKnowledgeMutationDisabled}
-              options={[
-                { label: 'active', value: 'active' },
-                { label: 'draft', value: 'draft' },
-                { label: 'deprecated', value: 'deprecated' },
-              ]}
-            />
-          </Form.Item>
+          <Collapse
+            ghost
+            size="small"
+            items={[
+              {
+                key: 'advanced',
+                label: '高级治理字段（可选）',
+                children: (
+                  <>
+                    <Form.Item label="生命周期" name="lifecycle">
+                      <Select
+                        disabled={isKnowledgeMutationDisabled}
+                        options={[
+                          {
+                            label: '每次问数 per_question',
+                            value: 'per_question',
+                          },
+                          { label: '会话内 session', value: 'session' },
+                          {
+                            label: '知识库内 knowledge_base',
+                            value: 'knowledge_base',
+                          },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="依赖业务概念 ID"
+                      name="requiredByTermsText"
+                    >
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="roi"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="依赖 SQL 模板 ID"
+                      name="requiredByTemplatesText"
+                    >
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="T05"
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联分析规则 ID" name="relatedRulesText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="R13"
+                      />
+                    </Form.Item>
+                    <Form.Item label="validation JSON" name="validationJson">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={5}
+                        placeholder={
+                          '{\n  "value_type": "number",\n  "min": 0\n}'
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item label="状态" name="status">
+                      <Select
+                        disabled={isKnowledgeMutationDisabled}
+                        options={[
+                          { label: 'active', value: 'active' },
+                          { label: 'draft', value: 'draft' },
+                          { label: 'deprecated', value: 'deprecated' },
+                        ]}
+                      />
+                    </Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Drawer>
     </WorkbenchSectionPanel>

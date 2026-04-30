@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
+  Collapse,
   Drawer,
   Form,
   Input,
@@ -428,49 +429,78 @@ export default function KnowledgeBusinessTermsStage({
 tenant_plat_id`}
             />
           </Form.Item>
-          <Form.Item label="规范表达式" name="canonicalExpression">
-            <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={3} />
-          </Form.Item>
-          <Form.Item label="来源表" name="sourceTablesText">
-            <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={2} />
-          </Form.Item>
-          <Form.Item label="来源字段" name="sourceFieldsText">
-            <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={2} />
-          </Form.Item>
-          <Form.Item label="关联分析规则 ID" name="relatedRulesText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="R02"
-            />
-          </Form.Item>
-          <Form.Item label="关联 SQL 模板 ID" name="relatedTemplatesText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="T03"
-            />
-          </Form.Item>
-          <Form.Item label="业务特征" name="featuresText">
-            <Input.TextArea
-              disabled={isKnowledgeMutationDisabled}
-              rows={2}
-              placeholder="cohort"
-            />
-          </Form.Item>
-          <Form.Item label="易混淆概念" name="conflictTermsText">
-            <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={2} />
-          </Form.Item>
-          <Form.Item label="状态" name="status">
-            <Select
-              disabled={isKnowledgeMutationDisabled}
-              options={[
-                { label: 'active', value: 'active' },
-                { label: 'draft', value: 'draft' },
-                { label: 'deprecated', value: 'deprecated' },
-              ]}
-            />
-          </Form.Item>
+          <Collapse
+            ghost
+            size="small"
+            items={[
+              {
+                key: 'advanced',
+                label: '高级治理字段（可选）',
+                children: (
+                  <>
+                    <Form.Item label="规范表达式" name="canonicalExpression">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={3}
+                      />
+                    </Form.Item>
+                    <Form.Item label="来源表" name="sourceTablesText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                      />
+                    </Form.Item>
+                    <Form.Item label="来源字段" name="sourceFieldsText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                      />
+                    </Form.Item>
+                    <Form.Item label="关联分析规则 ID" name="relatedRulesText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="R02"
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="关联 SQL 模板 ID"
+                      name="relatedTemplatesText"
+                    >
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="T03"
+                      />
+                    </Form.Item>
+                    <Form.Item label="业务特征" name="featuresText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                        placeholder="cohort"
+                      />
+                    </Form.Item>
+                    <Form.Item label="易混淆概念" name="conflictTermsText">
+                      <Input.TextArea
+                        disabled={isKnowledgeMutationDisabled}
+                        rows={2}
+                      />
+                    </Form.Item>
+                    <Form.Item label="状态" name="status">
+                      <Select
+                        disabled={isKnowledgeMutationDisabled}
+                        options={[
+                          { label: 'active', value: 'active' },
+                          { label: 'draft', value: 'draft' },
+                          { label: 'deprecated', value: 'deprecated' },
+                        ]}
+                      />
+                    </Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Drawer>
     </WorkbenchSectionPanel>
