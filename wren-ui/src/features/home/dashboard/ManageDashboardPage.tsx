@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [selectedDashboardItemId, setSelectedDashboardItemId] = useState<
     number | null
   >(null);
+  const [dashboardRailCollapsed, setDashboardRailCollapsed] = useState(false);
   const [createDashboardOpen, setCreateDashboardOpen] = useState(false);
   const [createDashboardName, setCreateDashboardName] = useState('');
   const [renameDashboardOpen, setRenameDashboardOpen] = useState(false);
@@ -343,7 +344,7 @@ export default function Dashboard() {
     [dashboardItems],
   );
 
-  const onDeleteDashboardItemFromRail = useCallback(
+  const onDeleteDashboardItemFromOutline = useCallback(
     (itemId: number) => {
       const targetItem = dashboardItems.find((item) => item.id === itemId);
       appModal.confirm({
@@ -387,8 +388,7 @@ export default function Dashboard() {
     return (
       <DirectShellPageFrame
         activeNav="dashboard"
-        flushBottomPadding
-        mainPaddingTop="8px"
+        mainPadding="10px 16px 12px 10px"
         stretchContent
       >
         <LoadingWrapper loading>
@@ -401,39 +401,36 @@ export default function Dashboard() {
   return (
     <DirectShellPageFrame
       activeNav="dashboard"
-      flushBottomPadding
-      mainPaddingTop="8px"
+      mainPadding="10px 16px 12px 10px"
       stretchContent
     >
       <LoadingWrapper loading={loading}>
-        <DashboardWorkbench>
+        <DashboardWorkbench $railCollapsed={dashboardRailCollapsed}>
           <DashboardWorkbenchRail
             activeDashboardId={activeDashboardId}
             canShowCacheSettings={canShowCacheSettings}
+            collapsed={dashboardRailCollapsed}
             dashboards={visibleDashboards}
             dashboardMutationTargetId={dashboardMutationTargetId}
-            filteredDashboardSummaryItems={dashboardSummaryItems}
-            hasDashboardSummaryItems={dashboardSummaryItems.length > 0}
             isDashboardReadonly={isDashboardReadonly}
             onCacheSettings={(dashboardId) =>
               void openCacheSettings(dashboardId)
             }
             onCreateDashboard={() => setCreateDashboardOpen(true)}
             onDeleteDashboard={onDeleteDashboard}
-            onDeleteItem={onDeleteDashboardItemFromRail}
             onRefreshDashboard={(dashboardId) =>
               void refreshDashboard(dashboardId)
             }
             onRenameDashboard={onOpenRenameDashboard}
-            onRenameItem={onOpenRenameDashboardItem}
             onSelectDashboard={(dashboardId) => {
               void replaceDashboardRoute(dashboardId);
             }}
-            onSelectItem={onSelectItem}
             onSetDefaultDashboard={(dashboardId) => {
               void submitSetDefaultDashboard(dashboardId);
             }}
-            selectedDashboardItem={selectedDashboardItem}
+            onToggleCollapsed={() =>
+              setDashboardRailCollapsed((value) => !value)
+            }
           />
 
           <DashboardWorkbenchStage
@@ -451,20 +448,26 @@ export default function Dashboard() {
             }
             dashboardGridRef={dashboardGridRef}
             dashboardItems={dashboardItems}
+            dashboardSummaryItems={dashboardSummaryItems}
             isDashboardReadonly={isDashboardReadonly}
             isSupportCached={isSupportCached}
             nextScheduleTime={visibleDashboardDetail?.nextScheduledAt}
             onCacheSettings={openCacheSettings}
-            onDeleteItem={onDelete}
+            onDeleteItem={async (itemId) => {
+              onDeleteDashboardItemFromOutline(itemId);
+            }}
             onGoToThread={goToSourceThread}
             onItemUpdated={onDashboardItemUpdated}
+            onRenameItem={onOpenRenameDashboardItem}
             onRefreshAll={() => {
               dashboardGridRef.current?.onRefreshAll();
             }}
+            onSelectItem={onSelectItem}
             onSubmitCacheSettings={submitCacheSettings}
             onUpdateChange={onUpdateChange as (layouts: any[]) => Promise<void>}
             readOnlySchedule={visibleDashboardDetail?.schedule as Schedule}
             runtimeScopeSelector={activeDashboardRuntimeSelector}
+            selectedDashboardItemId={selectedDashboardItem?.id ?? null}
           />
         </DashboardWorkbench>
       </LoadingWrapper>
@@ -516,7 +519,7 @@ export default function Dashboard() {
       />
       <DashboardCreateModal
         confirmLoading={dashboardItemMutationTargetId === renameDashboardItemId}
-        description="更新当前看板中已固定图表的名称，不会影响来源问数结果。"
+        description="更新当前看板中图表卡片的名称，不会影响来源问数结果。"
         inputPlaceholder="请输入新的图表名称"
         isDashboardReadonly={isDashboardReadonly}
         okText="保存名称"

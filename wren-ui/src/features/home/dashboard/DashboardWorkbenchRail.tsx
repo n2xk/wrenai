@@ -2,6 +2,8 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -9,26 +11,25 @@ import {
 } from '@ant-design/icons';
 import type { KeyboardEvent } from 'react';
 import {
-  Divider,
+  Button,
   Dropdown,
   Empty,
   Tag,
+  Tooltip,
   Typography,
   type MenuProps,
 } from 'antd';
+import styled from 'styled-components';
 
-import type { DashboardGridItem } from '@/components/pages/home/dashboardGrid';
 import { resolveDashboardDisplayName } from '@/utils/dashboardRest';
 
 import {
   DashboardRail,
   DashboardRailCard,
   DashboardRailCreateButton,
-  DashboardRailInlineMeta,
   DashboardRailItem,
   DashboardRailItemBody,
   DashboardRailItemMenuButton,
-  DashboardRailItemRow,
   DashboardRailList,
   DashboardRailSection,
   DashboardRailSectionCount,
@@ -37,9 +38,44 @@ import {
   DashboardRailTitle,
 } from './manageDashboardPageStyles';
 
+const DashboardRailCollapseButton = styled(Button)`
+  &.ant-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    color: var(--nova-text-secondary);
+  }
+`;
+
+const DashboardRailHeaderActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const CollapsedDashboardRailCard = styled(DashboardRailCard)`
+  .ant-card-body {
+    align-items: center;
+    padding: 8px 6px;
+  }
+`;
+
+const CollapsedDashboardRailLabel = styled.div`
+  writing-mode: vertical-rl;
+  letter-spacing: 0.08em;
+  color: var(--nova-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+`;
+
 export const DashboardWorkbenchRail = (props: {
   activeDashboardId: number | null;
   canShowCacheSettings: boolean;
+  collapsed?: boolean;
   dashboards: Array<{
     id: number;
     isDefault?: boolean | null;
@@ -48,44 +84,31 @@ export const DashboardWorkbenchRail = (props: {
     scheduleFrequency?: string | null;
   }>;
   dashboardMutationTargetId: number | null;
-  filteredDashboardSummaryItems: Array<{
-    id: number;
-    title: string;
-    meta: string;
-  }>;
-  hasDashboardSummaryItems: boolean;
   isDashboardReadonly: boolean;
   onCacheSettings: (dashboardId?: number) => void;
   onCreateDashboard: () => void;
   onDeleteDashboard: (dashboardId: number) => void;
-  onDeleteItem: (itemId: number) => void;
   onRefreshDashboard: (dashboardId?: number) => void;
   onRenameDashboard: (dashboardId: number) => void;
-  onRenameItem: (itemId: number) => void;
   onSelectDashboard: (dashboardId: number) => void;
-  onSelectItem: (itemId: number) => void;
   onSetDefaultDashboard: (dashboardId: number) => void;
-  selectedDashboardItem: DashboardGridItem | null;
+  onToggleCollapsed: () => void;
 }) => {
   const {
     activeDashboardId,
     canShowCacheSettings,
+    collapsed = false,
     dashboards,
     dashboardMutationTargetId,
-    filteredDashboardSummaryItems,
-    hasDashboardSummaryItems,
     isDashboardReadonly,
     onCacheSettings,
     onCreateDashboard,
     onDeleteDashboard,
-    onDeleteItem,
     onRefreshDashboard,
     onRenameDashboard,
-    onRenameItem,
     onSelectDashboard,
-    onSelectItem,
     onSetDefaultDashboard,
-    selectedDashboardItem,
+    onToggleCollapsed,
   } = props;
 
   const handleRailItemKeyDown =
@@ -98,15 +121,44 @@ export const DashboardWorkbenchRail = (props: {
       onActivate();
     };
 
+  if (collapsed) {
+    return (
+      <DashboardRail>
+        <CollapsedDashboardRailCard variant="borderless">
+          <Tooltip title="展开看板列表" placement="right">
+            <DashboardRailCollapseButton
+              type="text"
+              icon={<MenuUnfoldOutlined />}
+              onClick={onToggleCollapsed}
+            />
+          </Tooltip>
+          <DashboardRailSectionCount>
+            {dashboards.length}
+          </DashboardRailSectionCount>
+          <CollapsedDashboardRailLabel>看板</CollapsedDashboardRailLabel>
+        </CollapsedDashboardRailCard>
+      </DashboardRail>
+    );
+  }
+
   return (
     <DashboardRail>
       <DashboardRailCard variant="borderless">
         <DashboardRailSection>
           <DashboardRailSectionHeader>
             <DashboardRailSectionTitle>看板</DashboardRailSectionTitle>
-            <DashboardRailSectionCount>
-              {dashboards.length}
-            </DashboardRailSectionCount>
+            <DashboardRailHeaderActions>
+              <DashboardRailSectionCount>
+                {dashboards.length}
+              </DashboardRailSectionCount>
+              <Tooltip title="收起列表，扩大看板区域">
+                <DashboardRailCollapseButton
+                  type="text"
+                  icon={<MenuFoldOutlined />}
+                  onClick={onToggleCollapsed}
+                />
+              </Tooltip>
+            </DashboardRailHeaderActions>
           </DashboardRailSectionHeader>
           <DashboardRailList>
             {dashboards.length === 0 ? (
@@ -214,93 +266,6 @@ export const DashboardWorkbenchRail = (props: {
             新建看板
           </DashboardRailCreateButton>
         </DashboardRailSection>
-
-        {hasDashboardSummaryItems ? (
-          <>
-            <Divider style={{ margin: '4px 0' }} />
-            <DashboardRailSection>
-              <DashboardRailSectionHeader>
-                <DashboardRailSectionTitle>
-                  已固定图表
-                </DashboardRailSectionTitle>
-                <DashboardRailSectionCount>
-                  {filteredDashboardSummaryItems.length}
-                </DashboardRailSectionCount>
-              </DashboardRailSectionHeader>
-              <DashboardRailList>
-                {filteredDashboardSummaryItems.length === 0 ? (
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="没有匹配的图表"
-                  />
-                ) : (
-                  filteredDashboardSummaryItems.map((item) => {
-                    const itemMenuItems: NonNullable<MenuProps['items']> = [
-                      {
-                        key: 'rename',
-                        icon: <EditOutlined />,
-                        label: '重命名',
-                        disabled: isDashboardReadonly,
-                        onClick: () => onRenameItem(item.id),
-                      },
-                      {
-                        key: 'delete',
-                        icon: <DeleteOutlined />,
-                        label: '删除图表',
-                        danger: true,
-                        disabled: isDashboardReadonly,
-                        onClick: () => onDeleteItem(item.id),
-                      },
-                    ];
-
-                    return (
-                      <DashboardRailItem
-                        key={item.id}
-                        $active={selectedDashboardItem?.id === item.id}
-                        aria-pressed={selectedDashboardItem?.id === item.id}
-                        onClick={() => onSelectItem(item.id)}
-                        onKeyDown={handleRailItemKeyDown(() =>
-                          onSelectItem(item.id),
-                        )}
-                      >
-                        <DashboardRailItemBody>
-                          <DashboardRailItemRow>
-                            <DashboardRailTitle>
-                              <Typography.Text
-                                ellipsis
-                                style={{ marginBottom: 0 }}
-                              >
-                                {item.title}
-                              </Typography.Text>
-                            </DashboardRailTitle>
-                            <DashboardRailInlineMeta>
-                              {item.meta}
-                            </DashboardRailInlineMeta>
-                          </DashboardRailItemRow>
-                        </DashboardRailItemBody>
-                        <Dropdown
-                          menu={{
-                            items: itemMenuItems,
-                            onClick: ({ domEvent }) =>
-                              domEvent.stopPropagation(),
-                          }}
-                          placement="bottomRight"
-                          trigger={['click']}
-                        >
-                          <DashboardRailItemMenuButton
-                            type="text"
-                            icon={<MoreOutlined />}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                        </Dropdown>
-                      </DashboardRailItem>
-                    );
-                  })
-                )}
-              </DashboardRailList>
-            </DashboardRailSection>
-          </>
-        ) : null}
       </DashboardRailCard>
     </DashboardRail>
   );

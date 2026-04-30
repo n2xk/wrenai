@@ -172,7 +172,7 @@ export const ensureDashboardForWorkspaceScope = async (
   return dashboard;
 };
 
-const ensureDashboardForRequestedScope = async (
+export const ensureDashboardForRequestedScope = async (
   ctx: IContext,
   dashboardId: number,
 ): Promise<Dashboard> => {
@@ -196,7 +196,7 @@ export const ensureDashboardItemForScope = async (
 ): Promise<DashboardItem> => {
   const item = await ctx.dashboardService.getDashboardItem(itemId);
   try {
-    await ensureDashboardForWorkspaceScope(ctx, item.dashboardId);
+    await ensureDashboardForRequestedScope(ctx, item.dashboardId);
   } catch (_error) {
     throw new ApiError(`Dashboard item not found. id: ${itemId}`, 404);
   }

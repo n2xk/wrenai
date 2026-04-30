@@ -88,15 +88,17 @@ const buildPagedSql = ({
   sql,
   page,
   pageSize,
+  limit = pageSize,
 }: {
   sql: string;
   page: number;
   pageSize: number;
+  limit?: number;
 }) => {
   const sourceSql = stripTrailingSemicolon(sql);
   const offset = Math.max(0, page) * pageSize;
 
-  return `SELECT * FROM (${sourceSql}) AS spreadsheet_source LIMIT ${pageSize} OFFSET ${offset}`;
+  return `SELECT * FROM (${sourceSql}) AS spreadsheet_source LIMIT ${limit} OFFSET ${offset}`;
 };
 
 const buildCountSql = (sql: string) =>
@@ -139,12 +141,16 @@ export const previewSpreadsheetPage = async ({
   page,
   pageSize,
   refresh,
+  includeCount = true,
+  countOnly = false,
 }: {
   ctx: IContext;
   spreadsheet: Spreadsheet;
   page: number;
   pageSize: number;
   refresh?: boolean | null;
+  includeCount?: boolean;
+  countOnly?: boolean;
 }) => {
   await assertDashboardExecutableRuntimeScope(ctx);
   const requestRuntimeIdentity = getCurrentSpreadsheetRuntimeIdentity(ctx);
@@ -174,28 +180,59 @@ export const previewSpreadsheetPage = async ({
     ...(spreadsheet.sqlMode ? { sqlMode: spreadsheet.sqlMode } : {}),
   };
 
-  const [pageData, countData] = await Promise.all([
-    ctx.queryService.preview(
-      buildPagedSql({ sql: spreadsheet.sql, page, pageSize }),
-      {
-        ...previewOptions,
-        limit: pageSize,
-      },
-    ) as Promise<PreviewDataResponse>,
-    ctx.queryService.preview(buildCountSql(spreadsheet.sql), {
+  const loadCount = async () =>
+    (await ctx.queryService.preview(buildCountSql(spreadsheet.sql), {
       ...previewOptions,
       limit: 1,
-    }) as Promise<PreviewDataResponse>,
-  ]);
-  const rowCount = readRowCount(countData);
+    })) as PreviewDataResponse;
+
+  if (countOnly) {
+    const countData = await loadCount();
+    const rowCount = readRowCount(countData);
+
+    return {
+      columns: [],
+      data: [],
+      page,
+      pageSize,
+      rowCount,
+      totalPages: Math.max(1, Math.ceil(rowCount / pageSize)),
+      hasMore: false,
+      cacheHit: countData.cacheHit || false,
+      cacheCreatedAt: countData.cacheCreatedAt || null,
+      cacheOverrodeAt: countData.cacheOverrodeAt || null,
+      override: countData.override || false,
+    };
+  }
+
+  const pageLimit = includeCount ? pageSize : pageSize + 1;
+  const pageDataPromise = ctx.queryService.preview(
+    buildPagedSql({ sql: spreadsheet.sql, page, pageSize, limit: pageLimit }),
+    {
+      ...previewOptions,
+      limit: pageLimit,
+    },
+  ) as Promise<PreviewDataResponse>;
+  const [pageData, countData] = includeCount
+    ? await Promise.all([pageDataPromise, loadCount()])
+    : [await pageDataPromise, null];
+  const hasMore = !includeCount && (pageData.data?.length || 0) > pageSize;
+  const pageRows = hasMore ? pageData.data.slice(0, pageSize) : pageData.data;
+  const rowCount = countData
+    ? readRowCount(countData)
+    : hasMore
+      ? null
+      : page * pageSize + pageRows.length;
 
   return {
     columns: pageData.columns,
-    data: pageData.data,
+    data: pageRows,
     page,
     pageSize,
     rowCount,
-    totalPages: Math.max(1, Math.ceil(rowCount / pageSize)),
+    totalPages:
+      rowCount == null ? null : Math.max(1, Math.ceil(rowCount / pageSize)),
+    hasMore,
     cacheHit: pageData.cacheHit || false,
     cacheCreatedAt: pageData.cacheCreatedAt || null,
     cacheOverrodeAt: pageData.cacheOverrodeAt || null,

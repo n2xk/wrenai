@@ -18,6 +18,11 @@ import { MORE_ACTION } from '@/utils/enum';
 import { MoreIcon } from '@/utils/icons';
 import { getCompactTime, nextTick } from '@/utils/time';
 import {
+  abortWithReason,
+  createAbortError,
+  resolveAbortSafeErrorMessage,
+} from '@/utils/abort';
+import {
   previewDashboardItem,
   type DashboardPreviewData,
 } from '@/utils/dashboardRest';
@@ -34,6 +39,101 @@ import type {
 const Chart = dynamic(() => import('@/components/chart'), {
   ssr: false,
 });
+
+const DASHBOARD_PREVIEW_CONCURRENCY = 3;
+let activeDashboardPreviewRequests = 0;
+type DashboardPreviewQueueJob = {
+  cancel: () => void;
+  cancelled: boolean;
+  run: () => void;
+  started: boolean;
+};
+const dashboardPreviewQueue: DashboardPreviewQueueJob[] = [];
+
+const runNextDashboardPreview = () => {
+  while (
+    activeDashboardPreviewRequests < DASHBOARD_PREVIEW_CONCURRENCY &&
+    dashboardPreviewQueue.length > 0
+  ) {
+    const next = dashboardPreviewQueue.shift();
+    if (!next || next.cancelled) {
+      continue;
+    }
+    next.run();
+  }
+};
+
+const scheduleDashboardPreview = <TResult,>(
+  task: () => Promise<TResult>,
+): { cancel: () => void; promise: Promise<TResult> } => {
+  let job: DashboardPreviewQueueJob | null = null;
+  let settled = false;
+
+  const promise = new Promise<TResult>((resolve, reject) => {
+    const rejectAsCancelled = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(createAbortError('Dashboard preview request was cancelled'));
+    };
+
+    job = {
+      cancelled: false,
+      started: false,
+      cancel: () => {
+        if (!job || job.cancelled || settled) {
+          return;
+        }
+        job.cancelled = true;
+        if (!job.started) {
+          const queuedIndex = dashboardPreviewQueue.indexOf(job);
+          if (queuedIndex >= 0) {
+            dashboardPreviewQueue.splice(queuedIndex, 1);
+          }
+          rejectAsCancelled();
+        }
+      },
+      run: () => {
+        if (!job || job.cancelled) {
+          rejectAsCancelled();
+          runNextDashboardPreview();
+          return;
+        }
+        job.started = true;
+        activeDashboardPreviewRequests += 1;
+        task()
+          .then((result) => {
+            if (!settled) {
+              settled = true;
+              resolve(result);
+            }
+          })
+          .catch((error) => {
+            if (!settled) {
+              settled = true;
+              reject(error);
+            }
+          })
+          .finally(() => {
+            activeDashboardPreviewRequests = Math.max(
+              0,
+              activeDashboardPreviewRequests - 1,
+            );
+            runNextDashboardPreview();
+          });
+      },
+    };
+
+    dashboardPreviewQueue.push(job);
+    runNextDashboardPreview();
+  });
+
+  return {
+    cancel: () => job?.cancel(),
+    promise,
+  };
+};
 
 const toPreferredRenderer = (value: unknown): 'svg' | 'canvas' | undefined =>
   value === 'svg' || value === 'canvas' ? value : undefined;
@@ -89,10 +189,14 @@ export const DashboardGridPinnedItem = forwardRef(
     );
     const [previewLoading, setPreviewLoading] = useState(false);
     const previewRequestIdRef = useRef(0);
+    const previewCancelRef = useRef<(() => void) | null>(null);
 
     const loadPreview = useCallback(
       async ({ refresh = false }: { refresh?: boolean } = {}) => {
         if (readOnly) {
+          previewRequestIdRef.current += 1;
+          previewCancelRef.current?.();
+          previewCancelRef.current = null;
           setPreviewItem(null);
           setPreviewLoading(false);
           return null;
@@ -100,14 +204,29 @@ export const DashboardGridPinnedItem = forwardRef(
 
         const requestId = previewRequestIdRef.current + 1;
         previewRequestIdRef.current = requestId;
+        previewCancelRef.current?.();
+        previewCancelRef.current = null;
         setPreviewLoading(true);
 
-        try {
-          const payload = await previewDashboardItem(
+        const abortController = new AbortController();
+        const scheduledPreview = scheduleDashboardPreview(() =>
+          previewDashboardItem(
             runtimeScopeSelector,
             item.id,
             refresh ? { refresh: isSupportCached } : {},
+            { signal: abortController.signal },
+          ),
+        );
+        previewCancelRef.current = () => {
+          scheduledPreview.cancel();
+          abortWithReason(
+            abortController,
+            'Dashboard preview request was superseded',
           );
+        };
+
+        try {
+          const payload = await scheduledPreview.promise;
 
           if (previewRequestIdRef.current === requestId) {
             setPreviewItem(payload);
@@ -116,16 +235,19 @@ export const DashboardGridPinnedItem = forwardRef(
           return payload;
         } catch (error) {
           if (previewRequestIdRef.current === requestId) {
-            setPreviewItem(null);
-            message.error(
-              error instanceof Error
-                ? error.message
-                : '加载看板图表失败，请稍后重试。',
+            const errorMessage = resolveAbortSafeErrorMessage(
+              error,
+              '加载看板图表失败，请稍后重试。',
             );
+            if (errorMessage) {
+              setPreviewItem(null);
+              message.error(errorMessage);
+            }
           }
           return null;
         } finally {
           if (previewRequestIdRef.current === requestId) {
+            previewCancelRef.current = null;
             setPreviewLoading(false);
           }
         }
@@ -152,6 +274,8 @@ export const DashboardGridPinnedItem = forwardRef(
     useEffect(
       () => () => {
         previewRequestIdRef.current += 1;
+        previewCancelRef.current?.();
+        previewCancelRef.current = null;
       },
       [],
     );
@@ -159,6 +283,8 @@ export const DashboardGridPinnedItem = forwardRef(
     useEffect(() => {
       if (readOnly) {
         previewRequestIdRef.current += 1;
+        previewCancelRef.current?.();
+        previewCancelRef.current = null;
         setPreviewItem(null);
         setPreviewLoading(false);
         return;

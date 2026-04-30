@@ -32,7 +32,7 @@ import 'react-resizable/css/styles.css';
 
 const StyledDashboardGrid = styled.div`
   flex: 1;
-  padding: 18px;
+  padding: 14px 16px 18px;
   min-width: 0;
   min-height: 0;
 
@@ -82,7 +82,7 @@ const StyledDashboardGrid = styled.div`
     justify-content: space-between;
     align-items: center;
     flex: 0 0 auto;
-    padding: 14px 14px 0 16px;
+    padding: 12px 14px 0;
 
     * {
       min-width: 0;
@@ -107,14 +107,14 @@ const StyledDashboardGrid = styled.div`
     display: flex;
     flex-direction: column;
     min-height: 0;
-    padding: 12px 14px 14px;
+    padding: 10px 14px 14px;
     box-sizing: border-box;
 
     &-overflow {
       flex: 1 1 auto;
       overflow: auto;
       min-height: 0;
-      padding: 6px 10px;
+      padding: 0;
     }
 
     &-info {
@@ -261,6 +261,16 @@ const DashboardGrid = forwardRef(
       </div>
     ));
 
+    const commitLayoutChange = (nextLayouts: Layout[]) => {
+      if (readOnly) {
+        return;
+      }
+
+      onUpdateChange(
+        nextLayouts.map((layout) => getLayoutToUpdateItem(layout)),
+      );
+    };
+
     useEffect(() => {
       const container = containerRef.current;
       if (!container) {
@@ -300,14 +310,8 @@ const DashboardGrid = forwardRef(
             width={gridWidth}
             isDraggable={!readOnly}
             isResizable={!readOnly}
-            onLayoutChange={(nextLayouts: Layout[]) => {
-              if (readOnly) {
-                return;
-              }
-              onUpdateChange(
-                nextLayouts.map((layout) => getLayoutToUpdateItem(layout)),
-              );
-            }}
+            onDragStop={commitLayoutChange}
+            onResizeStop={commitLayoutChange}
           >
             {gridItems}
           </GridLayout>

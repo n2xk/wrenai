@@ -231,6 +231,7 @@ export default async function handler(
       page: 0,
       pageSize: 100,
       refresh: true,
+      includeCount: false,
     });
 
     await recordSpreadsheetReadAudit(

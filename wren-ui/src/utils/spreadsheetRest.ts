@@ -62,8 +62,9 @@ export type SpreadsheetPreviewData = {
   data: Array<Array<any>>;
   page: number;
   pageSize: number;
-  rowCount: number;
-  totalPages: number;
+  rowCount?: number | null;
+  totalPages?: number | null;
+  hasMore?: boolean;
   cacheHit?: boolean;
   cacheCreatedAt?: string | null;
   cacheOverrodeAt?: string | null;
@@ -134,6 +135,160 @@ export const buildSpreadsheetOperationUrl = (
     selector,
   );
 
+type TimedCacheEntry<TPayload> = {
+  value: TPayload;
+  updatedAt: number;
+};
+
+const SPREADSHEET_CACHE_TTL_MS = 30_000;
+const spreadsheetListCache = new Map<
+  string,
+  TimedCacheEntry<SpreadsheetListItem[]>
+>();
+const spreadsheetListRequests = new Map<
+  string,
+  Promise<SpreadsheetListItem[]>
+>();
+const spreadsheetDetailCache = new Map<
+  string,
+  TimedCacheEntry<SpreadsheetDetailData>
+>();
+const spreadsheetDetailRequests = new Map<
+  string,
+  Promise<SpreadsheetDetailData>
+>();
+
+const getFreshCachedValue = <TPayload>(
+  cache: Map<string, TimedCacheEntry<TPayload>>,
+  requestUrl: string,
+) => {
+  const cached = cache.get(requestUrl);
+  if (!cached) {
+    return null;
+  }
+
+  if (Date.now() - cached.updatedAt > SPREADSHEET_CACHE_TTL_MS) {
+    cache.delete(requestUrl);
+    return null;
+  }
+
+  return cached.value;
+};
+
+export const clearSpreadsheetRestCache = () => {
+  spreadsheetListCache.clear();
+  spreadsheetListRequests.clear();
+  spreadsheetDetailCache.clear();
+  spreadsheetDetailRequests.clear();
+};
+
+export const peekSpreadsheetListPayload = ({
+  selector,
+  requestUrl,
+}: {
+  selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
+}) => {
+  const resolvedRequestUrl = requestUrl || buildSpreadsheetListUrl(selector);
+  return getFreshCachedValue(spreadsheetListCache, resolvedRequestUrl);
+};
+
+export const primeSpreadsheetListPayload = ({
+  selector,
+  requestUrl,
+  payload,
+}: {
+  selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
+  payload: SpreadsheetListItem[];
+}) => {
+  const resolvedRequestUrl = requestUrl || buildSpreadsheetListUrl(selector);
+  spreadsheetListCache.set(resolvedRequestUrl, {
+    value: payload,
+    updatedAt: Date.now(),
+  });
+};
+
+export const peekSpreadsheetDetailPayload = ({
+  selector,
+  requestUrl,
+  spreadsheetId,
+}: {
+  selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
+  spreadsheetId?: number;
+}) => {
+  const resolvedRequestUrl =
+    requestUrl ||
+    (spreadsheetId != null
+      ? buildSpreadsheetDetailUrl(spreadsheetId, selector)
+      : null);
+  if (!resolvedRequestUrl) {
+    return null;
+  }
+
+  return getFreshCachedValue(spreadsheetDetailCache, resolvedRequestUrl);
+};
+
+export const primeSpreadsheetDetailPayload = ({
+  selector,
+  requestUrl,
+  spreadsheetId,
+  payload,
+}: {
+  selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
+  spreadsheetId?: number;
+  payload: SpreadsheetDetailData;
+}) => {
+  const resolvedRequestUrl =
+    requestUrl ||
+    (spreadsheetId != null
+      ? buildSpreadsheetDetailUrl(spreadsheetId, selector)
+      : null);
+  if (!resolvedRequestUrl) {
+    return;
+  }
+
+  spreadsheetDetailCache.set(resolvedRequestUrl, {
+    value: payload,
+    updatedAt: Date.now(),
+  });
+};
+
+const upsertSpreadsheetListItem = (
+  selector: ClientRuntimeScopeSelector,
+  spreadsheet: SpreadsheetListItem,
+) => {
+  const requestUrl = buildSpreadsheetListUrl(selector);
+  const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
+  if (!cached) {
+    return;
+  }
+
+  const exists = cached.some((item) => item.id === spreadsheet.id);
+  const nextPayload = exists
+    ? cached.map((item) => (item.id === spreadsheet.id ? spreadsheet : item))
+    : [spreadsheet, ...cached];
+  primeSpreadsheetListPayload({ requestUrl, payload: nextPayload });
+};
+
+const removeSpreadsheetListItem = (
+  selector: ClientRuntimeScopeSelector,
+  spreadsheetId: number,
+) => {
+  const requestUrl = buildSpreadsheetListUrl(selector);
+  const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
+  if (!cached) {
+    return;
+  }
+
+  primeSpreadsheetListPayload({
+    requestUrl,
+    payload: cached.filter((item) => item.id !== spreadsheetId),
+  });
+};
+
 export const resolveSpreadsheetRuntimeSelector = (
   spreadsheet?: Partial<SpreadsheetListItem> | null,
 ): ClientRuntimeScopeSelector => ({
@@ -149,39 +304,106 @@ export const resolveSpreadsheetRuntimeSelector = (
 
 export const loadSpreadsheetListPayload = async ({
   selector,
+  requestUrl,
   fetcher = fetch,
+  useCache = true,
 }: {
   selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
   fetcher?: typeof fetch;
+  useCache?: boolean;
 }) => {
-  const response = await fetcher(buildSpreadsheetListUrl(selector), {
+  const resolvedRequestUrl = requestUrl || buildSpreadsheetListUrl(selector);
+
+  if (useCache) {
+    const cached = getFreshCachedValue(
+      spreadsheetListCache,
+      resolvedRequestUrl,
+    );
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const pendingRequest = spreadsheetListRequests.get(resolvedRequestUrl);
+  if (pendingRequest) {
+    return pendingRequest;
+  }
+
+  const request = fetcher(resolvedRequestUrl, {
     cache: 'no-store',
-  });
-  return parseRestJsonResponse<SpreadsheetListItem[]>(
-    response,
-    '加载数据表列表失败，请稍后重试。',
-  );
+  })
+    .then((response) =>
+      parseRestJsonResponse<SpreadsheetListItem[]>(
+        response,
+        '加载数据表列表失败，请稍后重试。',
+      ),
+    )
+    .then((payload) => {
+      primeSpreadsheetListPayload({ requestUrl: resolvedRequestUrl, payload });
+      return payload;
+    })
+    .finally(() => {
+      spreadsheetListRequests.delete(resolvedRequestUrl);
+    });
+
+  spreadsheetListRequests.set(resolvedRequestUrl, request);
+  return request;
 };
 
 export const loadSpreadsheetDetailPayload = async ({
   spreadsheetId,
   selector,
+  requestUrl,
   fetcher = fetch,
+  useCache = true,
 }: {
   spreadsheetId: number;
   selector?: ClientRuntimeScopeSelector;
+  requestUrl?: string;
   fetcher?: typeof fetch;
+  useCache?: boolean;
 }) => {
-  const response = await fetcher(
-    buildSpreadsheetDetailUrl(spreadsheetId, selector),
-    {
-      cache: 'no-store',
-    },
-  );
-  return parseRestJsonResponse<SpreadsheetDetailData>(
-    response,
-    '加载数据表失败，请稍后重试。',
-  );
+  const resolvedRequestUrl =
+    requestUrl || buildSpreadsheetDetailUrl(spreadsheetId, selector);
+
+  if (useCache) {
+    const cached = getFreshCachedValue(
+      spreadsheetDetailCache,
+      resolvedRequestUrl,
+    );
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const pendingRequest = spreadsheetDetailRequests.get(resolvedRequestUrl);
+  if (pendingRequest) {
+    return pendingRequest;
+  }
+
+  const request = fetcher(resolvedRequestUrl, {
+    cache: 'no-store',
+  })
+    .then((response) =>
+      parseRestJsonResponse<SpreadsheetDetailData>(
+        response,
+        '加载数据表失败，请稍后重试。',
+      ),
+    )
+    .then((payload) => {
+      primeSpreadsheetDetailPayload({
+        requestUrl: resolvedRequestUrl,
+        payload,
+      });
+      return payload;
+    })
+    .finally(() => {
+      spreadsheetDetailRequests.delete(resolvedRequestUrl);
+    });
+
+  spreadsheetDetailRequests.set(resolvedRequestUrl, request);
+  return request;
 };
 
 export const createSpreadsheet = async (
@@ -193,10 +415,17 @@ export const createSpreadsheet = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  return parseRestJsonResponse<SpreadsheetDetailData>(
+  const payload = await parseRestJsonResponse<SpreadsheetDetailData>(
     response,
     '保存为数据表失败，请稍后重试。',
   );
+  primeSpreadsheetDetailPayload({
+    selector,
+    spreadsheetId: payload.id,
+    payload,
+  });
+  upsertSpreadsheetListItem(selector, payload);
+  return payload;
 };
 
 export const updateSpreadsheet = async (
@@ -212,10 +441,13 @@ export const updateSpreadsheet = async (
       body: JSON.stringify(data),
     },
   );
-  return parseRestJsonResponse<SpreadsheetDetailData>(
+  const payload = await parseRestJsonResponse<SpreadsheetDetailData>(
     response,
     '更新数据表失败，请稍后重试。',
   );
+  primeSpreadsheetDetailPayload({ selector, spreadsheetId, payload });
+  upsertSpreadsheetListItem(selector, payload);
+  return payload;
 };
 
 export const deleteSpreadsheet = async (
@@ -228,16 +460,28 @@ export const deleteSpreadsheet = async (
       method: 'DELETE',
     },
   );
-  return parseRestJsonResponse<{ success: boolean }>(
+  const payload = await parseRestJsonResponse<{ success: boolean }>(
     response,
     '删除数据表失败，请稍后重试。',
   );
+  spreadsheetDetailCache.delete(
+    buildSpreadsheetDetailUrl(spreadsheetId, selector),
+  );
+  removeSpreadsheetListItem(selector, spreadsheetId);
+  return payload;
 };
 
 export const previewSpreadsheet = async (
   selector: ClientRuntimeScopeSelector,
   spreadsheetId: number,
-  data: { page?: number; pageSize?: number; refresh?: boolean },
+  data: {
+    page?: number;
+    pageSize?: number;
+    refresh?: boolean;
+    includeCount?: boolean;
+    countOnly?: boolean;
+  },
+  options?: { signal?: AbortSignal },
 ) => {
   const response = await fetch(
     buildSpreadsheetPreviewUrl(spreadsheetId, selector),
@@ -245,6 +489,7 @@ export const previewSpreadsheet = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      signal: options?.signal,
     },
   );
   return parseRestJsonResponse<SpreadsheetPreviewData>(
@@ -266,10 +511,13 @@ export const updateSpreadsheetSetting = async (
       body: JSON.stringify(data),
     },
   );
-  return parseRestJsonResponse<SpreadsheetDetailData>(
+  const payload = await parseRestJsonResponse<SpreadsheetDetailData>(
     response,
     '更新数据表列设置失败，请稍后重试。',
   );
+  primeSpreadsheetDetailPayload({ selector, spreadsheetId, payload });
+  upsertSpreadsheetListItem(selector, payload);
+  return payload;
 };
 
 export const saveSpreadsheetVersion = async (
@@ -285,10 +533,13 @@ export const saveSpreadsheetVersion = async (
       body: JSON.stringify(data),
     },
   );
-  return parseRestJsonResponse<SpreadsheetDetailData>(
+  const payload = await parseRestJsonResponse<SpreadsheetDetailData>(
     response,
     '保存数据表失败，请稍后重试。',
   );
+  primeSpreadsheetDetailPayload({ selector, spreadsheetId, payload });
+  upsertSpreadsheetListItem(selector, payload);
+  return payload;
 };
 
 export type SpreadsheetAiOperationType =
@@ -327,8 +578,16 @@ export const runSpreadsheetAiOperation = async (
       body: JSON.stringify(data),
     },
   );
-  return parseRestJsonResponse<RunSpreadsheetAiOperationResponse>(
-    response,
-    '执行数据表 AI 操作失败，请稍后重试。',
-  );
+  const payload =
+    await parseRestJsonResponse<RunSpreadsheetAiOperationResponse>(
+      response,
+      '执行数据表 AI 操作失败，请稍后重试。',
+    );
+  primeSpreadsheetDetailPayload({
+    selector,
+    spreadsheetId,
+    payload: payload.spreadsheet,
+  });
+  upsertSpreadsheetListItem(selector, payload.spreadsheet);
+  return payload;
 };

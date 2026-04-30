@@ -34,6 +34,8 @@ export default async function handler(
       page,
       pageSize,
       refresh: req.body?.refresh === true,
+      includeCount: req.body?.includeCount !== false,
+      countOnly: req.body?.countOnly === true,
     });
 
     await recordSpreadsheetReadAudit(

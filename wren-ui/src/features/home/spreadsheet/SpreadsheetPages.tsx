@@ -28,6 +28,8 @@ import DeleteOutlined from '@ant-design/icons/DeleteOutlined';
 import EditOutlined from '@ant-design/icons/EditOutlined';
 import HistoryOutlined from '@ant-design/icons/HistoryOutlined';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
+import MenuFoldOutlined from '@ant-design/icons/MenuFoldOutlined';
+import MenuUnfoldOutlined from '@ant-design/icons/MenuUnfoldOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import RobotOutlined from '@ant-design/icons/RobotOutlined';
@@ -53,12 +55,15 @@ import {
   type SpreadsheetListItem,
   type SpreadsheetPreviewData,
 } from '@/utils/spreadsheetRest';
-import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import {
+  abortWithReason,
+  isAbortRequestError,
+  resolveAbortSafeErrorMessage,
+} from '@/utils/abort';
 import { appMessage, appModal } from '@/utils/antdAppBridge';
 import {
   DashboardRail,
   DashboardRailCard,
-  DashboardRailCreateButton,
   DashboardRailItem,
   DashboardRailItemBody,
   DashboardRailItemMenuButton,
@@ -84,7 +89,7 @@ const HeaderCard = styled(Card)`
   box-shadow: none;
 
   .ant-card-body {
-    padding: 12px 14px;
+    padding: 10px 12px;
   }
 `;
 
@@ -92,7 +97,7 @@ const HeaderRow = styled.div`
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 `;
 
 const TitleBlock = styled.div`
@@ -133,7 +138,7 @@ const ContentCard = styled(Card)`
     min-height: 0;
     display: flex;
     flex-direction: column;
-    padding: 8px 10px 6px;
+    padding: 8px 10px 10px;
   }
 `;
 
@@ -143,7 +148,7 @@ const ToolbarCard = styled(Card)`
   box-shadow: none;
 
   .ant-card-body {
-    padding: 10px 12px;
+    padding: 8px 10px;
   }
 `;
 
@@ -297,6 +302,18 @@ const SpreadsheetPreviewShell = styled.div`
   }
 `;
 
+const SpreadsheetWorkbenchShell = styled(DashboardWorkbench)<{
+  $railCollapsed?: boolean;
+}>`
+  grid-template-columns: ${(props) =>
+    props.$railCollapsed ? '48px minmax(0, 1fr)' : '252px minmax(0, 1fr)'};
+  transition: grid-template-columns 0.18s ease;
+
+  @media (max-width: 1080px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
 const RailCard = styled(DashboardRailCard)`
   &.ant-card {
     border-radius: var(--nova-radius-panel);
@@ -304,9 +321,37 @@ const RailCard = styled(DashboardRailCard)`
   }
 
   .ant-card-body {
-    padding: 10px;
+    padding: 12px 10px;
     gap: 8px;
   }
+`;
+
+const CollapsedRailCard = styled(RailCard)`
+  .ant-card-body {
+    align-items: center;
+    padding: 8px 6px;
+  }
+`;
+
+const RailCollapseButton = styled(Button)`
+  &.ant-btn {
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    color: var(--nova-text-secondary);
+  }
+`;
+
+const CollapsedRailLabel = styled.div`
+  writing-mode: vertical-rl;
+  letter-spacing: 0.08em;
+  color: var(--nova-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
 `;
 
 const RailItem = styled(DashboardRailItem)`
@@ -320,17 +365,6 @@ const RailItem = styled(DashboardRailItem)`
   &:hover {
     background: ${(props) =>
       props.$active ? 'rgba(111, 71, 255, 0.07)' : '#f7f8fb'};
-  }
-`;
-
-const RailRefreshButton = styled(DashboardRailCreateButton)`
-  &.ant-btn {
-    height: 30px;
-    border-style: solid;
-    border-color: rgba(111, 71, 255, 0.18);
-    background: transparent;
-    color: #6f58d8;
-    justify-content: center;
   }
 `;
 
@@ -499,6 +533,7 @@ const applyColumnSetting = (
 
 const SPREADSHEET_TABLE_SCROLL_ROW_THRESHOLD = 12;
 const SPREADSHEET_TABLE_SCROLL_Y = 'calc(100vh - 430px)';
+const SPREADSHEET_COUNT_TIMEOUT_MS = 10_000;
 
 const resolveSpreadsheetTableScrollY = (
   previewData?: { data?: Array<Array<any>> } | null,
@@ -682,6 +717,7 @@ const useSpreadsheetRailActions = ({
 
 function SpreadsheetWorkbenchRail({
   activeSpreadsheetId,
+  collapsed,
   loading,
   mutatingSpreadsheetId,
   spreadsheets,
@@ -689,8 +725,10 @@ function SpreadsheetWorkbenchRail({
   onRefresh,
   onRenameSpreadsheet,
   onSelectSpreadsheet,
+  onToggleCollapsed,
 }: {
   activeSpreadsheetId?: number | null;
+  collapsed?: boolean;
   loading?: boolean;
   mutatingSpreadsheetId?: number | null;
   spreadsheets: SpreadsheetListItem[];
@@ -698,16 +736,55 @@ function SpreadsheetWorkbenchRail({
   onRefresh: () => void;
   onRenameSpreadsheet: (spreadsheetId: number) => void;
   onSelectSpreadsheet: (spreadsheetId: number) => void;
+  onToggleCollapsed: () => void;
 }) {
+  if (collapsed) {
+    return (
+      <DashboardRail>
+        <CollapsedRailCard variant="borderless">
+          <Tooltip title="展开数据表列表" placement="right">
+            <RailCollapseButton
+              type="text"
+              icon={<MenuUnfoldOutlined />}
+              onClick={onToggleCollapsed}
+            />
+          </Tooltip>
+          <DashboardRailSectionCount>
+            {spreadsheets.length}
+          </DashboardRailSectionCount>
+          <CollapsedRailLabel>数据表</CollapsedRailLabel>
+        </CollapsedRailCard>
+      </DashboardRail>
+    );
+  }
+
   return (
     <DashboardRail>
       <RailCard variant="borderless">
         <DashboardRailSection>
           <DashboardRailSectionHeader>
             <DashboardRailSectionTitle>数据表</DashboardRailSectionTitle>
-            <DashboardRailSectionCount>
-              {spreadsheets.length}
-            </DashboardRailSectionCount>
+            <Space size={4}>
+              <Tooltip title="刷新数据表列表">
+                <RailCollapseButton
+                  type="text"
+                  aria-label="刷新数据表列表"
+                  icon={<ReloadOutlined />}
+                  loading={loading}
+                  onClick={onRefresh}
+                />
+              </Tooltip>
+              <DashboardRailSectionCount>
+                {spreadsheets.length}
+              </DashboardRailSectionCount>
+              <Tooltip title="收起列表，扩大表格区域">
+                <RailCollapseButton
+                  type="text"
+                  icon={<MenuFoldOutlined />}
+                  onClick={onToggleCollapsed}
+                />
+              </Tooltip>
+            </Space>
           </DashboardRailSectionHeader>
           <DashboardRailList>
             {loading && spreadsheets.length === 0 ? (
@@ -798,14 +875,6 @@ function SpreadsheetWorkbenchRail({
               })
             )}
           </DashboardRailList>
-          <RailRefreshButton
-            block
-            icon={<ReloadOutlined />}
-            loading={loading}
-            onClick={onRefresh}
-          >
-            刷新
-          </RailRefreshButton>
         </DashboardRailSection>
       </RailCard>
     </DashboardRail>
@@ -815,6 +884,7 @@ function SpreadsheetWorkbenchRail({
 export function SpreadsheetListPage() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const spreadsheets = useHomeSpreadsheets();
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const spreadsheetRailActions = useSpreadsheetRailActions({
     activeSpreadsheetId: null,
     spreadsheets: spreadsheets.data.spreadsheets,
@@ -846,19 +916,20 @@ export function SpreadsheetListPage() {
   return (
     <DirectShellPageFrame
       activeNav="spreadsheet"
-      flushBottomPadding
-      mainPaddingTop="8px"
+      mainPadding="10px 16px 12px 10px"
       stretchContent
     >
-      <DashboardWorkbench>
+      <SpreadsheetWorkbenchShell $railCollapsed={railCollapsed}>
         <SpreadsheetWorkbenchRail
           activeSpreadsheetId={null}
+          collapsed={railCollapsed}
           loading={spreadsheets.loading}
           mutatingSpreadsheetId={spreadsheetRailActions.mutatingSpreadsheetId}
           spreadsheets={spreadsheets.data.spreadsheets}
           onDeleteSpreadsheet={spreadsheetRailActions.deleteSpreadsheetById}
           onRefresh={() => void spreadsheets.refetch()}
           onRenameSpreadsheet={spreadsheetRailActions.openRenameSpreadsheet}
+          onToggleCollapsed={() => setRailCollapsed((value) => !value)}
           onSelectSpreadsheet={(spreadsheetId) =>
             void runtimeScopeNavigation.push(
               `/home/spreadsheets/${spreadsheetId}`,
@@ -895,7 +966,7 @@ export function SpreadsheetListPage() {
             />
           </ContentCard>
         </SpreadsheetStage>
-      </DashboardWorkbench>
+      </SpreadsheetWorkbenchShell>
       {spreadsheetRailActions.renameModal}
     </DirectShellPageFrame>
   );
@@ -912,8 +983,11 @@ export function SpreadsheetDetailPage() {
   const [previewData, setPreviewData] = useState<SpreadsheetPreviewData | null>(
     null,
   );
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingCount, setLoadingCount] = useState(false);
+  const [countHint, setCountHint] = useState<string | null>(null);
   const [savingSetting, setSavingSetting] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
   const [runningOperation, setRunningOperation] = useState(false);
@@ -930,6 +1004,8 @@ export function SpreadsheetDetailPage() {
   const [operationInstruction, setOperationInstruction] = useState('');
   const detailRequestIdRef = useRef(0);
   const previewRequestIdRef = useRef(0);
+  const countRequestIdRef = useRef(0);
+  const countAbortRef = useRef<AbortController | null>(null);
   const spreadsheetRailActions = useSpreadsheetRailActions({
     activeSpreadsheetId: spreadsheetId,
     spreadsheets: spreadsheets.data.spreadsheets,
@@ -972,6 +1048,89 @@ export function SpreadsheetDetailPage() {
     }
   }, [runtimeScopeNavigation.workspaceSelector, spreadsheetId]);
 
+  const loadPreviewCount = useCallback(
+    async ({
+      nextPage,
+      nextPageSize,
+      refresh = false,
+    }: {
+      nextPage: number;
+      nextPageSize: number;
+      refresh?: boolean;
+    }) => {
+      if (!spreadsheetId) {
+        return null;
+      }
+
+      const requestId = countRequestIdRef.current + 1;
+      countRequestIdRef.current = requestId;
+      countAbortRef.current?.abort();
+      const abortController = new AbortController();
+      countAbortRef.current = abortController;
+      let timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        abortWithReason(
+          abortController,
+          'Spreadsheet row count request timed out',
+        );
+      }, SPREADSHEET_COUNT_TIMEOUT_MS);
+      setCountHint(null);
+      setLoadingCount(true);
+      try {
+        const payload = await previewSpreadsheet(
+          runtimeScopeNavigation.workspaceSelector,
+          spreadsheetId,
+          {
+            page: nextPage,
+            pageSize: nextPageSize,
+            refresh,
+            countOnly: true,
+          },
+          { signal: abortController.signal },
+        );
+        if (countRequestIdRef.current === requestId) {
+          setCountHint(null);
+          setPreviewData((current) => {
+            if (
+              !current ||
+              current.page !== nextPage ||
+              current.pageSize !== nextPageSize
+            ) {
+              return current;
+            }
+
+            return {
+              ...current,
+              rowCount: payload.rowCount,
+              totalPages: payload.totalPages,
+              hasMore: false,
+            };
+          });
+        }
+        return payload;
+      } catch (error) {
+        if (countRequestIdRef.current === requestId) {
+          if (timedOut) {
+            setCountHint('总行数统计较慢，已先显示当前页。');
+          } else if (!isAbortRequestError(error)) {
+            setCountHint('总行数暂不可用，已保留当前页。');
+          }
+        }
+        return null;
+      } finally {
+        window.clearTimeout(timeoutId);
+        if (countRequestIdRef.current === requestId) {
+          if (countAbortRef.current === abortController) {
+            countAbortRef.current = null;
+          }
+          setLoadingCount(false);
+        }
+      }
+    },
+    [runtimeScopeNavigation.workspaceSelector, spreadsheetId],
+  );
+
   const loadPreview = useCallback(
     async ({
       nextPage,
@@ -988,6 +1147,11 @@ export function SpreadsheetDetailPage() {
 
       const requestId = previewRequestIdRef.current + 1;
       previewRequestIdRef.current = requestId;
+      countRequestIdRef.current += 1;
+      countAbortRef.current?.abort();
+      countAbortRef.current = null;
+      setCountHint(null);
+      setLoadingCount(false);
       setLoadingPreview(true);
       try {
         const payload = await previewSpreadsheet(
@@ -997,10 +1161,18 @@ export function SpreadsheetDetailPage() {
             page: nextPage,
             pageSize: nextPageSize,
             refresh,
+            includeCount: false,
           },
         );
         if (previewRequestIdRef.current === requestId) {
           setPreviewData(payload);
+          if (payload.rowCount == null) {
+            void loadPreviewCount({
+              nextPage,
+              nextPageSize,
+              refresh,
+            });
+          }
         }
         return payload;
       } catch (error) {
@@ -1020,13 +1192,16 @@ export function SpreadsheetDetailPage() {
         }
       }
     },
-    [runtimeScopeNavigation.workspaceSelector, spreadsheetId],
+    [loadPreviewCount, runtimeScopeNavigation.workspaceSelector, spreadsheetId],
   );
 
   useEffect(
     () => () => {
       detailRequestIdRef.current += 1;
       previewRequestIdRef.current += 1;
+      countRequestIdRef.current += 1;
+      countAbortRef.current?.abort();
+      countAbortRef.current = null;
     },
     [],
   );
@@ -1034,9 +1209,14 @@ export function SpreadsheetDetailPage() {
   useEffect(() => {
     detailRequestIdRef.current += 1;
     previewRequestIdRef.current += 1;
+    countRequestIdRef.current += 1;
+    countAbortRef.current?.abort();
+    countAbortRef.current = null;
     setSpreadsheet(null);
     setPreviewData(null);
     setPage(0);
+    setLoadingCount(false);
+    setCountHint(null);
   }, [
     runtimeScopeNavigation.workspaceSelector.runtimeScopeId,
     runtimeScopeNavigation.workspaceSelector.workspaceId,
@@ -1172,6 +1352,13 @@ export function SpreadsheetDetailPage() {
       setPreviewData(result.preview);
       setPage(result.preview.page);
       setPageSize(result.preview.pageSize);
+      if (result.preview.rowCount == null) {
+        void loadPreviewCount({
+          nextPage: result.preview.page,
+          nextPageSize: result.preview.pageSize,
+          refresh: true,
+        });
+      }
       setOperationModalOpen(false);
       void spreadsheets.refetch();
       appMessage.success(
@@ -1203,12 +1390,60 @@ export function SpreadsheetDetailPage() {
     });
   };
 
+  const paginationTotal = useMemo(() => {
+    if (typeof previewData?.rowCount === 'number') {
+      return previewData.rowCount;
+    }
+
+    const previewPage = previewData?.page ?? page;
+    const previewPageSize = previewData?.pageSize ?? pageSize;
+    const loadedRows = previewData?.data?.length || 0;
+    return (
+      previewPage * previewPageSize +
+      loadedRows +
+      (previewData?.hasMore ? 1 : 0)
+    );
+  }, [
+    page,
+    pageSize,
+    previewData?.data?.length,
+    previewData?.hasMore,
+    previewData?.page,
+    previewData?.pageSize,
+    previewData?.rowCount,
+  ]);
+
+  const paginationTotalLabel = useMemo(() => {
+    if (typeof previewData?.rowCount === 'number') {
+      return `共 ${previewData.rowCount} 行`;
+    }
+
+    if (loadingCount) {
+      return `已加载当前页，正在统计总行数…`;
+    }
+
+    if (countHint) {
+      return previewData?.hasMore
+        ? `至少 ${paginationTotal - 1} 行 · ${countHint}`
+        : countHint;
+    }
+
+    return previewData?.hasMore
+      ? `至少 ${paginationTotal - 1} 行`
+      : `共 ${paginationTotal} 行`;
+  }, [
+    countHint,
+    loadingCount,
+    paginationTotal,
+    previewData?.hasMore,
+    previewData?.rowCount,
+  ]);
+
   if (!spreadsheetId) {
     return (
       <DirectShellPageFrame
         activeNav="spreadsheet"
-        flushBottomPadding
-        mainPaddingTop="8px"
+        mainPadding="10px 16px 12px 10px"
         stretchContent
       >
         <SpreadsheetEmptyStage>
@@ -1222,19 +1457,20 @@ export function SpreadsheetDetailPage() {
   return (
     <DirectShellPageFrame
       activeNav="spreadsheet"
-      flushBottomPadding
-      mainPaddingTop="8px"
+      mainPadding="10px 16px 12px 10px"
       stretchContent
     >
-      <DashboardWorkbench>
+      <SpreadsheetWorkbenchShell $railCollapsed={railCollapsed}>
         <SpreadsheetWorkbenchRail
           activeSpreadsheetId={spreadsheetId}
+          collapsed={railCollapsed}
           loading={spreadsheets.loading}
           mutatingSpreadsheetId={spreadsheetRailActions.mutatingSpreadsheetId}
           spreadsheets={spreadsheets.data.spreadsheets}
           onDeleteSpreadsheet={spreadsheetRailActions.deleteSpreadsheetById}
           onRefresh={() => void spreadsheets.refetch()}
           onRenameSpreadsheet={spreadsheetRailActions.openRenameSpreadsheet}
+          onToggleCollapsed={() => setRailCollapsed((value) => !value)}
           onSelectSpreadsheet={(nextSpreadsheetId) =>
             void runtimeScopeNavigation.push(
               `/home/spreadsheets/${nextSpreadsheetId}`,
@@ -1285,19 +1521,20 @@ export function SpreadsheetDetailPage() {
                 </MetaLine>
               </TitleBlock>
               <HeaderActions>
-                <Button
-                  icon={<ReloadOutlined />}
-                  loading={loadingPreview}
-                  onClick={() =>
-                    void loadPreview({
-                      nextPage: page,
-                      nextPageSize: pageSize,
-                      refresh: true,
-                    })
-                  }
-                >
-                  刷新
-                </Button>
+                <Tooltip title="刷新当前数据表">
+                  <Button
+                    aria-label="刷新当前数据表"
+                    icon={<ReloadOutlined />}
+                    loading={loadingPreview || loadingCount}
+                    onClick={() =>
+                      void loadPreview({
+                        nextPage: page,
+                        nextPageSize: pageSize,
+                        refresh: true,
+                      })
+                    }
+                  />
+                </Tooltip>
               </HeaderActions>
             </HeaderRow>
           </HeaderCard>
@@ -1381,9 +1618,9 @@ export function SpreadsheetDetailPage() {
               <Pagination
                 current={(previewData?.page ?? page) + 1}
                 pageSize={previewData?.pageSize ?? pageSize}
-                total={previewData?.rowCount ?? 0}
+                total={paginationTotal}
                 showSizeChanger
-                showTotal={(total) => `共 ${total} 行`}
+                showTotal={() => paginationTotalLabel}
                 onChange={onPaginationChange}
               />
             </PaginationBar>
@@ -1532,7 +1769,7 @@ export function SpreadsheetDetailPage() {
             />
           </Drawer>
         </SpreadsheetStage>
-      </DashboardWorkbench>
+      </SpreadsheetWorkbenchShell>
       {spreadsheetRailActions.renameModal}
     </DirectShellPageFrame>
   );

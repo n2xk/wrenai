@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { appMessage as message } from '@/utils/antdAppBridge';
 import useRuntimeScopeNavigation from './useRuntimeScopeNavigation';
 import {
+  buildSpreadsheetListUrl,
   loadSpreadsheetListPayload,
+  peekSpreadsheetListPayload,
   type SpreadsheetListItem,
 } from '@/utils/spreadsheetRest';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
@@ -31,11 +33,21 @@ export default function useHomeSpreadsheets(
     selectorKey: string;
     spreadsheets: SpreadsheetListItem[];
     initialized: boolean;
-  }>(() => ({
-    selectorKey,
-    spreadsheets: [],
-    initialized: false,
-  }));
+  }>(() => {
+    const cached = disabled
+      ? null
+      : peekSpreadsheetListPayload({
+          requestUrl: buildSpreadsheetListUrl(
+            runtimeScopeNavigation.workspaceSelector,
+          ),
+        });
+
+    return {
+      selectorKey,
+      spreadsheets: cached || [],
+      initialized: Boolean(cached),
+    };
+  });
   const [loading, setLoading] = useState(false);
   const spreadsheets =
     spreadsheetState.selectorKey === selectorKey
@@ -46,54 +58,73 @@ export default function useHomeSpreadsheets(
       ? spreadsheetState.initialized
       : false;
 
-  const load = useCallback(async () => {
-    if (disabled || !runtimeScopeNavigation.hasRuntimeScope) {
-      setSpreadsheetState({
-        selectorKey,
-        spreadsheets: [],
-        initialized: true,
-      });
-      return [];
-    }
+  const requestUrl = useMemo(
+    () => buildSpreadsheetListUrl(runtimeScopeNavigation.workspaceSelector),
+    [runtimeScopeNavigation.workspaceSelector],
+  );
 
-    setLoading(true);
-    try {
-      const payload = await loadSpreadsheetListPayload({
-        selector: runtimeScopeNavigation.workspaceSelector,
-      });
-      setSpreadsheetState({
-        selectorKey,
-        spreadsheets: payload,
-        initialized: true,
-      });
-      return payload;
-    } catch (error) {
-      const errorMessage = resolveAbortSafeErrorMessage(
-        error,
-        '加载数据表列表失败，请稍后重试',
-      );
-      if (errorMessage) {
-        message.error(errorMessage);
+  const load = useCallback(
+    async ({ useCache = false } = {}) => {
+      if (disabled || !runtimeScopeNavigation.hasRuntimeScope) {
+        setSpreadsheetState({
+          selectorKey,
+          spreadsheets: [],
+          initialized: true,
+        });
+        return [];
       }
-      setSpreadsheetState({
-        selectorKey,
-        spreadsheets: [],
-        initialized: true,
-      });
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    disabled,
-    runtimeScopeNavigation.hasRuntimeScope,
-    runtimeScopeNavigation.workspaceSelector,
-    selectorKey,
-  ]);
+
+      setLoading(true);
+      try {
+        const payload = await loadSpreadsheetListPayload({
+          selector: runtimeScopeNavigation.workspaceSelector,
+          requestUrl,
+          useCache,
+        });
+        setSpreadsheetState({
+          selectorKey,
+          spreadsheets: payload,
+          initialized: true,
+        });
+        return payload;
+      } catch (error) {
+        const errorMessage = resolveAbortSafeErrorMessage(
+          error,
+          '加载数据表列表失败，请稍后重试',
+        );
+        if (errorMessage) {
+          message.error(errorMessage);
+        }
+        setSpreadsheetState({
+          selectorKey,
+          spreadsheets: [],
+          initialized: true,
+        });
+        return [];
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      disabled,
+      runtimeScopeNavigation.hasRuntimeScope,
+      runtimeScopeNavigation.workspaceSelector,
+      requestUrl,
+      selectorKey,
+    ],
+  );
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const cached = disabled ? null : peekSpreadsheetListPayload({ requestUrl });
+    if (cached) {
+      setSpreadsheetState({
+        selectorKey,
+        spreadsheets: cached,
+        initialized: true,
+      });
+    }
+    void load({ useCache: true });
+  }, [disabled, load, requestUrl, selectorKey]);
 
   return useMemo(
     () => ({

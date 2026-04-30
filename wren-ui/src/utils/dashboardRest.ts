@@ -575,11 +575,13 @@ export const previewDashboardItem = async (
   selector: ClientRuntimeScopeSelector,
   itemId: number,
   data: { limit?: number; refresh?: boolean } = {},
+  options?: { signal?: AbortSignal },
 ) => {
   const response = await fetch(buildDashboardItemPreviewUrl(itemId, selector), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+    signal: options?.signal,
   });
 
   return parseRestJsonResponse<DashboardPreviewData>(

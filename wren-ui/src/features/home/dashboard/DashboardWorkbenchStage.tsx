@@ -21,6 +21,11 @@ export const DashboardWorkbenchStage = (props: {
   dashboardName?: string;
   dashboardGridRef: React.RefObject<DashboardGridHandle | null>;
   dashboardItems: DashboardGridItem[];
+  dashboardSummaryItems: Array<{
+    id: number;
+    title: string;
+    meta: string;
+  }>;
   isDashboardReadonly: boolean;
   isSupportCached: boolean;
   nextScheduleTime?: string | null;
@@ -31,17 +36,21 @@ export const DashboardWorkbenchStage = (props: {
     responseId?: number | null,
   ) => Promise<void>;
   onItemUpdated: (item: DashboardGridItem) => void;
+  onRenameItem: (id: number) => void;
   onRefreshAll: () => void;
+  onSelectItem: (id: number) => void;
   onSubmitCacheSettings: (values: any) => Promise<void>;
   onUpdateChange: (layouts: any[]) => Promise<void>;
   readOnlySchedule?: Schedule;
   runtimeScopeSelector: any;
+  selectedDashboardItemId?: number | null;
 }) => {
   const {
     cacheSettingsDrawerProps,
     dashboardName,
     dashboardGridRef,
     dashboardItems,
+    dashboardSummaryItems,
     isDashboardReadonly,
     isSupportCached,
     nextScheduleTime,
@@ -49,11 +58,14 @@ export const DashboardWorkbenchStage = (props: {
     onDeleteItem,
     onGoToThread,
     onItemUpdated,
+    onRenameItem,
     onRefreshAll,
+    onSelectItem,
     onSubmitCacheSettings,
     onUpdateChange,
     readOnlySchedule,
     runtimeScopeSelector,
+    selectedDashboardItemId,
   } = props;
 
   return (
@@ -66,9 +78,16 @@ export const DashboardWorkbenchStage = (props: {
             readOnly={isDashboardReadonly}
             schedule={readOnlySchedule}
             nextScheduleTime={nextScheduleTime ?? undefined}
+            outlineItems={dashboardSummaryItems}
+            selectedOutlineItemId={selectedDashboardItemId}
             onCacheSettings={() => {
               void onCacheSettings();
             }}
+            onDeleteOutlineItem={(itemId) => {
+              void onDeleteItem(itemId);
+            }}
+            onRenameOutlineItem={onRenameItem}
+            onSelectOutlineItem={onSelectItem}
             onRefreshAll={() => {
               onRefreshAll();
             }}

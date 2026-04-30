@@ -149,6 +149,18 @@ jest.mock('@/components/pages/home/dashboardGrid/DashboardHeader', () => ({
       'div',
       null,
       props.readOnly ? 'DashboardHeaderReadonly' : 'DashboardHeader',
+      React.createElement(
+        'span',
+        null,
+        `图表目录 ${props.outlineItems?.length || 0}`,
+      ),
+      (props.outlineItems || []).map((item: any) =>
+        React.createElement(
+          'span',
+          { key: item.id },
+          `${item.title} ${item.meta}`,
+        ),
+      ),
     );
   },
 }));
@@ -299,7 +311,7 @@ describe('home/dashboard page', () => {
     expect(markup).toContain('经营总览');
     expect(markup).toContain('销售看板');
     expect(markup).toContain('销售趋势');
-    expect(markup).toContain('已固定图表');
+    expect(markup).toContain('图表目录 1');
     expect(markup).toContain('BAR · 3×2');
     expect(markup).not.toContain('看板列表');
     expect(markup).not.toContain('图表列表');

@@ -1,18 +1,20 @@
 import { Button, Card } from 'antd';
 import styled from 'styled-components';
 
-export const DashboardWorkbench = styled.div`
+export const DashboardWorkbench = styled.div<{ $railCollapsed?: boolean }>`
   flex: 1;
   width: 100%;
   margin: 0;
   display: grid;
-  grid-template-columns: 252px minmax(0, 1fr);
+  grid-template-columns: ${(props) =>
+    props.$railCollapsed ? '48px minmax(0, 1fr)' : '252px minmax(0, 1fr)'};
   grid-template-rows: minmax(0, 1fr);
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
   align-content: stretch;
   min-height: 100%;
   height: 100%;
+  transition: grid-template-columns 0.18s ease;
 
   @media (max-width: 1080px) {
     grid-template-columns: 1fr;
@@ -51,10 +53,10 @@ export const DashboardRailCard = styled(Card)`
 
   .ant-card-body {
     flex: 1;
-    padding: 12px;
+    padding: 12px 10px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     min-height: 0;
     height: 100%;
   }
@@ -63,7 +65,7 @@ export const DashboardRailCard = styled(Card)`
 export const DashboardRailSection = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 `;
 
@@ -71,7 +73,7 @@ export const DashboardRailSectionHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 `;
 
@@ -100,7 +102,7 @@ export const DashboardRailSectionCount = styled.span`
 export const DashboardRailList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
   min-width: 0;
   overflow: auto;
 `;
