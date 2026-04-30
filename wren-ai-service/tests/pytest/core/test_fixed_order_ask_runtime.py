@@ -2,6 +2,7 @@ from src.core.fixed_order_ask_runtime import (
     build_reusable_template_sql,
     build_template_decision,
     detect_missing_external_source_requirement,
+    detect_missing_tenant_plat_id_requirement,
     filter_active_sql_samples,
     ground_template_sql_to_retrieved_tables,
     rerank_sql_samples,
@@ -132,6 +133,150 @@ def test_build_template_decision_downgrades_low_margin_business_template_conflic
     assert result["mode"] == "trusted_reference"
     assert result["fallback_reason"] == "template_conflict_low_margin"
     assert result["template_id"] == "template-bucket-1"
+
+
+def test_build_template_decision_downgrades_daily_template_for_channel_period_summary():
+    result = build_template_decision(
+        [
+            {
+                "id": "T01",
+                "question": "按天查看某渠道综合日报指标",
+                "title": "渠道日基础汇总",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :start_date, :end_date, "
+                    "biz_date FROM daily_report"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T01",
+                    "features": ["daily_summary", "channel_summary"],
+                    "resultGrain": "biz_date + channel_id",
+                },
+                "score": 0.97,
+                "status": "active",
+            }
+        ],
+        query=(
+            "对比租户平台990001下渠道990011、990012、990013、990014在"
+            "2026-04-08到2026-04-14的成功充值订单笔数和充值金额"
+        ),
+    )
+
+    assert result["template_id"] == "T01"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == (
+        "template_guard_channel_period_summary_mismatch"
+    )
+    assert result["sql_source"] == "generated"
+
+
+def test_build_template_decision_downgrades_segment_template_for_channel_period_summary():
+    result = build_template_decision(
+        [
+            {
+                "id": "T09",
+                "question": (
+                    "统计某渠道区间内 ALL、TOP3 和非 TOP3 用户的存款、投注、"
+                    "投充比和杀率"
+                ),
+                "title": "ALL、TOP3和非TOP3用户区间汇总",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :start_date, :end_date, "
+                    ":top_n, user_segment FROM topn_summary"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T09",
+                    "features": ["topn_segment", "deposit_summary"],
+                    "dimensions": ["user_segment"],
+                    "expected_grain": "user_segment",
+                },
+                "score": 0.98,
+                "status": "active",
+            }
+        ],
+        query=(
+            "对比租户平台990001下渠道990011、990012、990013、990014在"
+            "2026-04-08到2026-04-14的成功充值订单笔数和充值金额"
+        ),
+    )
+
+    assert result["template_id"] == "T09"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == (
+        "template_guard_channel_period_summary_mismatch"
+    )
+    assert result["sql_source"] == "generated"
+
+
+def test_build_template_decision_downgrades_cohort_template_for_login_without_deposit():
+    result = build_template_decision(
+        [
+            {
+                "id": "T03",
+                "question": "查询某渠道在指定时间段的首存用户名单与首存金额",
+                "title": "首存 cohort 提取",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date FROM first_deposit_cohort"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T03",
+                    "features": ["cohort", "first_deposit"],
+                    "resultGrain": "first_deposit_user",
+                },
+                "score": 0.96,
+                "status": "active",
+            }
+        ],
+        query=(
+            "找出租户平台990001渠道990011在2026-04-01到2026-04-07"
+            "登录过但没有成功充值的玩家"
+        ),
+    )
+
+    assert result["template_id"] == "T03"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == (
+        "template_guard_login_without_deposit_mismatch"
+    )
+    assert result["sql_source"] == "generated"
+
+
+def test_detect_missing_tenant_plat_id_requirement_for_channel_query():
+    result = detect_missing_tenant_plat_id_requirement(
+        "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况"
+    )
+
+    assert result is not None
+    assert result["missing_parameters"] == ["tenant_plat_id"]
+    assert "租户平台" in result["content"]
+
+
+def test_detect_missing_tenant_plat_id_requirement_uses_unique_history_context():
+    result = detect_missing_tenant_plat_id_requirement(
+        "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况",
+        histories=[
+            {
+                "question": (
+                    "统计租户平台990001下渠道990011在2026-04-01到"
+                    "2026-04-03首存cohort从D1到D7的累计收入"
+                )
+            }
+        ],
+    )
+
+    assert result is None
 
 
 def test_build_template_decision_keeps_same_family_low_margin_business_template_anchor():

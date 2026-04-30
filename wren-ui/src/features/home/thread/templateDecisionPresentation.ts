@@ -56,6 +56,7 @@ const resolveDecisionReasonText = (
 ) => {
   const fallbackReasonMap: Record<string, string> = {
     inactive_template: messages.reasons.inactiveTemplate,
+    missing_required_slot: messages.reasons.missingRequiredSlot,
     missing_template_parameters: messages.reasons.missingTemplateParameters,
     template_confidence_below_threshold:
       messages.reasons.templateConfidenceBelowThreshold,
@@ -63,6 +64,10 @@ const resolveDecisionReasonText = (
     template_core_protection_rejected_correction:
       messages.reasons.templateCoreProtectionRejectedCorrection,
     template_dry_run_failed: messages.reasons.templateDryRunFailed,
+    template_guard_channel_period_summary_mismatch:
+      messages.reasons.templateGuardChannelPeriodSummaryMismatch,
+    template_guard_login_without_deposit_mismatch:
+      messages.reasons.templateGuardLoginWithoutDepositMismatch,
     template_schema_retrieval_insufficient:
       messages.reasons.templateSchemaRetrievalInsufficient,
   };

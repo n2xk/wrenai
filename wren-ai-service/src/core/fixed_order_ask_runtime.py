@@ -191,6 +191,21 @@ MISSING_SOURCE_PROMPTS = {
 }
 
 
+def _env_flag_enabled(name: str, default: bool = True) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _template_route_guards_enabled() -> bool:
+    return _env_flag_enabled("WREN_TEMPLATE_ROUTE_GUARD_ENABLED", True)
+
+
+def _tenant_slot_guard_enabled() -> bool:
+    return _env_flag_enabled("WREN_TENANT_SLOT_GUARD_ENABLED", True)
+
+
 def _normalize_string_list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -595,6 +610,81 @@ def _iter_history_questions(histories: Sequence[Any] | None) -> list[str]:
     ]
 
 
+def _extract_tenant_plat_ids_from_text(text: Optional[str]) -> list[int]:
+    if not text:
+        return []
+
+    return _extract_integer_values(
+        [
+            r"tenant_plat_id\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
+            r"租户平台\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
+            r"平台\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
+        ],
+        text,
+    )
+
+
+def _extract_channel_ids_from_text(text: Optional[str]) -> list[int]:
+    if not text:
+        return []
+
+    return _extract_integer_values(
+        [
+            r"channel_id\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
+            r"渠道(?:ID|id)?\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
+        ],
+        text,
+    )
+
+
+def _query_requires_tenant_plat_id(query: Optional[str]) -> bool:
+    if not query or _extract_tenant_plat_ids_from_text(query):
+        return False
+    return bool(_extract_channel_ids_from_text(query))
+
+
+def _resolve_history_tenant_plat_ids(histories: Sequence[Any] | None) -> list[int]:
+    tenant_ids: list[int] = []
+    for question in _iter_history_questions(histories):
+        for tenant_id in _extract_tenant_plat_ids_from_text(question):
+            if tenant_id not in tenant_ids:
+                tenant_ids.append(tenant_id)
+    return tenant_ids
+
+
+def detect_missing_tenant_plat_id_requirement(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    if not _tenant_slot_guard_enabled() or not _query_requires_tenant_plat_id(query):
+        return None
+
+    history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
+    if len(history_tenant_ids) == 1:
+        return None
+
+    if len(history_tenant_ids) > 1:
+        content = (
+            "当前对话中出现了多个租户平台，无法唯一确定本次查询应使用哪个平台。"
+            "请补充明确的租户平台 ID，例如：租户平台990001。"
+        )
+        reasoning = "缺少唯一租户平台：历史上下文存在多个 tenant_plat_id。"
+    else:
+        content = (
+            "要继续生成 SQL，还需要确认租户平台 ID。"
+            "请补充租户平台（例如：租户平台990001），我会按该平台和当前渠道继续查询。"
+        )
+        reasoning = "缺少必填业务参数：tenant_plat_id。"
+
+    return {
+        "slot": "tenant_plat_id",
+        "missing_parameters": ["tenant_plat_id"],
+        "content": content,
+        "reasoning": reasoning,
+    }
+
+
 def _get_latest_history_sql(histories: Sequence[Any] | None) -> Optional[str]:
     if not histories:
         return None
@@ -681,6 +771,131 @@ def _sample_supports_player_level_detail(sample: Any) -> bool:
             flags=re.IGNORECASE,
         )
     )
+
+
+def _collect_sample_signature_text(sample: Any) -> str:
+    business_signature = _get_business_signature(sample)
+    signature_values: list[str] = []
+    for key in (
+        "concepts",
+        "features",
+        "metrics",
+        "dimensions",
+        "positiveCues",
+        "positive_cues",
+        "negativeCues",
+        "negative_cues",
+        "expectedGrain",
+        "expected_grain",
+        "resultGrain",
+        "result_grain",
+    ):
+        signature_values.extend(_normalize_string_list(business_signature.get(key)))
+
+    return " ".join(
+        filter(
+            None,
+            [
+                str(_get_sample_value(sample, "question", "")),
+                str(_get_sample_value(sample, "title", "")),
+                str(_get_sample_value(sample, "sql", "")),
+                _resolve_sample_result_grain(sample),
+                " ".join(signature_values),
+            ],
+        )
+    )
+
+
+def _query_requests_channel_period_recharge_summary(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    channel_ids = _extract_channel_ids_from_text(query)
+    has_channel_comparison = len(channel_ids) > 1 or bool(
+        re.search(r"对比|各渠道|按渠道|分渠道", query, flags=re.IGNORECASE)
+    )
+    has_recharge_summary_metric = bool(
+        re.search(
+            r"成功充值|充值订单|充值.*(?:笔数|笔|金额)|订单笔数|充值金额",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+    asks_daily_grain = bool(
+        re.search(r"每日|每天|按天|逐日|日级|日报|日期", query, flags=re.IGNORECASE)
+    )
+    return has_channel_comparison and has_recharge_summary_metric and not asks_daily_grain
+
+
+def _sample_has_daily_grain(sample: Any) -> bool:
+    result_grain = _resolve_sample_result_grain(sample)
+    if any(token in result_grain for token in ("biz_date", "date", "day", "日")):
+        return True
+
+    sample_text = _collect_sample_signature_text(sample)
+    return bool(
+        re.search(r"日报|每日|每天|按天|逐日|日级|日期", sample_text, flags=re.IGNORECASE)
+    )
+
+
+def _sample_has_specialized_recharge_grain(sample: Any) -> bool:
+    sample_text = _collect_sample_signature_text(sample)
+    return bool(
+        re.search(
+            (
+                r"TOP\d+|top[_\s-]?n|user[_\s-]?segment|segment_sort|"
+                r"非TOP|分层|cohort|首存|首充|首次存款|续存|复存|"
+                r"二存|三存|四存|五存|六存|金额分桶|amount[_\s-]?bucket|"
+                r"游戏类型|game[_\s-]?type|投充比|杀率|ROI|PV|UV"
+            ),
+            sample_text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _query_requests_login_without_successful_deposit(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    return bool(
+        re.search(
+            r"登录过?.*(?:没有|未|无).*成功?充值|(?:没有|未|无).*成功?充值.*登录|登录未充值|未充值玩家|无充值玩家",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _sample_supports_login_without_successful_deposit(sample: Any) -> bool:
+    sample_text = _collect_sample_signature_text(sample)
+    return bool(
+        re.search(
+            r"登录.*(?:没有|未|无).*成功?充值|(?:没有|未|无).*成功?充值.*登录|登录未充值|未充值玩家|无充值玩家|not\s+exists|anti[_\s-]?join",
+            sample_text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _resolve_template_route_guard_failure(
+    query: Optional[str], sample: Any
+) -> Optional[str]:
+    if not _template_route_guards_enabled() or not query:
+        return None
+
+    if _query_requests_channel_period_recharge_summary(query) and (
+        _sample_has_daily_grain(sample) or _sample_has_specialized_recharge_grain(sample)
+    ):
+        return "template_guard_channel_period_summary_mismatch"
+
+    if (
+        _query_requests_login_without_successful_deposit(query)
+        and not _sample_supports_login_without_successful_deposit(sample)
+    ):
+        return "template_guard_login_without_deposit_mismatch"
+
+    return None
 
 
 def _extract_relation_names(sql: Optional[str]) -> set[str]:
@@ -866,6 +1081,9 @@ def _score_sql_sample_for_query(
             score += 2.5
         else:
             score -= 3.0
+
+    if _resolve_template_route_guard_failure(query, sample):
+        score -= 6.0
 
     all_placeholders, required_placeholders = _resolve_required_template_placeholders(
         sample
@@ -1878,6 +2096,20 @@ def build_template_decision(
         )
     )
     has_min_retrieval_support = _has_min_retrieval_support(raw_score, top_adjusted_score)
+    route_guard_failure = _resolve_template_route_guard_failure(query, top_sample)
+
+    if route_guard_failure and _is_trusted_template_candidate(top_sample):
+        return _build_template_decision_payload(
+            decision_reason="reference_sql_pair_selected",
+            fallback_reason=route_guard_failure,
+            margin=margin,
+            missing_parameters=[],
+            mode="reference",
+            parameters={},
+            sample=top_sample,
+            score=confidence,
+            sql_source="generated",
+        )
 
     if _is_anchored_template_candidate(top_sample):
         if not has_min_retrieval_support or confidence < TEMPLATE_MIN_ANCHORED_CONFIDENCE:
@@ -3107,6 +3339,72 @@ class BaseFixedOrderAskRuntime:
             template_decision=state.template_decision,
         )
 
+    async def _maybe_handle_missing_slot_rule(
+        self,
+        *,
+        state: AskExecutionState,
+        histories: Sequence[AskHistoryLike],
+        trace_id: Optional[str],
+        is_followup: bool,
+        is_stopped: StopChecker,
+        set_result: ResultUpdater,
+        results: dict[str, Any],
+        orchestrator: str,
+    ) -> Optional[dict[str, Any]]:
+        missing_slot_requirement = detect_missing_tenant_plat_id_requirement(
+            state.user_query,
+            histories=histories,
+        )
+        if not missing_slot_requirement:
+            return None
+
+        missing_parameters = missing_slot_requirement.get("missing_parameters") or []
+        if state.template_decision is not None:
+            existing_missing_parameters = list(
+                state.template_decision.get("missing_parameters") or []
+            )
+            for parameter in missing_parameters:
+                if parameter not in existing_missing_parameters:
+                    existing_missing_parameters.append(parameter)
+            state.template_decision["missing_parameters"] = existing_missing_parameters
+            state.template_decision["fallback_reason"] = "missing_required_slot"
+            state.template_decision["sql_source"] = "generated"
+
+        state.intent_reasoning = missing_slot_requirement["reasoning"]
+        state.ask_path = "general"
+
+        if not is_stopped():
+            set_result(
+                status="generating",
+                type="GENERAL",
+                rephrased_question=state.rephrased_question,
+                intent_reasoning=state.intent_reasoning,
+                trace_id=trace_id,
+                is_followup=is_followup,
+                general_type="DATA_ASSISTANCE",
+                ask_path=state.ask_path,
+                template_decision=state.template_decision,
+            )
+            set_result(
+                status="finished",
+                type="GENERAL",
+                rephrased_question=state.rephrased_question,
+                intent_reasoning=state.intent_reasoning,
+                content=missing_slot_requirement["content"],
+                trace_id=trace_id,
+                is_followup=is_followup,
+                general_type="DATA_ASSISTANCE",
+                ask_path=state.ask_path,
+                template_decision=state.template_decision,
+            )
+
+        return self._attach_result_metadata(
+            self._mixed_answer_composer.compose_general(results),
+            ask_path=state.ask_path,
+            orchestrator=orchestrator,
+            template_decision=state.template_decision,
+        )
+
     async def _handle_intent_result(
         self,
         *,
@@ -3693,6 +3991,19 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     if missing_source_result is not None:
                         return missing_source_result
 
+                    missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                        state=state,
+                        histories=histories,
+                        trace_id=trace_id,
+                        is_followup=is_followup,
+                        is_stopped=is_stopped,
+                        set_result=set_result,
+                        results=results,
+                        orchestrator=orchestrator,
+                    )
+                    if missing_slot_result is not None:
+                        return missing_slot_result
+
                     if self._allow_intent_classification:
                         early_result = await self._handle_intent_result(
                             state=state,
@@ -3855,6 +4166,19 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                 )
                 if missing_source_result is not None:
                     return missing_source_result
+
+                missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                    state=state,
+                    histories=histories,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                    is_stopped=is_stopped,
+                    set_result=set_result,
+                    results=results,
+                    orchestrator=orchestrator,
+                )
+                if missing_slot_result is not None:
+                    return missing_slot_result
 
                 if self._allow_intent_classification:
                     early_result = await self._handle_intent_result(

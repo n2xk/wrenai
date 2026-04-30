@@ -128,12 +128,15 @@ export type ThreadWorkbenchMessages = {
       inactiveTemplate: string;
       missingTemplateParameters: string;
       missingExternalData: string;
+      missingRequiredSlot: string;
       noSqlPairCandidates: string;
       referenceSqlPairSelected: string;
       templateConfidenceBelowThreshold: string;
       templateConflictLowMargin: string;
       templateCoreProtectionRejectedCorrection: string;
       templateDryRunFailed: string;
+      templateGuardChannelPeriodSummaryMismatch: string;
+      templateGuardLoginWithoutDepositMismatch: string;
       templateSchemaRetrievalInsufficient: string;
       trustedReferenceSelected: string;
     };
@@ -230,6 +233,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         inactiveTemplate: '模板已停用，未直接采用',
         missingTemplateParameters: '模板必填参数不完整，已降级处理',
         missingExternalData: '当前问题依赖外部数据，已转为补充数据提示',
+        missingRequiredSlot: '缺少必填业务参数，已先返回追问提示',
         noSqlPairCandidates: '未命中 SQL 模板/参考样例',
         referenceSqlPairSelected: '已命中相关 SQL 参考样例',
         templateConfidenceBelowThreshold: '模板置信度不足，已降级为参考生成',
@@ -237,6 +241,10 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         templateCoreProtectionRejectedCorrection:
           '修正会破坏模板核心骨架，已拒绝套用',
         templateDryRunFailed: '模板直执行未通过 dry-run 校验，已降级为约束生成',
+        templateGuardChannelPeriodSummaryMismatch:
+          '当前问题要求按渠道区间汇总，不适合直接套用日级或分层等其他粒度模板',
+        templateGuardLoginWithoutDepositMismatch:
+          '当前问题是登录未充值反查，不适合直接套用充值或首存模板',
         templateSchemaRetrievalInsufficient:
           '模板缺少足够的 schema 召回支撑，未直接套用',
         trustedReferenceSelected: '已命中可信 SQL 参考',
@@ -387,6 +395,8 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
           'Required template parameters were incomplete, so the flow downgraded',
         missingExternalData:
           'The question depends on external data, so the answer asks for more data',
+        missingRequiredSlot:
+          'Required business parameters were missing, so the flow asked a clarification question first',
         noSqlPairCandidates: 'No SQL template/reference candidates matched',
         referenceSqlPairSelected: 'Matched a related SQL reference sample',
         templateConfidenceBelowThreshold:
@@ -397,6 +407,10 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
           'Rejected a correction that would alter the protected template core',
         templateDryRunFailed:
           'Direct template execution failed dry-run validation and fell back safely',
+        templateGuardChannelPeriodSummaryMismatch:
+          'The question asks for channel-period aggregation, so daily or segmented templates were not applied directly',
+        templateGuardLoginWithoutDepositMismatch:
+          'The question asks for login-without-deposit players, so deposit/cohort templates were not applied directly',
         templateSchemaRetrievalInsufficient:
           'Schema retrieval was insufficient, so the template was not applied directly',
         trustedReferenceSelected: 'Matched a trusted SQL reference',

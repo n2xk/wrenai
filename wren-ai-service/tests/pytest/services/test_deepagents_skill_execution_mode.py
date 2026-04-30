@@ -541,6 +541,57 @@ async def test_deepagents_routes_missing_external_source_questions_to_general():
 
 
 @pytest.mark.asyncio
+async def test_deepagents_routes_missing_tenant_slot_to_general_clarification():
+    pipelines = make_pipelines(
+        sql_pairs_documents=[
+            {
+                "id": "template-8",
+                "question": "统计某日/某段首存 cohort 的 2~6 存人数、率、人均金额",
+                "sql": (
+                    "SELECT :tenant_plat_id AS tenant_plat_id, "
+                    ":channel_id AS channel_id, :cohort_start_date AS start_date, "
+                    ":cohort_end_date AS end_date"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T08",
+                    "features": ["cohort", "retention"],
+                },
+                "score": 0.92,
+                "status": "active",
+            }
+        ],
+    )
+
+    result, updates = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(
+            query=(
+                "统计渠道990011在2026-04-01到2026-04-03"
+                "首充用户的二存到六存情况"
+            )
+        ),
+    )
+
+    assert pipelines["intent_classification"].run.await_count == 0
+    assert pipelines["sql_generation"].run.await_count == 0
+    assert result["metadata"]["ask_path"] == "general"
+    assert result["metadata"]["template_decision"]["fallback_reason"] == (
+        "missing_required_slot"
+    )
+    assert result["metadata"]["template_decision"]["missing_parameters"] == [
+        "tenant_plat_id"
+    ]
+    assert updates[-1]["status"] == "finished"
+    assert updates[-1]["type"] == "GENERAL"
+    assert updates[-1]["general_type"] == "DATA_ASSISTANCE"
+    assert "租户平台" in (updates[-1]["content"] or "")
+
+
+@pytest.mark.asyncio
 async def test_deepagents_historical_hit_short_circuits_schema_and_generation():
     pipelines = make_pipelines(
         historical_documents=[

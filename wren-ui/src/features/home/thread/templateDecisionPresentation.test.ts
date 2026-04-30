@@ -92,6 +92,32 @@ describe('templateDecisionPresentation', () => {
     );
   });
 
+  it('maps semantic route guard fallback reasons to localized descriptions', () => {
+    const channelSummaryPresentation = resolveTemplateDecisionPresentation(
+      {
+        fallbackReason: 'template_guard_channel_period_summary_mismatch',
+        mode: 'reference',
+        sqlSource: 'generated',
+      },
+      messages,
+    );
+    const loginWithoutDepositPresentation = resolveTemplateDecisionPresentation(
+      {
+        fallbackReason: 'template_guard_login_without_deposit_mismatch',
+        mode: 'reference',
+        sqlSource: 'generated',
+      },
+      messages,
+    );
+
+    expect(channelSummaryPresentation?.description).toContain(
+      '当前问题要求按渠道区间汇总，不适合直接套用日级或分层等其他粒度模板',
+    );
+    expect(loginWithoutDepositPresentation?.description).toContain(
+      '当前问题是登录未充值反查，不适合直接套用充值或首存模板',
+    );
+  });
+
   it('uses business-knowledge wording for GENERAL answers without implying SQL generation', () => {
     const presentation = resolveTemplateDecisionPresentation(
       {
