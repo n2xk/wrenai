@@ -297,6 +297,42 @@ def test_build_template_decision_downgrades_template_when_raw_table_requested():
     assert result["sql_source"] == "generated"
 
 
+def test_build_template_decision_downgrades_template_when_raw_order_requested():
+    result = build_template_decision(
+        [
+            {
+                "id": "T01",
+                "question": "按天查看某渠道综合日报指标",
+                "title": "渠道日基础汇总",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :start_date, :end_date, "
+                    "biz_date FROM daily_report"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T01",
+                    "features": ["daily_summary", "channel_summary"],
+                    "resultGrain": "biz_date + channel_id",
+                },
+                "score": 0.97,
+                "status": "active",
+            }
+        ],
+        query=(
+            "直接查原始提现订单，统计租户平台990001下渠道990011在"
+            "2026-04-01到2026-04-07每天成功提现金额"
+        ),
+    )
+
+    assert result["template_id"] == "T01"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == "template_guard_plain_sql_requested"
+    assert result["sql_source"] == "generated"
+
+
 def test_build_template_decision_downgrades_cohort_template_for_login_without_deposit():
     result = build_template_decision(
         [
@@ -379,6 +415,56 @@ def test_detect_missing_required_slot_requirement_keeps_metric_specific_channel_
     result = detect_missing_required_slot_requirement("这个渠道新客首充成本是多少")
 
     assert result is None
+
+
+def test_detect_missing_required_slot_requirement_clarifies_ratio_scope():
+    result = detect_missing_required_slot_requirement(
+        "查询无充值但有投注或无投注日期的投充比/杀率"
+    )
+
+    assert result is not None
+    assert result["slot"] == "financial_ratio_scope"
+    assert result["missing_parameters"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "date_range",
+    ]
+
+
+def test_detect_missing_required_slot_requirement_clarifies_distribution_scope():
+    result = detect_missing_required_slot_requirement("查询游戏类型投注占比或首存金额桶占比")
+
+    assert result is not None
+    assert result["slot"] == "distribution_scope"
+    assert result["missing_parameters"] == ["tenant_plat_id", "date_range"]
+
+
+def test_build_minimal_semantic_plan_marks_reference_without_template_as_normal_sql():
+    plan = build_minimal_semantic_plan(
+        "不要用综合日报模板，直接查充值订单表的成功充值笔数",
+        template_decision={
+            "mode": "reference",
+            "template_id": None,
+            "sql_source": "generated",
+            "fallback_reason": None,
+        },
+    )
+
+    assert plan["decision"]["route"] == "normal_text_to_sql"
+
+
+def test_build_minimal_semantic_plan_treats_plain_sql_guard_as_normal_sql():
+    plan = build_minimal_semantic_plan(
+        "不用业务报表模板，直接查询充值订单",
+        template_decision={
+            "mode": "reference",
+            "template_id": "13",
+            "sql_source": "generated",
+            "fallback_reason": "template_guard_plain_sql_requested",
+        },
+    )
+
+    assert plan["decision"]["route"] == "normal_text_to_sql"
 
 
 def test_build_minimal_semantic_plan_exposes_blocking_slot_clarification():
@@ -624,6 +710,82 @@ def test_apply_policy_state_downgrades_forbidden_template():
     assert "policy_forbid_t08" in state.semantic_plan["decision"][
         "policy_reason_codes"
     ]
+
+
+def test_apply_policy_state_prefers_request_level_policy():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    runtime._ask_policy_config = AskPolicyConfig(
+        version="file_policy_v1",
+        rules=(
+            AskPolicyRule(
+                id="file_policy",
+                reason_code="file_policy",
+                query_contains_any=("普通充值",),
+                forbidden_templates=("T99",),
+            ),
+        ),
+    )
+    state = AskExecutionState(user_query="统计普通充值订单")
+    state.template_decision = {
+        "template_id": "T08",
+        "mode": "anchored_template",
+        "sql_source": "anchored_template",
+    }
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    runtime._apply_policy_state(
+        state,
+        request_policy={
+            "policy_id": "workspace_policy",
+            "version": "workspace_policy_v2",
+            "rules": [
+                {
+                    "id": "request_forbid_t08",
+                    "reason_code": "request_policy_forbid_t08",
+                    "query_contains_any": ["普通充值"],
+                    "forbidden_templates": ["T08"],
+                }
+            ],
+        },
+    )
+
+    assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
+    assert state.template_decision["policy_id"] == "workspace_policy"
+    assert state.template_decision["policy_version"] == "workspace_policy_v2"
+    assert "request_policy_forbid_t08" in state.semantic_plan["decision"][
+        "policy_reason_codes"
+    ]
+
+
+def test_apply_policy_state_marks_required_slots_as_clarification():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(user_query="统计首充用户")
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    runtime._apply_policy_state(
+        state,
+        request_policy={
+            "policy_id": "workspace_policy",
+            "version": "workspace_policy_v3",
+            "rules": [
+                {
+                    "id": "require_tenant",
+                    "reason_code": "policy_require_tenant",
+                    "query_contains_any": ["首充"],
+                    "required_slots": ["tenant_plat_id"],
+                }
+            ],
+        },
+    )
+
+    assert state.semantic_plan["decision"]["route"] == "clarification_required"
+    assert state.semantic_plan["missing_slots"] == ["tenant_plat_id"]
+    assert state.semantic_plan["clarification_request"]["slot"] == "tenant_plat_id"
+    assert "租户平台" in state.semantic_plan["clarification_request"]["prompt"]
+    assert "policy_require_tenant" in state.semantic_plan["decision"][
+        "policy_reason_codes"
+    ]
+    assert "missing_required_slot" in state.semantic_plan["decision"]["reason_codes"]
 
 
 def test_build_template_decision_keeps_same_family_low_margin_business_template_anchor():
@@ -1281,6 +1443,18 @@ def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv()
     assert "缺失指标" in result["content"]
     assert "需要粒度：日期、渠道" in result["content"]
     assert "示例表头" in result["content"]
+
+
+def test_detect_missing_external_source_requirement_handles_plain_traffic_aliases():
+    result = detect_missing_external_source_requirement(
+        "帮我把访问量、独立访客、下载点击人数一起放进渠道日报"
+    )
+
+    assert result is not None
+    required_metrics = result["instruction"]["required_metrics"]
+    assert "访问PV" in required_metrics
+    assert "访问UV" in required_metrics
+    assert "下载点击UV" in required_metrics
 
 
 def test_detect_missing_external_source_requirement_handles_roi_synonyms():

@@ -15,13 +15,21 @@ models:
   kwargs:
     n: 1
     temperature: 0
+    # OpenRouter DeepSeek V4 Flash has fast providers that do not all support
+    # structured response_format=json_schema. Wren prompts already require JSON,
+    # so drop response_format to keep routing constrained to the three providers
+    # below instead of falling through to DeepInfra.
+    drop_params: true
+    additional_drop_params:
+      - response_format
+    reasoning:
+      exclude: true
     provider:
       order:
+      - deepseek
       - siliconflow/fp8
       - novita
-      - deepinfra/fp4
-      - akashml/fp8
-      allow_fallbacks: true
+      allow_fallbacks: false
 ---
 type: embedder
 provider: litellm_embedder

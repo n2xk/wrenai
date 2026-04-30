@@ -123,6 +123,32 @@ def load_ask_policy_config(policy_file: Optional[str] = None) -> AskPolicyConfig
     )
 
 
+def coerce_ask_policy_config(raw: Any) -> AskPolicyConfig:
+    """Build an ask policy config from request-level JSON.
+
+    The file loader remains the default deployment-level contract. Productized
+    UI governance sends the same schema inline per request so a workspace or
+    knowledge base can evaluate different policies without rewriting the
+    AI-service process environment.
+    """
+
+    if isinstance(raw, AskPolicyConfig):
+        return raw
+
+    if not isinstance(raw, dict):
+        return AskPolicyConfig()
+
+    return AskPolicyConfig(
+        policy_id=str(raw.get("policy_id") or raw.get("policyId") or DEFAULT_POLICY_ID),
+        version=str(raw.get("version") or DEFAULT_POLICY_VERSION),
+        rules=tuple(
+            _parse_rule(raw_rule, index)
+            for index, raw_rule in enumerate(_as_list(raw.get("rules")), start=1)
+            if isinstance(raw_rule, dict)
+        ),
+    )
+
+
 def _rule_matches_query(rule: AskPolicyRule, query: str) -> bool:
     if not rule.query_contains_any:
         return True

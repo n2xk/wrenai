@@ -201,6 +201,47 @@ async def test_ask_service_resumes_clarification_session_with_slot_value():
 
 
 @pytest.mark.asyncio
+async def test_ask_service_resumes_clarification_session_from_request_state():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._ask_results["query-persisted"] = AskResultResponse(
+        status="understanding"
+    )
+
+    ask_request = AskRequest(
+        query="990001",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-persisted",
+        clarification_state={
+            "status": "needs_clarification",
+            "clarification_session_id": "clarify-persisted",
+            "original_question": "统计渠道990011首充用户",
+            "pending_slots": ["tenant_plat_id"],
+            "resolved_slots": {},
+            "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+        },
+    )
+    ask_request.query_id = "query-persisted"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert "统计渠道990011首充用户" in routed_request.query
+    assert "租户平台990001" in routed_request.query
+    assert routed_request.slot_values == {"tenant_plat_id": "990001"}
+
+
+@pytest.mark.asyncio
 async def test_ask_service_resumes_clarification_session_with_multiple_slot_values():
     tool_router = SimpleNamespace(
         run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})

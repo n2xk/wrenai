@@ -75,6 +75,14 @@ class AskRequest(BaseRequest):
         default_factory=dict,
         validation_alias=AliasChoices("slot_values", "slotValues"),
     )
+    ask_policy: Optional[dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("ask_policy", "askPolicy"),
+    )
+    clarification_state: Optional[dict[str, Any]] = Field(
+        default=None,
+        validation_alias=AliasChoices("clarification_state", "clarificationState"),
+    )
 
 
 class AskResponse(BaseModel):
@@ -460,6 +468,13 @@ class AskService:
             return
 
         session = self._clarification_sessions.get(session_id)
+        if not session and ask_request.clarification_state:
+            request_session = ask_request.clarification_state
+            if (
+                str(request_session.get("clarification_session_id") or "")
+                == str(session_id)
+            ):
+                session = request_session
         if not session:
             return
         if self._clarification_session_expired(session):

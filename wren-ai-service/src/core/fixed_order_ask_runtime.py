@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
 
-from src.core.ask_policy import evaluate_policy_context, load_ask_policy_config
+from src.core.ask_policy import (
+    coerce_ask_policy_config,
+    evaluate_policy_context,
+    load_ask_policy_config,
+)
 from src.core.mixed_answer_composer import MixedAnswerComposer
 from src.core.pipeline import BasicPipeline
 from src.pipelines.common import retrieve_data_source
@@ -31,6 +35,7 @@ class AskRequestLike(Protocol):
     allow_dry_plan_fallback: bool
     request_from: str
     skills: Sequence[Any]
+    ask_policy: Optional[dict[str, Any]]
 
 
 class SkillCandidateLike(Protocol):
@@ -773,6 +778,94 @@ def detect_missing_ambiguous_channel_requirement(
     }
 
 
+def detect_missing_financial_ratio_scope_requirement(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    if not query:
+        return None
+
+    if not re.search(r"投充比|流水充值比|杀率|平台赢率", query, flags=re.IGNORECASE):
+        return None
+
+    missing_parameters: list[str] = []
+    if (
+        not _extract_tenant_plat_ids_from_text(query)
+        and len(_resolve_history_tenant_plat_ids(histories)) != 1
+    ):
+        missing_parameters.append("tenant_plat_id")
+    if (
+        not _extract_channel_ids_from_text(query)
+        and len(_resolve_history_channel_ids(histories)) != 1
+    ):
+        missing_parameters.append("channel_id")
+    if not _extract_date_range_from_text(query) and not _history_has_date_context(
+        histories,
+    ):
+        missing_parameters.append("date_range")
+
+    if not missing_parameters:
+        return None
+
+    return {
+        "slot": "financial_ratio_scope",
+        "missing_parameters": missing_parameters,
+        "content": (
+            "投充比、流水充值比或杀率这类比例指标必须先明确统计范围，"
+            "否则分母为 0 或无数据日期时容易误算。请补充租户平台、渠道 ID "
+            "和时间范围后再继续。"
+        ),
+        "reasoning": "比例类问题缺少统计范围，需先澄清 tenant/channel/date 后再生成 SQL。",
+    }
+
+
+def detect_missing_distribution_scope_requirement(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    if not query:
+        return None
+
+    if not re.search(
+        r"占比|分布|桶位|金额桶|游戏类型",
+        query,
+        flags=re.IGNORECASE,
+    ):
+        return None
+
+    missing_parameters: list[str] = []
+    if (
+        not _extract_tenant_plat_ids_from_text(query)
+        and len(_resolve_history_tenant_plat_ids(histories)) != 1
+    ):
+        missing_parameters.append("tenant_plat_id")
+    if (
+        "渠道" in query
+        and not _extract_channel_ids_from_text(query)
+        and len(_resolve_history_channel_ids(histories)) != 1
+    ):
+        missing_parameters.append("channel_id")
+    if not _extract_date_range_from_text(query) and not _history_has_date_context(
+        histories,
+    ):
+        missing_parameters.append("date_range")
+
+    if not missing_parameters:
+        return None
+
+    return {
+        "slot": "distribution_scope",
+        "missing_parameters": missing_parameters,
+        "content": (
+            "占比、分布或金额桶这类指标需要先明确统计范围，"
+            "否则分母口径不清。请补充租户平台、必要的渠道 ID 和时间范围后再继续。"
+        ),
+        "reasoning": "分布/占比类问题缺少统计范围，需先澄清后再生成 SQL。",
+    }
+
+
 def detect_missing_required_slot_requirement(
     query: Optional[str],
     *,
@@ -782,6 +875,12 @@ def detect_missing_required_slot_requirement(
         query,
         histories=histories,
     ) or detect_missing_ambiguous_channel_requirement(
+        query,
+        histories=histories,
+    ) or detect_missing_financial_ratio_scope_requirement(
+        query,
+        histories=histories,
+    ) or detect_missing_distribution_scope_requirement(
         query,
         histories=histories,
     )
@@ -1011,14 +1110,23 @@ def _build_semantic_route_decision(
         mode = (template_decision or {}).get("mode")
         sql_source = (template_decision or {}).get("sql_source")
         fallback_reason = (template_decision or {}).get("fallback_reason")
+        template_id = (template_decision or {}).get("template_id")
         if mode in TEMPLATE_ANCHORED_MODES and sql_source in {
             "anchored_template",
             "rendered_template",
         }:
             route = "template_answer"
+        elif fallback_reason in {
+            "policy_forbidden_template",
+            "template_guard_plain_sql_requested",
+        }:
+            route = "normal_text_to_sql"
         elif template_decision and (
             mode == "trusted_reference"
-            or sql_source in {"anchored_generated", "generated"}
+            or (
+                template_id is not None
+                and sql_source in {"anchored_generated", "generated"}
+            )
         ):
             route = "template_reference_sql"
         else:
@@ -1064,6 +1172,37 @@ def _build_slot_details(slots: Sequence[str], *, source: str) -> list[dict[str, 
         }
         for slot in slots
     ]
+
+
+def _build_policy_clarification_prompt(slots: Sequence[str]) -> str:
+    labels = [SLOT_LABELS.get(slot, slot) for slot in slots]
+    if labels == ["租户平台"]:
+        return (
+            "当前问数策略要求先确认租户平台，避免跨租户平台误查。"
+            "请补充租户平台（例如：租户平台990001），我会继续查询。"
+        )
+
+    return (
+        "当前问数策略要求先补充必填信息，避免系统默认猜测业务口径。"
+        f"请补充：{'、'.join(labels)}。"
+    )
+
+
+def _build_policy_clarification_request(slots: Sequence[str]) -> dict[str, Any]:
+    missing_slots = list(slots)
+    return {
+        "slot": missing_slots[0]
+        if len(missing_slots) == 1
+        else "ask_policy_required_slots",
+        "prompt": _build_policy_clarification_prompt(missing_slots),
+        "hint_values": [],
+        "blocking": True,
+        "resume_strategy": "resubmit_with_slot_value",
+        "pending_slots": _build_slot_details(
+            missing_slots,
+            source="ask_policy",
+        ),
+    }
 
 
 def _build_resolved_slot(
@@ -1440,7 +1579,8 @@ def _query_requests_plain_sql_generation(query: Optional[str]) -> bool:
                 r"不(?:按|套用).{0,10}模板|"
                 r"避免.{0,10}(?:业务)?(?:报表)?模板|"
                 r"(?:直接|只|仅)基于.{0,18}(?:原始表|明细表|订单表|日志表|事实表)|"
-                r"(?:直接|只|仅)(?:查|查询|统计).{0,24}(?:原始表|明细表|订单表|日志表|事实表)"
+                r"(?:直接|只|仅)(?:查|查询|统计).{0,24}(?:原始表|明细表|订单表|日志表|事实表)|"
+                r"(?:直接|只|仅)(?:查|查询|统计).{0,24}(?:原始|明细).{0,12}(?:订单|记录|数据)"
             ),
             query,
             flags=re.IGNORECASE,
@@ -2500,11 +2640,11 @@ def detect_missing_external_source_requirement(
     if re.search(r"UV注册率", query, flags=re.IGNORECASE):
         append_metric("uv")
 
-    if re.search(r"下载点击\s*UV", query, flags=re.IGNORECASE):
+    if re.search(r"下载点击\s*(?:UV|人数|人次)?", query, flags=re.IGNORECASE):
         append_metric("download_click_uv")
 
     if re.search(
-        r"(?<![A-Z0-9])PV(?![A-Z0-9])|访问PV",
+        r"(?<![A-Z0-9])PV(?![A-Z0-9])|访问PV|访问量",
         normalized_query,
         flags=re.IGNORECASE,
     ):
@@ -2517,7 +2657,7 @@ def detect_missing_external_source_requirement(
         flags=re.IGNORECASE,
     )
     if re.search(
-        r"(?<![A-Z0-9])UV(?![A-Z0-9])|访问UV",
+        r"(?<![A-Z0-9])UV(?![A-Z0-9])|访问UV|独立访客",
         access_uv_query,
         flags=re.IGNORECASE,
     ):
@@ -3585,12 +3725,22 @@ class BaseFixedOrderAskRuntime:
             llm_plan=llm_plan,
         )
 
-    def _apply_policy_state(self, state: AskExecutionState) -> None:
+    def _apply_policy_state(
+        self,
+        state: AskExecutionState,
+        *,
+        request_policy: Optional[dict[str, Any]] = None,
+    ) -> None:
+        policy_config = (
+            coerce_ask_policy_config(request_policy)
+            if request_policy
+            else self._ask_policy_config
+        )
         evaluation = evaluate_policy_context(
             query=state.user_query,
             semantic_plan=state.semantic_plan,
             template_decision=state.template_decision,
-            config=self._ask_policy_config,
+            config=policy_config,
         )
         metadata = evaluation.to_metadata()
 
@@ -3601,6 +3751,39 @@ class BaseFixedOrderAskRuntime:
             for reason_code in metadata["policy_reason_codes"]:
                 if reason_code not in reason_codes:
                     reason_codes.append(reason_code)
+            missing_required_slots = metadata["policy_missing_required_slots"]
+            if missing_required_slots:
+                missing_slots = state.semantic_plan.setdefault("missing_slots", [])
+                for slot in missing_required_slots:
+                    if slot not in missing_slots:
+                        missing_slots.append(slot)
+                decision["route"] = "clarification_required"
+                decision["missing_slots"] = missing_slots
+                if "missing_required_slot" not in reason_codes:
+                    reason_codes.append("missing_required_slot")
+
+                existing_details = {
+                    detail.get("slot")
+                    for detail in state.semantic_plan.get("missing_slot_details", [])
+                    if isinstance(detail, dict)
+                }
+                policy_slot_details = [
+                    detail
+                    for detail in _build_slot_details(
+                        missing_required_slots,
+                        source="ask_policy",
+                    )
+                    if detail["slot"] not in existing_details
+                ]
+                if policy_slot_details:
+                    state.semantic_plan.setdefault("missing_slot_details", []).extend(
+                        policy_slot_details
+                    )
+
+                if not state.semantic_plan.get("clarification_request"):
+                    state.semantic_plan["clarification_request"] = (
+                        _build_policy_clarification_request(missing_required_slots)
+                    )
 
         if state.template_decision is not None:
             state.template_decision.update(metadata)
@@ -3613,10 +3796,40 @@ class BaseFixedOrderAskRuntime:
                 "executable_template",
             }:
                 state.template_decision["mode"] = "reference"
-            if state.semantic_plan is not None:
+            if (
+                state.semantic_plan is not None
+                and not metadata["policy_missing_required_slots"]
+            ):
                 decision = state.semantic_plan.setdefault("decision", {})
                 decision["route"] = "normal_text_to_sql"
                 decision["fallback_reason"] = "policy_forbidden_template"
+
+    def _build_policy_missing_slot_requirement(
+        self, state: AskExecutionState
+    ) -> Optional[dict[str, Any]]:
+        decision = (
+            state.semantic_plan.get("decision")
+            if isinstance(state.semantic_plan, dict)
+            else {}
+        ) or {}
+        missing_slots = list(
+            decision.get("policy_missing_required_slots")
+            or (state.template_decision or {}).get("policy_missing_required_slots")
+            or []
+        )
+        if not missing_slots:
+            return None
+
+        return {
+            "slot": missing_slots[0]
+            if len(missing_slots) == 1
+            else "ask_policy_required_slots",
+            "missing_parameters": missing_slots,
+            "content": _build_policy_clarification_prompt(missing_slots),
+            "reasoning": "问数策略要求补充必填业务槽位："
+            + "、".join(missing_slots)
+            + "。",
+        }
 
     def _extract_general_answer_content(
         self, pipeline_result: Any, *, pipeline_name: str
@@ -4192,7 +4405,7 @@ class BaseFixedOrderAskRuntime:
         ) or detect_missing_template_parameter_requirement(
             state.user_query,
             state.template_decision,
-        )
+        ) or self._build_policy_missing_slot_requirement(state)
         if not missing_slot_requirement:
             return None
 
@@ -4804,6 +5017,24 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     trace_id=trace_id,
                     is_followup=is_followup,
                 )
+                self._sync_semantic_plan_state(state, histories=histories)
+                self._apply_policy_state(
+                    state,
+                    request_policy=getattr(ask_request, "ask_policy", None),
+                )
+                missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                    state=state,
+                    query_id=ask_request.query_id,
+                    histories=histories,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                    is_stopped=is_stopped,
+                    set_result=set_result,
+                    results=results,
+                    orchestrator=orchestrator,
+                )
+                if missing_slot_result is not None:
+                    return missing_slot_result
 
                 state.api_results = await self._toolset.retrieve_historical_question(
                     query=state.user_query,
@@ -4846,7 +5077,10 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         histories=histories,
                         configuration=ask_request.configurations,
                     )
-                    self._apply_policy_state(state)
+                    self._apply_policy_state(
+                        state,
+                        request_policy=getattr(ask_request, "ask_policy", None),
+                    )
                     state.effective_instructions = [
                         *state.instructions,
                         *build_template_instruction(state.template_decision),
@@ -5004,6 +5238,24 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     trace_id=trace_id,
                     is_followup=is_followup,
                 )
+                self._sync_semantic_plan_state(state, histories=histories)
+                self._apply_policy_state(
+                    state,
+                    request_policy=getattr(ask_request, "ask_policy", None),
+                )
+                missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                    state=state,
+                    query_id=ask_request.query_id,
+                    histories=histories,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                    is_stopped=is_stopped,
+                    set_result=set_result,
+                    results=results,
+                    orchestrator=orchestrator,
+                )
+                if missing_slot_result is not None:
+                    return missing_slot_result
 
                 (
                     retrieval_query,
@@ -5031,7 +5283,10 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     histories=histories,
                     configuration=ask_request.configurations,
                 )
-                self._apply_policy_state(state)
+                self._apply_policy_state(
+                    state,
+                    request_policy=getattr(ask_request, "ask_policy", None),
+                )
                 state.effective_instructions = [
                     *state.instructions,
                     *build_template_instruction(state.template_decision),

@@ -195,7 +195,9 @@ def prompt(
 
 @observe(as_type="generation", capture_input=False)
 @trace_cost
-async def generate_semantic_plan(prompt: dict, generator: Any, generator_name: str):
+async def generate_semantic_plan(
+    prompt: dict, generator: Any, generator_name: str
+) -> dict:
     return await generator(prompt=prompt.get("prompt")), generator_name
 
 
