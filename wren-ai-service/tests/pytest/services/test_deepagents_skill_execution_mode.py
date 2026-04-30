@@ -585,10 +585,95 @@ async def test_deepagents_routes_missing_tenant_slot_to_general_clarification():
     assert result["metadata"]["template_decision"]["missing_parameters"] == [
         "tenant_plat_id"
     ]
+    assert result["metadata"]["clarification_state"]["status"] == (
+        "needs_clarification"
+    )
+    assert result["metadata"]["clarification_state"]["clarification_session_id"] == (
+        "query-1"
+    )
+    assert result["metadata"]["clarification_state"]["pending_slots"] == [
+        "tenant_plat_id"
+    ]
+    assert result["metadata"]["semantic_plan"]["decision"]["route"] == (
+        "clarification_required"
+    )
     assert updates[-1]["status"] == "finished"
     assert updates[-1]["type"] == "GENERAL"
     assert updates[-1]["general_type"] == "DATA_ASSISTANCE"
+    assert updates[-1]["clarification_state"]["status"] == "needs_clarification"
     assert "租户平台" in (updates[-1]["content"] or "")
+
+
+@pytest.mark.asyncio
+async def test_deepagents_routes_vague_channel_performance_to_clarification():
+    pipelines = make_pipelines()
+
+    result, updates = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(query="帮我看看这个渠道最近表现怎么样"),
+    )
+
+    assert pipelines["intent_classification"].run.await_count == 0
+    assert pipelines["sql_generation"].run.await_count == 0
+    assert result["metadata"]["ask_path"] == "general"
+    assert result["metadata"]["clarification_state"]["pending_slots"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "date_range",
+        "metric_focus",
+    ]
+    assert result["metadata"]["semantic_plan"]["decision"]["route"] == (
+        "clarification_required"
+    )
+    assert updates[-1]["status"] == "finished"
+    assert updates[-1]["type"] == "GENERAL"
+    assert "关注的指标方向" in (updates[-1]["content"] or "")
+
+
+@pytest.mark.asyncio
+async def test_deepagents_routes_missing_cohort_dates_to_clarification():
+    pipelines = make_pipelines(
+        sql_pairs_documents=[
+            {
+                "id": "template-10",
+                "question": "统计首存 cohort 从首存当日开始的每日趋势",
+                "sql": (
+                    "SELECT :tenant_plat_id AS tenant_plat_id, "
+                    ":channel_id AS channel_id, :cohort_start_date AS start_date, "
+                    ":cohort_end_date AS end_date, :n_days AS n_days"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {"templateId": "T10"},
+                "score": 0.92,
+                "status": "active",
+            }
+        ],
+    )
+
+    result, updates = await run_orchestrator(
+        pipelines=pipelines,
+        ask_request=make_request(
+            query=(
+                "输出租户平台990001渠道990011首存用户从D1到D30"
+                "每日充值、提现、有效投注、输赢、杀率和投充比"
+            )
+        ),
+    )
+
+    assert pipelines["sql_generation"].run.await_count == 0
+    assert result["metadata"]["ask_path"] == "general"
+    assert result["metadata"]["clarification_state"]["pending_slots"] == [
+        "cohort_start_date",
+        "cohort_end_date",
+    ]
+    assert result["metadata"]["semantic_plan"]["decision"]["route"] == (
+        "clarification_required"
+    )
+    assert updates[-1]["status"] == "finished"
+    assert "首存 cohort 日期范围" in (updates[-1]["content"] or "")
 
 
 @pytest.mark.asyncio

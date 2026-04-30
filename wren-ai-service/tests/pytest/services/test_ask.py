@@ -1,5 +1,7 @@
 import json
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import orjson
 import pytest
@@ -11,6 +13,7 @@ from src.utils import fetch_wren_ai_docs
 from src.web.v1.services.ask import (
     AskRequest,
     AskResultRequest,
+    AskResultResponse,
     AskService,
 )
 from src.web.v1.services.semantics_preparation import (
@@ -156,3 +159,41 @@ async def test_ask_with_successful_query(
     # assert ask_result_response.response[0].sql != ""
     # assert ask_result_response.response[0].summary != ""
     # assert ask_result_response.response[0].type == "llm" or "view"
+
+
+@pytest.mark.asyncio
+async def test_ask_service_resumes_clarification_session_with_slot_value():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._clarification_sessions["clarify-1"] = {
+        "status": "needs_clarification",
+        "clarification_session_id": "clarify-1",
+        "original_question": "统计渠道990011在2026-04-01到2026-04-03首充用户",
+        "pending_slots": ["tenant_plat_id"],
+        "resolved_slots": {},
+    }
+    ask_service._ask_results["query-2"] = AskResultResponse(status="understanding")
+
+    ask_request = AskRequest(
+        query="990001",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-1",
+    )
+    ask_request.query_id = "query-2"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert "统计渠道990011" in routed_request.query
+    assert "租户平台990001" in routed_request.query
+    assert routed_request.slot_values == {"tenant_plat_id": "990001"}

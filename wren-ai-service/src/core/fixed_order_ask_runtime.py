@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
 
 from src.core.mixed_answer_composer import MixedAnswerComposer
@@ -62,6 +62,7 @@ class AskExecutionState:
     current_sql_correction_retries: int = 0
     template_decision: Optional[dict[str, Any]] = None
     semantic_plan: Optional[dict[str, Any]] = None
+    clarification_state: Optional[dict[str, Any]] = None
 
 
 def _normalize_instruction(value: Any) -> Optional[str]:
@@ -670,6 +671,19 @@ def _resolve_history_tenant_plat_ids(histories: Sequence[Any] | None) -> list[in
     return tenant_ids
 
 
+def _resolve_history_channel_ids(histories: Sequence[Any] | None) -> list[int]:
+    channel_ids: list[int] = []
+    for question in _iter_history_questions(histories):
+        for channel_id in _extract_channel_ids_from_text(question):
+            if channel_id not in channel_ids:
+                channel_ids.append(channel_id)
+    return channel_ids
+
+
+def _history_has_date_context(histories: Sequence[Any] | None) -> bool:
+    return any(_extract_date_range_from_text(question) for question in _iter_history_questions(histories))
+
+
 def detect_missing_tenant_plat_id_requirement(
     query: Optional[str],
     *,
@@ -703,6 +717,129 @@ def detect_missing_tenant_plat_id_requirement(
     }
 
 
+def _query_is_ambiguous_channel_performance_question(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    text = query.strip()
+    if "渠道" not in text:
+        return False
+
+    vague_performance_cues = [
+        r"最近.*(?:表现|效果|情况).*?(?:怎么样|如何)?",
+        r"(?:表现|效果|情况).*?(?:怎么样|如何)",
+        r"帮我看看.*渠道.*最近",
+        r"看一下.*渠道.*最近",
+    ]
+    if not any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in vague_performance_cues):
+        return False
+
+    # If the user already named a concrete metric, let the normal slot/external
+    # dependency guards handle it. This keeps focused questions like “这个渠道新客
+    # 首充成本是多少” on the ROI/external-data path instead of over-clarifying.
+    return not _extract_pattern_keys(text, SEMANTIC_METRIC_PATTERNS)
+
+
+def detect_missing_ambiguous_channel_requirement(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    if not _query_is_ambiguous_channel_performance_question(query):
+        return None
+
+    missing_parameters: list[str] = []
+    history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
+    history_channel_ids = _resolve_history_channel_ids(histories)
+
+    if not _extract_tenant_plat_ids_from_text(query) and len(history_tenant_ids) != 1:
+        missing_parameters.append("tenant_plat_id")
+    if not _extract_channel_ids_from_text(query) and len(history_channel_ids) != 1:
+        missing_parameters.append("channel_id")
+    if not _extract_date_range_from_text(query) and not _history_has_date_context(histories):
+        missing_parameters.append("date_range")
+    missing_parameters.append("metric_focus")
+
+    return {
+        "slot": "channel_performance_context",
+        "missing_parameters": missing_parameters,
+        "content": (
+            "这个问题还需要先明确查询范围，避免我默认猜测渠道、时间或指标。"
+            "请补充租户平台、渠道 ID、时间范围，以及你更关注的指标方向"
+            "（例如充值、投注、ROI、留存、流量或综合日报）。"
+        ),
+        "reasoning": "渠道表现类问题缺少明确范围：需要先澄清渠道、时间和关注指标。",
+    }
+
+
+def detect_missing_required_slot_requirement(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+) -> Optional[dict[str, Any]]:
+    return detect_missing_tenant_plat_id_requirement(
+        query,
+        histories=histories,
+    ) or detect_missing_ambiguous_channel_requirement(
+        query,
+        histories=histories,
+    )
+
+
+def detect_missing_template_parameter_requirement(
+    query: Optional[str],
+    template_decision: Optional[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    if not query or not template_decision:
+        return None
+
+    missing_parameters = list(template_decision.get("missing_parameters") or [])
+    if not missing_parameters:
+        return None
+
+    has_explicit_date = bool(_extract_date_range_from_text(query))
+    missing_cohort_dates = [
+        parameter
+        for parameter in ("cohort_start_date", "cohort_end_date")
+        if parameter in missing_parameters
+    ]
+    if missing_cohort_dates and not has_explicit_date:
+        return {
+            "slot": "cohort_date_range",
+            "missing_parameters": missing_cohort_dates,
+            "content": (
+                "这类首存 cohort 趋势需要明确首存用户的起止日期，"
+                "否则无法判断从哪一批首存用户开始计算 D1、D3 或 D30。"
+                "请补充首存 cohort 日期范围，例如：2026-04-01 到 2026-04-30。"
+            ),
+            "reasoning": "模板缺少首存 cohort 起止日期，需先澄清日期范围。",
+        }
+
+    required_context_slots = [
+        parameter
+        for parameter in (
+            "tenant_plat_id",
+            "channel_id",
+            "start_date",
+            "end_date",
+        )
+        if parameter in missing_parameters
+    ]
+    if len(required_context_slots) >= 2:
+        return {
+            "slot": "template_required_context",
+            "missing_parameters": required_context_slots,
+            "content": (
+                "这个问题匹配到的业务模板还缺少关键查询范围。"
+                "请补充租户平台、渠道 ID 和时间范围后再继续，"
+                "避免我用默认值或历史样例误生成结果。"
+            ),
+            "reasoning": "模板缺少多个关键上下文参数，需先澄清后再生成 SQL。",
+        }
+
+    return None
+
+
 def _extract_date_range_from_text(text: Optional[str]) -> dict[str, str]:
     dates = DATE_PATTERN.findall(text or "")
     if len(dates) >= 2:
@@ -718,7 +855,7 @@ def _collapse_single_or_list(values: list[Any]) -> Any:
     return values
 
 
-def _extract_query_features(query: Optional[str]) -> list[str]:
+def _extract_semantic_features(query: Optional[str]) -> list[str]:
     if not query:
         return []
 
@@ -727,6 +864,66 @@ def _extract_query_features(query: Optional[str]) -> list[str]:
         if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in patterns):
             features.append(feature)
     return features
+
+
+SEMANTIC_METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
+    "ad_spend": (r"投放金额", r"投放成本", r"广告费", r"买量成本"),
+    "bet_amount": (r"有效投注", r"流水", r"投注"),
+    "bet_count": (r"下注次数", r"投注次数"),
+    "deposit_amount": (r"充值金额", r"存款金额", r"充值总额", r"存款总额"),
+    "deposit_count": (r"充值笔数", r"存款笔数", r"几笔成功充值"),
+    "deposit_user_count": (r"充值人数", r"存款人数"),
+    "download_click_uv": (r"下载点击", r"下载点击UV"),
+    "first_deposit": (r"首存", r"首充", r"首次存款", r"第一次充值"),
+    "first_deposit_cost": (r"首存成本", r"首充成本", r"新客.*成本"),
+    "kill_rate": (r"杀率", r"平台赢率"),
+    "login_user_count": (r"登录人数", r"登录用户", r"登录去重"),
+    "pv": (r"\bPV\b", r"访问量", r"访问PV"),
+    "registration_count": (r"注册人数", r"注册用户"),
+    "retention_deposit": (r"续存", r"复存", r"[二三四五六2-6]\s*存"),
+    "roi": (r"\bROI\b", r"投放回收", r"回本"),
+    "uv": (r"\bUV\b", r"独立访客", r"访问UV"),
+    "withdraw_amount": (r"提现金额", r"提款金额"),
+    "win_loss": (r"输赢", r"平台输赢"),
+}
+
+
+SEMANTIC_DIMENSION_PATTERNS: dict[str, tuple[str, ...]] = {
+    "biz_date": (r"每日", r"按天", r"日期", r"日报", r"趋势"),
+    "channel_id": (r"渠道", r"channel[_\s-]?id"),
+    "cohort_age": (r"D\s*\d+", r"日龄"),
+    "first_deposit_date": (r"首存日期", r"首充日期", r"cohort"),
+    "game_type": (r"游戏类型", r"game[_\s-]?type"),
+    "player_id": (r"玩家", r"用户", r"player[_\s-]?id", r"名单", r"明细"),
+    "segment": (r"TOP\s*\d+", r"非\s*TOP", r"分层", r"大户"),
+    "tenant_plat_id": (r"租户平台", r"tenant[_\s-]?plat[_\s-]?id"),
+}
+
+
+def _extract_pattern_keys(
+    query: Optional[str],
+    patterns_by_key: dict[str, tuple[str, ...]],
+) -> list[str]:
+    if not query:
+        return []
+    return [
+        key
+        for key, patterns in patterns_by_key.items()
+        if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in patterns)
+    ]
+
+
+def _infer_semantic_subject(query: Optional[str], features: Sequence[str]) -> Optional[str]:
+    text = query or ""
+    if "cohort" in features or re.search(r"首存|首充", text, flags=re.IGNORECASE):
+        return "cohort"
+    if re.search(r"玩家|用户|player", text, flags=re.IGNORECASE):
+        return "player"
+    if re.search(r"渠道|channel", text, flags=re.IGNORECASE):
+        return "channel"
+    if re.search(r"游戏类型|game", text, flags=re.IGNORECASE):
+        return "game"
+    return None
 
 
 def _extract_template_decision_grain(
@@ -749,6 +946,34 @@ def _extract_template_decision_grain(
     return str(grain) if grain else None
 
 
+def _infer_semantic_grain(
+    *,
+    dimensions: Sequence[str],
+    template_decision: Optional[dict[str, Any]],
+) -> Optional[str]:
+    template_grain = _extract_template_decision_grain(template_decision)
+    if template_grain:
+        return template_grain
+
+    ordered_dimensions = [
+        dimension
+        for dimension in (
+            "tenant_plat_id",
+            "biz_date",
+            "first_deposit_date",
+            "channel_id",
+            "player_id",
+            "game_type",
+            "segment",
+            "cohort_age",
+        )
+        if dimension in dimensions
+    ]
+    if ordered_dimensions:
+        return " + ".join(ordered_dimensions)
+    return None
+
+
 def _build_template_plan_fragment(
     template_decision: Optional[dict[str, Any]],
 ) -> Optional[dict[str, Any]]:
@@ -765,18 +990,72 @@ def _build_template_plan_fragment(
     }
 
 
+def _build_semantic_route_decision(
+    *,
+    missing_slots: Sequence[str],
+    template_decision: Optional[dict[str, Any]],
+    route_override: Optional[str] = None,
+    reason_codes: Sequence[str] | None = None,
+    external_dependencies: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    collected_reason_codes = list(reason_codes or [])
+
+    if route_override:
+        route = route_override
+    elif missing_slots:
+        route = "clarification_required"
+        if "missing_required_slot" not in collected_reason_codes:
+            collected_reason_codes.append("missing_required_slot")
+    else:
+        mode = (template_decision or {}).get("mode")
+        sql_source = (template_decision or {}).get("sql_source")
+        fallback_reason = (template_decision or {}).get("fallback_reason")
+        if mode in TEMPLATE_ANCHORED_MODES and sql_source in {
+            "anchored_template",
+            "rendered_template",
+        }:
+            route = "template_answer"
+        elif template_decision and (
+            mode == "trusted_reference"
+            or sql_source in {"anchored_generated", "generated"}
+        ):
+            route = "template_reference_sql"
+        else:
+            route = "normal_text_to_sql"
+        if fallback_reason and fallback_reason not in collected_reason_codes:
+            collected_reason_codes.append(str(fallback_reason))
+
+    if (
+        external_dependencies
+        and "external_dependency_missing" not in collected_reason_codes
+    ):
+        collected_reason_codes.append("external_dependency_missing")
+
+    return {
+        "route": route,
+        "sql_source": (template_decision or {}).get("sql_source"),
+        "selected_template_id": (template_decision or {}).get("template_id"),
+        "selected_template_type": (template_decision or {}).get("mode"),
+        "reason_codes": collected_reason_codes,
+        "external_dependencies": list(external_dependencies or []),
+    }
+
+
 def build_minimal_semantic_plan(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
     template_decision: Optional[dict[str, Any]] = None,
     intent: Optional[str] = None,
+    route_override: Optional[str] = None,
+    reason_codes: Sequence[str] | None = None,
+    external_dependencies: Sequence[str] | None = None,
 ) -> dict[str, Any]:
-    """Build a deterministic, diagnostics-only SemanticPlan skeleton.
+    """Build a deterministic structured SemanticPlan for diagnostics and routing.
 
-    This is intentionally not a new LLM call. It exposes slots, coarse features,
-    and a clarification request shape so P1 can wire UI/API state machines later
-    without changing the current ask route behavior.
+    This intentionally avoids a new LLM call. The deterministic plan gives the
+    runtime a stable contract for slots, coarse metrics/dimensions, route
+    decisions, and clarification state while P1 semantic parsing evolves.
     """
 
     tenant_ids = _extract_tenant_plat_ids_from_text(query)
@@ -784,9 +1063,12 @@ def build_minimal_semantic_plan(
         tenant_ids = _resolve_history_tenant_plat_ids(histories)
     channel_ids = _extract_channel_ids_from_text(query)
     date_range = _extract_date_range_from_text(query)
-    missing_slot_requirement = detect_missing_tenant_plat_id_requirement(
+    missing_slot_requirement = detect_missing_required_slot_requirement(
         query,
         histories=histories,
+    ) or detect_missing_template_parameter_requirement(
+        query,
+        template_decision,
     )
     missing_slots = (
         missing_slot_requirement.get("missing_parameters", [])
@@ -800,6 +1082,15 @@ def build_minimal_semantic_plan(
     if channel_ids:
         filters["channel_id"] = _collapse_single_or_list(channel_ids)
     filters.update(date_range)
+    features = _extract_semantic_features(query)
+    metrics = _extract_pattern_keys(query, SEMANTIC_METRIC_PATTERNS)
+    dimensions = _extract_pattern_keys(query, SEMANTIC_DIMENSION_PATTERNS)
+    if tenant_ids and "tenant_plat_id" not in dimensions:
+        dimensions.append("tenant_plat_id")
+    if channel_ids and "channel_id" not in dimensions:
+        dimensions.append("channel_id")
+    if date_range and "biz_date" not in dimensions:
+        dimensions.append("biz_date")
 
     clarification_request = None
     if missing_slot_requirement:
@@ -810,20 +1101,31 @@ def build_minimal_semantic_plan(
             "blocking": True,
             "resume_strategy": "resubmit_with_slot_value",
         }
+    decision = _build_semantic_route_decision(
+        missing_slots=missing_slots,
+        template_decision=template_decision,
+        route_override=route_override,
+        reason_codes=reason_codes,
+        external_dependencies=external_dependencies,
+    )
 
     return {
-        "version": "p1_minimal_v1",
+        "version": "p1_structured_v1",
         "source": "deterministic",
         "intent": intent or "TEXT_TO_SQL",
-        "subject": None,
-        "features": _extract_query_features(query),
-        "metrics": [],
-        "dimensions": [],
+        "subject": _infer_semantic_subject(query, features),
+        "features": features,
+        "metrics": metrics,
+        "dimensions": dimensions,
         "filters": filters,
-        "grain": _extract_template_decision_grain(template_decision),
+        "grain": _infer_semantic_grain(
+            dimensions=dimensions,
+            template_decision=template_decision,
+        ),
         "missing_slots": missing_slots,
         "clarification_request": clarification_request,
         "template": _build_template_plan_fragment(template_decision),
+        "decision": decision,
         "confidence": 1.0,
     }
 
@@ -1461,6 +1763,18 @@ def _extract_template_parameters_from_query(
                 query,
             )
         else:
+            explicit_period_days = [
+                int(value)
+                for value in re.findall(r"D\s*(\d+)", query, flags=re.IGNORECASE)
+            ]
+            has_period_range = re.search(
+                r"D\s*\d+\s*(?:~|-|到|至)\s*D?\s*\d+",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if len(explicit_period_days) > 1 and not has_period_range:
+                parameters[key] = sorted(set(explicit_period_days))
+                continue
             value = _first_match(
                 [
                     r"D\s*1\s*(?:~|-|到|至)\s*D?\s*(\d+)",
@@ -2066,7 +2380,11 @@ def detect_missing_external_source_requirement(
         if metric not in required_metrics:
             required_metrics.append(metric)
 
-    if re.search(r"ROI|首存成本|投放金额", normalized_query, flags=re.IGNORECASE):
+    if re.search(
+        r"ROI|投放回收|回本|首存成本|首充成本|新客.*成本|投放金额|投放成本|买量成本|广告费",
+        normalized_query,
+        flags=re.IGNORECASE,
+    ):
         append_metric("spend_amount")
 
     if re.search(r"UV下载率", query, flags=re.IGNORECASE):
@@ -2102,7 +2420,11 @@ def detect_missing_external_source_requirement(
     if not required_metrics:
         return None
 
-    if re.search(r"cohort|ROI|回收|首存成本", query, flags=re.IGNORECASE):
+    if re.search(
+        r"cohort|ROI|投放回收|回本|回收|首存成本|首充成本",
+        query,
+        flags=re.IGNORECASE,
+    ):
         granularity_hint = "请按对应统计周期提供这些外部指标。"
     elif re.search(r"日报|趋势|按天|日期|渠道", query, flags=re.IGNORECASE):
         granularity_hint = "请按每个日期、每个渠道提供这些外部指标。"
@@ -2968,6 +3290,7 @@ class BaseFixedOrderAskRuntime:
         orchestrator: str,
         template_decision: Optional[dict[str, Any]] = None,
         semantic_plan: Optional[dict[str, Any]] = None,
+        clarification_state: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         metadata = result.setdefault("metadata", {})
         metadata["orchestrator"] = orchestrator
@@ -2977,6 +3300,8 @@ class BaseFixedOrderAskRuntime:
             metadata["template_decision"] = template_decision
         if semantic_plan:
             metadata["semantic_plan"] = semantic_plan
+        if clarification_state:
+            metadata["clarification_state"] = clarification_state
         return result
 
     def _resolve_text_to_sql_path(
@@ -3006,12 +3331,18 @@ class BaseFixedOrderAskRuntime:
         *,
         histories: Sequence[AskHistoryLike],
         intent: Optional[str] = None,
+        route_override: Optional[str] = None,
+        reason_codes: Sequence[str] | None = None,
+        external_dependencies: Sequence[str] | None = None,
     ) -> None:
         state.semantic_plan = build_minimal_semantic_plan(
             state.user_query,
             histories=histories,
             template_decision=state.template_decision,
             intent=intent,
+            route_override=route_override,
+            reason_codes=reason_codes,
+            external_dependencies=external_dependencies,
         )
 
     def _extract_general_answer_content(
@@ -3520,6 +3851,16 @@ class BaseFixedOrderAskRuntime:
             )
         state.intent_reasoning = missing_source_requirement["reasoning"]
         state.ask_path = "general"
+        self._sync_semantic_plan_state(
+            state,
+            histories=histories,
+            route_override="blocked_missing_external_data",
+            reason_codes=["external_dependency_missing"],
+            external_dependencies=missing_source_requirement.get(
+                "required_external_dependencies"
+            )
+            or [],
+        )
 
         if not is_stopped():
             set_result(
@@ -3533,6 +3874,7 @@ class BaseFixedOrderAskRuntime:
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
                 semantic_plan=state.semantic_plan,
+                clarification_state=state.clarification_state,
             )
             set_result(
                 status="finished",
@@ -3546,6 +3888,7 @@ class BaseFixedOrderAskRuntime:
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
                 semantic_plan=state.semantic_plan,
+                clarification_state=state.clarification_state,
             )
 
         return self._attach_result_metadata(
@@ -3554,12 +3897,14 @@ class BaseFixedOrderAskRuntime:
             orchestrator=orchestrator,
             template_decision=state.template_decision,
             semantic_plan=state.semantic_plan,
+            clarification_state=state.clarification_state,
         )
 
     async def _maybe_handle_missing_slot_rule(
         self,
         *,
         state: AskExecutionState,
+        query_id: str,
         histories: Sequence[AskHistoryLike],
         trace_id: Optional[str],
         is_followup: bool,
@@ -3568,9 +3913,12 @@ class BaseFixedOrderAskRuntime:
         results: dict[str, Any],
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
-        missing_slot_requirement = detect_missing_tenant_plat_id_requirement(
+        missing_slot_requirement = detect_missing_required_slot_requirement(
             state.user_query,
             histories=histories,
+        ) or detect_missing_template_parameter_requirement(
+            state.user_query,
+            state.template_decision,
         )
         if not missing_slot_requirement:
             return None
@@ -3589,7 +3937,23 @@ class BaseFixedOrderAskRuntime:
 
         state.intent_reasoning = missing_slot_requirement["reasoning"]
         state.ask_path = "general"
-        self._sync_semantic_plan_state(state, histories=histories)
+        expires_at = datetime.now(UTC) + timedelta(minutes=30)
+        state.clarification_state = {
+            "status": "needs_clarification",
+            "clarification_session_id": query_id,
+            "original_question": state.user_query,
+            "pending_slots": missing_parameters,
+            "resolved_slots": {},
+            "expires_at": expires_at.isoformat(),
+        }
+        self._sync_semantic_plan_state(
+            state,
+            histories=histories,
+            route_override="clarification_required",
+            reason_codes=["missing_required_slot"],
+        )
+        if state.semantic_plan is not None:
+            state.semantic_plan["clarification_state"] = state.clarification_state
 
         if not is_stopped():
             set_result(
@@ -3603,6 +3967,7 @@ class BaseFixedOrderAskRuntime:
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
                 semantic_plan=state.semantic_plan,
+                clarification_state=state.clarification_state,
             )
             set_result(
                 status="finished",
@@ -3616,6 +3981,7 @@ class BaseFixedOrderAskRuntime:
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
                 semantic_plan=state.semantic_plan,
+                clarification_state=state.clarification_state,
             )
 
         return self._attach_result_metadata(
@@ -3624,6 +3990,7 @@ class BaseFixedOrderAskRuntime:
             orchestrator=orchestrator,
             template_decision=state.template_decision,
             semantic_plan=state.semantic_plan,
+            clarification_state=state.clarification_state,
         )
 
     async def _handle_intent_result(
@@ -4224,6 +4591,7 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
 
                     missing_slot_result = await self._maybe_handle_missing_slot_rule(
                         state=state,
+                        query_id=ask_request.query_id,
                         histories=histories,
                         trace_id=trace_id,
                         is_followup=is_followup,
@@ -4402,6 +4770,7 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
 
                 missing_slot_result = await self._maybe_handle_missing_slot_rule(
                     state=state,
+                    query_id=ask_request.query_id,
                     histories=histories,
                     trace_id=trace_id,
                     is_followup=is_followup,

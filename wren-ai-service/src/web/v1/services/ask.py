@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -61,6 +62,17 @@ class AskRequest(BaseRequest):
     allow_dry_plan_fallback: bool = True
     custom_instruction: Optional[str] = None
     skills: list[AskSkillCandidate] = Field(default_factory=list)
+    clarification_session_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "clarification_session_id",
+            "clarificationSessionId",
+        ),
+    )
+    slot_values: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("slot_values", "slotValues"),
+    )
 
 
 class AskResponse(BaseModel):
@@ -190,6 +202,20 @@ class AskTemplateDecision(BaseModel):
     validation_error: Optional[str] = None
 
 
+class ClarificationState(BaseModel):
+    status: Literal[
+        "needs_clarification",
+        "clarification_provided",
+        "resuming",
+        "cancelled",
+    ]
+    clarification_session_id: str
+    original_question: str
+    pending_slots: list[str] = Field(default_factory=list)
+    resolved_slots: dict[str, Any] = Field(default_factory=dict)
+    expires_at: Optional[str] = None
+
+
 class AskShadowCompareRolloutReadiness(BaseModel):
     status: Literal[
         "no_data",
@@ -229,6 +255,7 @@ class _AskResultResponse(BaseModel):
     ask_path: Optional[AskPath] = None
     template_decision: Optional[AskTemplateDecision] = None
     semantic_plan: Optional[dict[str, Any]] = None
+    clarification_state: Optional[ClarificationState] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     shadow_compare: Optional[AskShadowCompare] = None
@@ -274,6 +301,10 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._clarification_sessions: Dict[str, dict[str, Any]] = TTLCache(
+            maxsize=maxsize,
+            ttl=ttl,
+        )
         self._shadow_compare_stats = AskShadowCompareStats()
         self._max_histories = max_histories
         self._deepagents_orchestrator = deepagents_orchestrator or (
@@ -317,6 +348,68 @@ class AskService:
 
     def _set_ask_result(self, query_id: str, **payload):
         self._ask_results[query_id] = AskResultResponse(**payload)
+
+    def _extract_slot_values_from_clarification_reply(
+        self,
+        ask_request: AskRequest,
+        pending_slots: list[str],
+    ) -> dict[str, Any]:
+        slot_values = dict(ask_request.slot_values or {})
+        if "tenant_plat_id" in pending_slots and "tenant_plat_id" not in slot_values:
+            match = re.search(
+                r"(?:租户平台|平台|tenant_plat_id)?\s*([0-9]{4,})",
+                ask_request.query or "",
+                flags=re.IGNORECASE,
+            )
+            if match:
+                slot_values["tenant_plat_id"] = match.group(1)
+        return slot_values
+
+    def _format_slot_values_for_query(self, slot_values: dict[str, Any]) -> str:
+        formatted_values: list[str] = []
+        for key, value in slot_values.items():
+            if key == "tenant_plat_id":
+                formatted_values.append(f"租户平台{value}")
+            else:
+                formatted_values.append(f"{key}={value}")
+        return "，".join(formatted_values)
+
+    def _resume_clarification_request(self, ask_request: AskRequest) -> None:
+        session_id = ask_request.clarification_session_id
+        if not session_id:
+            return
+
+        session = self._clarification_sessions.get(session_id)
+        if not session:
+            return
+
+        pending_slots = list(session.get("pending_slots") or [])
+        slot_values = self._extract_slot_values_from_clarification_reply(
+            ask_request,
+            pending_slots,
+        )
+        if not slot_values:
+            return
+
+        original_question = str(session.get("original_question") or ask_request.query)
+        formatted_slot_values = self._format_slot_values_for_query(slot_values)
+        ask_request.query = f"{original_question}（已补充：{formatted_slot_values}）"
+        ask_request.slot_values = slot_values
+        session["status"] = "resuming"
+        session["resolved_slots"] = slot_values
+
+    def _remember_clarification_session(
+        self,
+        clarification_state: Optional[dict[str, Any]],
+    ) -> None:
+        if not clarification_state:
+            return
+        if clarification_state.get("status") != "needs_clarification":
+            return
+        session_id = clarification_state.get("clarification_session_id")
+        if not session_id:
+            return
+        self._clarification_sessions[str(session_id)] = clarification_state
 
     def _bump_shadow_compare_bucket(
         self, bucket: dict[str, int], key: Optional[str]
@@ -438,6 +531,7 @@ class AskService:
     ):
         trace_id = kwargs.get("trace_id")
         query_id = ask_request.query_id
+        self._resume_clarification_request(ask_request)
         histories = ask_request.histories[: self._max_histories][
             ::-1
         ]  # reverse the order of histories
@@ -471,8 +565,12 @@ class AskService:
         ask_path = metadata.get("ask_path")
         template_decision = metadata.get("template_decision")
         semantic_plan = metadata.get("semantic_plan")
+        clarification_state = metadata.get("clarification_state")
+        self._remember_clarification_session(clarification_state)
         cached_result = self._ask_results.get(query_id)
-        if cached_result is not None and (ask_path or template_decision or semantic_plan):
+        if cached_result is not None and (
+            ask_path or template_decision or semantic_plan or clarification_state
+        ):
             update_payload = {}
             if ask_path:
                 update_payload["ask_path"] = ask_path
@@ -482,6 +580,10 @@ class AskService:
                 )
             if semantic_plan:
                 update_payload["semantic_plan"] = semantic_plan
+            if clarification_state:
+                update_payload["clarification_state"] = (
+                    ClarificationState.model_validate(clarification_state)
+                )
             self._ask_results[query_id] = cached_result.model_copy(
                 update=update_payload
             )

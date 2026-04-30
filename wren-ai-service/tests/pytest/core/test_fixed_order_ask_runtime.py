@@ -3,6 +3,8 @@ from src.core.fixed_order_ask_runtime import (
     build_reusable_template_sql,
     build_template_decision,
     detect_missing_external_source_requirement,
+    detect_missing_required_slot_requirement,
+    detect_missing_template_parameter_requirement,
     detect_missing_tenant_plat_id_requirement,
     filter_active_sql_samples,
     ground_template_sql_to_retrieved_tables,
@@ -353,22 +355,102 @@ def test_detect_missing_tenant_plat_id_requirement_uses_unique_history_context()
     assert result is None
 
 
+def test_detect_missing_required_slot_requirement_clarifies_vague_channel_performance():
+    result = detect_missing_required_slot_requirement("帮我看看这个渠道最近表现怎么样")
+
+    assert result is not None
+    assert result["slot"] == "channel_performance_context"
+    assert result["missing_parameters"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "date_range",
+        "metric_focus",
+    ]
+    assert "关注的指标方向" in result["content"]
+
+
+def test_detect_missing_required_slot_requirement_keeps_metric_specific_channel_query():
+    result = detect_missing_required_slot_requirement("这个渠道新客首充成本是多少")
+
+    assert result is None
+
+
 def test_build_minimal_semantic_plan_exposes_blocking_slot_clarification():
     plan = build_minimal_semantic_plan(
         "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况"
     )
 
-    assert plan["version"] == "p1_minimal_v1"
+    assert plan["version"] == "p1_structured_v1"
     assert plan["source"] == "deterministic"
+    assert plan["subject"] == "cohort"
+    assert "first_deposit" in plan["metrics"]
+    assert "retention_deposit" in plan["metrics"]
+    assert "channel_id" in plan["dimensions"]
+    assert "biz_date" in plan["dimensions"]
     assert plan["filters"] == {
         "channel_id": 990011,
         "start_date": "2026-04-01",
         "end_date": "2026-04-03",
     }
+    assert plan["decision"]["route"] == "clarification_required"
+    assert plan["decision"]["reason_codes"] == ["missing_required_slot"]
     assert plan["missing_slots"] == ["tenant_plat_id"]
     assert plan["clarification_request"]["slot"] == "tenant_plat_id"
     assert plan["clarification_request"]["blocking"] is True
     assert "租户平台" in plan["clarification_request"]["prompt"]
+
+
+def test_build_minimal_semantic_plan_marks_vague_channel_question_as_clarification():
+    plan = build_minimal_semantic_plan("帮我看看这个渠道最近效果怎么样")
+
+    assert plan["subject"] == "channel"
+    assert plan["decision"]["route"] == "clarification_required"
+    assert plan["missing_slots"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "date_range",
+        "metric_focus",
+    ]
+    assert plan["clarification_request"]["slot"] == "channel_performance_context"
+    assert "指标方向" in plan["clarification_request"]["prompt"]
+
+
+def test_detect_missing_template_parameter_requirement_clarifies_cohort_dates():
+    result = detect_missing_template_parameter_requirement(
+        "输出租户平台990001渠道990011首存用户从D1到D30每日充值趋势",
+        {
+            "missing_parameters": ["cohort_start_date", "cohort_end_date"],
+        },
+    )
+
+    assert result is not None
+    assert result["slot"] == "cohort_date_range"
+    assert result["missing_parameters"] == ["cohort_start_date", "cohort_end_date"]
+    assert "首存 cohort 日期范围" in result["content"]
+
+
+def test_detect_missing_template_parameter_requirement_clarifies_broad_context():
+    result = detect_missing_template_parameter_requirement(
+        "对TOP5和非TOP5用户存款、有效投注、输赢生成分组对比图",
+        {
+            "missing_parameters": [
+                "tenant_plat_id",
+                "channel_id",
+                "start_date",
+                "end_date",
+            ],
+        },
+    )
+
+    assert result is not None
+    assert result["slot"] == "template_required_context"
+    assert result["missing_parameters"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "start_date",
+        "end_date",
+    ]
+    assert "关键查询范围" in result["content"]
 
 
 def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
@@ -397,6 +479,7 @@ def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
     assert plan["missing_slots"] == []
     assert plan["clarification_request"] is None
     assert plan["template"]["template_id"] == "T04"
+    assert plan["decision"]["route"] == "template_answer"
 
 
 def test_build_template_decision_keeps_same_family_low_margin_business_template_anchor():
@@ -585,6 +668,36 @@ def test_build_template_decision_keeps_history_backed_anchor_for_low_margin_foll
     assert result["parameters"]["channel_id"] == 990011
     assert result["parameters"]["cohort_start_date"] == "2026-04-02"
     assert result["parameters"]["cohort_end_date"] == "2026-04-02"
+
+
+def test_build_template_decision_extracts_explicit_period_day_list():
+    result = build_template_decision(
+        [
+            {
+                "id": "template-04",
+                "question": "统计某渠道首存 cohort 在指定回收周期内的累计渠道收入",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date, :period_days"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "score": 0.95,
+                "status": "active",
+            }
+        ],
+        query=(
+            "统计租户平台990001下渠道990011在2026-04-01到2026-04-03"
+            "首存cohort的D1、D3、D7、D15、D30累计渠道收入"
+        ),
+    )
+
+    assert result["template_id"] == "template-04"
+    assert result["parameters"]["period_days"] == [1, 3, 7, 15, 30]
+    assert result["missing_parameters"] == []
+    assert result["sql_source"] == "anchored_template"
 
 
 def test_build_template_decision_ignores_optional_is_null_placeholders():
@@ -1024,6 +1137,17 @@ def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv()
     assert "缺失指标" in result["content"]
     assert "需要粒度：日期、渠道" in result["content"]
     assert "示例表头" in result["content"]
+
+
+def test_detect_missing_external_source_requirement_handles_roi_synonyms():
+    result = detect_missing_external_source_requirement(
+        "看这个渠道首存用户投放回收和回本情况"
+    )
+
+    assert result is not None
+    assert result["instruction"]["required_metrics"] == ["投放金额"]
+    assert "缺失指标：投放金额" in result["content"]
+    assert "需要粒度：对应统计周期" in result["content"]
 
 
 def test_detect_missing_external_source_requirement_uses_configured_grain():
