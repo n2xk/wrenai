@@ -407,6 +407,9 @@ export default function useAskPrompt(
           return null;
         }
 
+        const displayQuestion =
+          resolvedSubmitDefaults?.displayQuestion?.trim() || normalizedQuestion;
+
         void fetchAskingTaskWithGuard(askingTaskId)
           .then((nextTask) => {
             if (nextTask?.type === AskingTaskType.GENERAL) {
@@ -418,7 +421,7 @@ export default function useAskPrompt(
           });
 
         return {
-          question: normalizedQuestion,
+          question: displayQuestion,
           taskId: askingTaskId,
         };
       } catch (_error) {

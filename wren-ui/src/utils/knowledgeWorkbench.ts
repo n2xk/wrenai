@@ -9,6 +9,7 @@ export const KNOWLEDGE_WORKBENCH_SECTIONS = [
   'instructions',
   'businessTerms',
   'externalDependencies',
+  'askPolicies',
 ] as const;
 
 export type KnowledgeWorkbenchSection =

@@ -9,6 +9,7 @@ import {
 describe('knowledgeWorkbench helpers', () => {
   it('resolves supported workbench sections with fallback', () => {
     expect(resolveKnowledgeWorkbenchSection('modeling')).toBe('modeling');
+    expect(resolveKnowledgeWorkbenchSection('askPolicies')).toBe('askPolicies');
     expect(resolveKnowledgeWorkbenchSection('assets')).toBe('overview');
     expect(resolveKnowledgeWorkbenchSection('unknown')).toBe('overview');
   });

@@ -39,6 +39,7 @@ const WORKBENCH_SECTIONS = [
   { key: 'instructions', label: '分析规则' },
   { key: 'businessTerms', label: '业务词典' },
   { key: 'externalDependencies', label: '外部数据依赖' },
+  { key: 'askPolicies', label: '问数策略' },
 ] as const satisfies ReadonlyArray<{
   key: KnowledgeWorkbenchSectionKey;
   label: string;

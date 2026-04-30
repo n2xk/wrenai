@@ -2,32 +2,10 @@ import { useMemo } from 'react';
 import { Button, Form, Input, Space, Tag, Typography } from 'antd';
 import styled from 'styled-components';
 import type { AskClarificationState } from '@/types/home';
-
-const slotLabels: Record<string, string> = {
-  tenant_plat_id: '租户平台',
-  channel_id: '渠道',
-  date_range: '统计周期',
-  start_date: '开始日期',
-  end_date: '结束日期',
-  cohort_start_date: 'Cohort 开始日期',
-  cohort_end_date: 'Cohort 结束日期',
-  metric_focus: '指标方向',
-  channel_performance_context: '分析口径',
-};
-
-const slotPlaceholders: Record<string, string> = {
-  tenant_plat_id: '例如：990001',
-  channel_id: '例如：990011',
-  date_range: '例如：2026-04-01 到 2026-04-07',
-  start_date: '例如：2026-04-01',
-  end_date: '例如：2026-04-07',
-  cohort_start_date: '例如：2026-04-01',
-  cohort_end_date: '例如：2026-04-07',
-  metric_focus: '例如：充值人数、充值金额、成功率',
-  channel_performance_context: '例如：充值表现、注册转化、留存表现',
-};
-
-const normalizeSlotLabel = (slot: string) => slotLabels[slot] || slot;
+import {
+  normalizeClarificationSlotLabel,
+  slotPlaceholders,
+} from './clarificationSlotDisplay';
 
 const ClarificationPanel = styled.div`
   margin-bottom: 10px;
@@ -116,11 +94,11 @@ export default function ClarificationSlotForm({
             <Form.Item
               key={slot}
               name={slot}
-              label={normalizeSlotLabel(slot)}
+              label={normalizeClarificationSlotLabel(slot)}
               rules={[
                 {
                   required: true,
-                  message: `请填写${normalizeSlotLabel(slot)}`,
+                  message: `请填写${normalizeClarificationSlotLabel(slot)}`,
                 },
               ]}
             >

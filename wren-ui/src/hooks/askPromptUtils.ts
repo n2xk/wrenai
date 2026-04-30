@@ -25,6 +25,7 @@ export interface AskPromptData {
 export interface AskPromptSubmitDefaults {
   clarificationSessionId?: string | null;
   clarificationState?: Record<string, unknown> | null;
+  displayQuestion?: string | null;
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
   slotValues?: Record<string, unknown> | null;

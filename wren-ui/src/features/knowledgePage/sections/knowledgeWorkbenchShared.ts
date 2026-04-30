@@ -6,7 +6,8 @@ export type KnowledgeWorkbenchSectionKey =
   | 'sqlTemplates'
   | 'instructions'
   | 'businessTerms'
-  | 'externalDependencies';
+  | 'externalDependencies'
+  | 'askPolicies';
 
 export type KnowledgeWorkbenchDetailTab = 'overview' | 'fields' | 'usage';
 

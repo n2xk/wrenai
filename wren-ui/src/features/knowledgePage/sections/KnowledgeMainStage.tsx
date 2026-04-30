@@ -10,6 +10,7 @@ import {
   MainStage,
   MainStageContent,
 } from '@/features/knowledgePage/index.styles';
+import AskPoliciesManager from '@/features/askPolicies/AskPoliciesManager';
 import KnowledgeWorkbenchHeader from '@/features/knowledgePage/sections/KnowledgeWorkbenchHeader';
 import KnowledgeBusinessTermsStage from '@/features/knowledgePage/sections/KnowledgeBusinessTermsStage';
 import KnowledgeExternalDependenciesStage from '@/features/knowledgePage/sections/KnowledgeExternalDependenciesStage';
@@ -196,6 +197,20 @@ function KnowledgeMainStage({
           <KnowledgeExternalDependenciesStage
             isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
             runtimeSelector={runtimeSelector}
+          />
+        ) : null}
+
+        {activeWorkbenchSection === 'askPolicies' ? (
+          <AskPoliciesManager
+            embedded
+            lockScopeToKnowledgeBase
+            runtimeScopeSelector={runtimeSelector}
+            hasRuntimeScope={Boolean(
+              runtimeSelector.workspaceId && runtimeSelector.knowledgeBaseId,
+            )}
+            mutationDisabled={isKnowledgeMutationDisabled}
+            mutationDisabledHint={knowledgeMutationHint}
+            description="为当前知识库配置问数策略，用于约束模板采纳、必填业务槽位和问数路由。"
           />
         ) : null}
       </MainStageContent>

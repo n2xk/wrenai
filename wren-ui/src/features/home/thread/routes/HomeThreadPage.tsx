@@ -38,6 +38,7 @@ import useThreadDetail from '@/hooks/useThreadDetail';
 import useThreadResponsePolling from '@/hooks/useThreadResponsePolling';
 import ThreadConversationStage from '@/features/home/thread/components/ThreadConversationStage';
 import ClarificationSlotForm from '@/features/home/thread/components/ClarificationSlotForm';
+import { appendClarificationSlotSummary } from '@/features/home/thread/components/clarificationSlotDisplay';
 import ThreadPageOverlays from '@/features/home/thread/components/ThreadPageOverlays';
 import ThreadWorkbench from '@/features/home/thread/components/ThreadWorkbench';
 import { resolveComposerIntent } from '@/features/home/thread/homeIntentRouting';
@@ -975,12 +976,17 @@ export default function HomeThread() {
 
       const originalQuestion =
         latestPendingClarification.originalQuestion?.trim() || primaryQuestion;
+      const displayQuestion = appendClarificationSlotSummary({
+        question: originalQuestion,
+        slotValues,
+      });
       const askTask = await askPrompt.onSubmit(originalQuestion, {
         clarificationSessionId,
         clarificationState: latestPendingClarification as Record<
           string,
           unknown
         >,
+        displayQuestion,
         slotValues,
       });
       if (!askTask?.taskId) {
