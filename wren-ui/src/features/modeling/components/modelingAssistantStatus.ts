@@ -8,7 +8,7 @@ import type {
 } from '@/types/modeling';
 
 export type ModelingAssistantTaskSummary = {
-  key: 'semantics' | 'relationships';
+  key: 'semantics' | 'relationships' | 'governance';
   state: 'todo' | 'done';
   countLabel: string;
   detailLabel: string;
@@ -88,6 +88,12 @@ export const buildModelingAssistantTaskSummaries = ({
         relationCount > 0
           ? `模型中已有 ${relationCount} 条关联关系`
           : '还没有已保存的关联关系',
+    },
+    {
+      key: 'governance',
+      state: 'todo',
+      countLabel: '1',
+      detailLabel: '可推荐业务词、SQL 模板和外部依赖治理字段',
     },
   ];
 };

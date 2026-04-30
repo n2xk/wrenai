@@ -39,7 +39,8 @@ export const isLegacyModelingRoute = (pathname: string) =>
 
 export const isModelingAssistantRoute = (pathname: string) =>
   pathname.startsWith(Path.RecommendRelationships) ||
-  pathname.startsWith(Path.RecommendSemantics);
+  pathname.startsWith(Path.RecommendSemantics) ||
+  pathname.startsWith(Path.RecommendGovernance);
 
 const MODELING_DEEP_LINK_KEYS = [
   'modelId',

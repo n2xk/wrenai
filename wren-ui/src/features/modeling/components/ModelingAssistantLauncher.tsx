@@ -180,6 +180,13 @@ const items = [
     title: '推荐关联关系',
     description: '生成关联关系建议，并在保存前进行审核。',
   },
+  {
+    summaryKey: 'governance',
+    intent: 'governance',
+    key: Path.RecommendGovernance,
+    title: '推荐治理字段',
+    description: '生成业务词、SQL 模板和外部依赖草稿。',
+  },
 ] as const satisfies readonly {
   summaryKey: ModelingAssistantIntent;
   intent: ModelingAssistantIntent;
@@ -295,7 +302,7 @@ export default function ModelingAssistantLauncher({
               >
                 {hasTodo ? '待设置' : '已完成'}
               </Tag>
-              <Text type="secondary">语义描述与关联关系建议</Text>
+              <Text type="secondary">语义描述、关联关系与治理字段建议</Text>
             </LauncherTitleRow>
             <LauncherSummaryRow>
               <LauncherSummaryPill>{flowCount} 个流程</LauncherSummaryPill>

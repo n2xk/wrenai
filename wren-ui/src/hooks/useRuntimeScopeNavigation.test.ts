@@ -69,6 +69,9 @@ describe('shouldPreserveKnowledgeRuntimeScope', () => {
     expect(shouldPreserveKnowledgeRuntimeScope(Path.RecommendSemantics)).toBe(
       true,
     );
+    expect(shouldPreserveKnowledgeRuntimeScope(Path.RecommendGovernance)).toBe(
+      true,
+    );
     expect(
       shouldPreserveKnowledgeRuntimeScope(`${Path.Knowledge}?section=modeling`),
     ).toBe(true);
@@ -113,6 +116,12 @@ describe('resolveScopedNavigationSelector', () => {
       resolveScopedNavigationSelector({
         selector: fullSelector,
         path: Path.RecommendSemantics,
+      }),
+    ).toEqual(fullSelector);
+    expect(
+      resolveScopedNavigationSelector({
+        selector: fullSelector,
+        path: Path.RecommendGovernance,
       }),
     ).toEqual(fullSelector);
   });

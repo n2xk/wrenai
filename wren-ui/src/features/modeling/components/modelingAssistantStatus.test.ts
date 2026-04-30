@@ -30,6 +30,12 @@ describe('buildModelingAssistantTaskSummaries', () => {
         countLabel: '1',
         detailLabel: '模型中已有 1 条关联关系',
       },
+      {
+        key: 'governance',
+        state: 'todo',
+        countLabel: '1',
+        detailLabel: '可推荐业务词、SQL 模板和外部依赖治理字段',
+      },
     ]);
   });
 
@@ -66,6 +72,12 @@ describe('buildModelingAssistantTaskSummaries', () => {
         state: 'done',
         countLabel: '1',
         detailLabel: '模型中已有 1 条关联关系',
+      },
+      {
+        key: 'governance',
+        state: 'todo',
+        countLabel: '1',
+        detailLabel: '可推荐业务词、SQL 模板和外部依赖治理字段',
       },
     ]);
   });

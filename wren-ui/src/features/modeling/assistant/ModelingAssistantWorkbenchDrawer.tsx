@@ -1,14 +1,18 @@
 import { Drawer } from 'antd';
 import type { ModelingAssistantIntent } from './modelingAssistantRoutes';
+import { RecommendGovernanceFieldsAssistantContent } from './recommendGovernanceFields/RecommendGovernanceFieldsPage';
 import { RecommendRelationshipsAssistantContent } from './recommendRelationships/RecommendRelationshipsPage';
 import { RecommendSemanticsAssistantContent } from './recommendSemantics/RecommendSemanticsPage';
 
 const ASSISTANT_DRAWER_TITLE: Record<ModelingAssistantIntent, string> = {
+  governance: '推荐治理字段',
   relationships: '生成关联关系',
   semantics: '生成语义描述',
 };
 
 const ASSISTANT_DRAWER_DESCRIPTION: Record<ModelingAssistantIntent, string> = {
+  governance:
+    '根据业务口径生成业务词、SQL 模板和外部依赖治理字段草稿，审核后再保存。',
   relationships:
     '在当前知识库建模上下文中审核 AI 推荐的关联关系，确认后保存回语义层。',
   semantics:
@@ -47,7 +51,11 @@ export default function ModelingAssistantWorkbenchDrawer({
         </span>
       }
     >
-      {intent === 'semantics' ? (
+      {intent === 'governance' ? (
+        <RecommendGovernanceFieldsAssistantContent
+          onSaveSuccess={onSaveSuccess}
+        />
+      ) : intent === 'semantics' ? (
         <RecommendSemanticsAssistantContent onSaveSuccess={onSaveSuccess} />
       ) : (
         <RecommendRelationshipsAssistantContent

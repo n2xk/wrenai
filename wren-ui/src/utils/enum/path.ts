@@ -9,6 +9,7 @@ export enum Path {
   Modeling = '/modeling',
   RecommendRelationships = '/recommend-relationships',
   RecommendSemantics = '/recommend-semantics',
+  RecommendGovernance = '/recommend-governance',
   Onboarding = '/setup',
   OnboardingConnection = '/setup/connection',
   OnboardingModels = '/setup/models',
