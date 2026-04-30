@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
+  Drawer,
   Form,
   Input,
-  Modal,
   Popconfirm,
   Select,
   Space,
@@ -122,7 +122,7 @@ export default function AskPoliciesManager({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingRule, setEditingRule] = useState<AskPolicyRule | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const listUrl = useMemo(
     () =>
@@ -177,7 +177,7 @@ export default function AskPoliciesManager({
     void loadRules();
   }, [loadRules]);
 
-  const openCreateModal = () => {
+  const openCreateDrawer = () => {
     if (mutationDisabled) {
       if (mutationDisabledHint) {
         message.info(mutationDisabledHint);
@@ -197,13 +197,13 @@ export default function AskPoliciesManager({
       reasonCode: '',
       description: '',
     });
-    setModalOpen(true);
+    setDrawerOpen(true);
   };
 
   const isRuleLockedByScope = (rule: AskPolicyRule) =>
     lockScopeToKnowledgeBase && !rule.knowledgeBaseId;
 
-  const openEditModal = (rule: AskPolicyRule) => {
+  const openEditDrawer = (rule: AskPolicyRule) => {
     if (mutationDisabled || isRuleLockedByScope(rule)) {
       if (mutationDisabledHint) {
         message.info(mutationDisabledHint);
@@ -223,7 +223,7 @@ export default function AskPoliciesManager({
       reasonCode: rule.reasonCode,
       description: rule.description || '',
     });
-    setModalOpen(true);
+    setDrawerOpen(true);
   };
 
   const saveRule = async () => {
@@ -253,7 +253,7 @@ export default function AskPoliciesManager({
         throw new Error(payload?.error || '保存问数策略失败，请稍后重试。');
       }
       message.success('问数策略已保存');
-      setModalOpen(false);
+      setDrawerOpen(false);
       await loadRules();
     } catch (error) {
       const errorMessage = resolveAbortSafeErrorMessage(
@@ -349,7 +349,7 @@ export default function AskPoliciesManager({
               type="link"
               size="small"
               disabled={ruleMutationDisabled}
-              onClick={() => openEditModal(record)}
+              onClick={() => openEditDrawer(record)}
             >
               编辑
             </Button>
@@ -402,7 +402,7 @@ export default function AskPoliciesManager({
             type="primary"
             icon={<PlusOutlined />}
             disabled={mutationDisabled || !hasRuntimeScope}
-            onClick={openCreateModal}
+            onClick={openCreateDrawer}
           >
             新建策略
           </Button>
@@ -422,15 +422,23 @@ export default function AskPoliciesManager({
         />
       </Space>
 
-      <Modal
+      <Drawer
         title={editingRule ? '编辑问数策略' : '新建问数策略'}
-        open={modalOpen}
-        onCancel={() => setModalOpen(false)}
-        onOk={saveRule}
-        confirmLoading={saving}
-        okText="保存"
-        cancelText="取消"
-        width={720}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        size="large"
+        extra={
+          <Space>
+            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button
+              type="primary"
+              loading={saving}
+              onClick={() => void saveRule()}
+            >
+              保存
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical" requiredMark={false}>
           <Form.Item
@@ -487,7 +495,7 @@ export default function AskPoliciesManager({
             />
           </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   );
 }
