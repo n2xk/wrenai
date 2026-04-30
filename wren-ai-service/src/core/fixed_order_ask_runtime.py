@@ -1041,6 +1041,74 @@ def _build_semantic_route_decision(
     }
 
 
+SLOT_LABELS = {
+    "tenant_plat_id": "租户平台",
+    "channel_id": "渠道 ID",
+    "date_range": "时间范围",
+    "start_date": "开始日期",
+    "end_date": "结束日期",
+    "cohort_start_date": "首存 cohort 开始日期",
+    "cohort_end_date": "首存 cohort 结束日期",
+    "metric_focus": "关注指标",
+}
+
+
+def _build_slot_details(slots: Sequence[str], *, source: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "slot": slot,
+            "label": SLOT_LABELS.get(slot, slot),
+            "required": True,
+            "source": source,
+        }
+        for slot in slots
+    ]
+
+
+def _build_resolved_slot(
+    *,
+    value: Any,
+    source: str,
+) -> dict[str, Any]:
+    return {
+        "value": value,
+        "source": source,
+    }
+
+
+def _build_candidate_template_plan(
+    *,
+    template_decision: Optional[dict[str, Any]],
+    route: Optional[str],
+) -> list[dict[str, Any]]:
+    if not template_decision:
+        return []
+
+    mode = template_decision.get("mode")
+    fallback_reason = template_decision.get("fallback_reason")
+    decision = "accepted" if route == "template_answer" else "referenced"
+    if fallback_reason:
+        decision = "rejected"
+
+    reason_codes = []
+    if fallback_reason:
+        reason_codes.append(str(fallback_reason))
+    if template_decision.get("decision_reason"):
+        reason_codes.append(str(template_decision["decision_reason"]))
+
+    return [
+        {
+            "id": template_decision.get("template_id"),
+            "title": template_decision.get("template_title"),
+            "template_type": mode,
+            "decision": decision,
+            "sql_source": template_decision.get("sql_source"),
+            "reason_codes": reason_codes,
+            "missing_parameters": template_decision.get("missing_parameters") or [],
+        }
+    ]
+
+
 def build_minimal_semantic_plan(
     query: Optional[str],
     *,
@@ -1058,9 +1126,12 @@ def build_minimal_semantic_plan(
     decisions, and clarification state while P1 semantic parsing evolves.
     """
 
-    tenant_ids = _extract_tenant_plat_ids_from_text(query)
+    explicit_tenant_ids = _extract_tenant_plat_ids_from_text(query)
+    history_tenant_ids: list[int] = []
+    tenant_ids = explicit_tenant_ids
     if not tenant_ids:
-        tenant_ids = _resolve_history_tenant_plat_ids(histories)
+        history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
+        tenant_ids = history_tenant_ids
     channel_ids = _extract_channel_ids_from_text(query)
     date_range = _extract_date_range_from_text(query)
     missing_slot_requirement = detect_missing_required_slot_requirement(
@@ -1092,6 +1163,31 @@ def build_minimal_semantic_plan(
     if date_range and "biz_date" not in dimensions:
         dimensions.append("biz_date")
 
+    resolved_slots: dict[str, dict[str, Any]] = {}
+    if tenant_ids:
+        resolved_slots["tenant_plat_id"] = _build_resolved_slot(
+            value=_collapse_single_or_list(tenant_ids),
+            source="explicit_user_input"
+            if explicit_tenant_ids
+            else "history_context"
+            if history_tenant_ids
+            else "unknown",
+        )
+    if channel_ids:
+        resolved_slots["channel_id"] = _build_resolved_slot(
+            value=_collapse_single_or_list(channel_ids),
+            source="explicit_user_input",
+        )
+    for key, value in date_range.items():
+        resolved_slots[key] = _build_resolved_slot(
+            value=value,
+            source="explicit_user_input",
+        )
+
+    missing_slot_details = _build_slot_details(
+        missing_slots,
+        source=(missing_slot_requirement or {}).get("slot", "slot_guard"),
+    )
     clarification_request = None
     if missing_slot_requirement:
         clarification_request = {
@@ -1100,6 +1196,7 @@ def build_minimal_semantic_plan(
             "hint_values": [],
             "blocking": True,
             "resume_strategy": "resubmit_with_slot_value",
+            "pending_slots": missing_slot_details,
         }
     decision = _build_semantic_route_decision(
         missing_slots=missing_slots,
@@ -1107,6 +1204,12 @@ def build_minimal_semantic_plan(
         route_override=route_override,
         reason_codes=reason_codes,
         external_dependencies=external_dependencies,
+    )
+    decision["missing_slots"] = missing_slots
+    decision["resolved_slots"] = resolved_slots
+    decision["candidate_templates"] = _build_candidate_template_plan(
+        template_decision=template_decision,
+        route=decision.get("route"),
     )
 
     return {
@@ -1123,6 +1226,8 @@ def build_minimal_semantic_plan(
             template_decision=template_decision,
         ),
         "missing_slots": missing_slots,
+        "missing_slot_details": missing_slot_details,
+        "resolved_slots": resolved_slots,
         "clarification_request": clarification_request,
         "template": _build_template_plan_fragment(template_decision),
         "decision": decision,

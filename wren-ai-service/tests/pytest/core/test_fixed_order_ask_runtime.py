@@ -395,8 +395,27 @@ def test_build_minimal_semantic_plan_exposes_blocking_slot_clarification():
     assert plan["decision"]["route"] == "clarification_required"
     assert plan["decision"]["reason_codes"] == ["missing_required_slot"]
     assert plan["missing_slots"] == ["tenant_plat_id"]
+    assert plan["missing_slot_details"] == [
+        {
+            "slot": "tenant_plat_id",
+            "label": "租户平台",
+            "required": True,
+            "source": "tenant_plat_id",
+        }
+    ]
+    assert plan["resolved_slots"]["channel_id"] == {
+        "value": 990011,
+        "source": "explicit_user_input",
+    }
+    assert plan["decision"]["resolved_slots"]["channel_id"] == {
+        "value": 990011,
+        "source": "explicit_user_input",
+    }
     assert plan["clarification_request"]["slot"] == "tenant_plat_id"
     assert plan["clarification_request"]["blocking"] is True
+    assert plan["clarification_request"]["pending_slots"][0]["slot"] == (
+        "tenant_plat_id"
+    )
     assert "租户平台" in plan["clarification_request"]["prompt"]
 
 
@@ -473,6 +492,10 @@ def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
     )
 
     assert plan["filters"]["tenant_plat_id"] == 990001
+    assert plan["resolved_slots"]["tenant_plat_id"] == {
+        "value": 990001,
+        "source": "history_context",
+    }
     assert plan["filters"]["channel_id"] == 990011
     assert plan["filters"]["date"] == "2026-04-02"
     assert plan["grain"] == "first_deposit_date + channel_id"
@@ -480,6 +503,17 @@ def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
     assert plan["clarification_request"] is None
     assert plan["template"]["template_id"] == "T04"
     assert plan["decision"]["route"] == "template_answer"
+    assert plan["decision"]["candidate_templates"] == [
+        {
+            "id": "T04",
+            "title": None,
+            "template_type": "anchored_template",
+            "decision": "accepted",
+            "sql_source": "anchored_template",
+            "reason_codes": [],
+            "missing_parameters": [],
+        }
+    ]
 
 
 def test_build_template_decision_keeps_same_family_low_margin_business_template_anchor():

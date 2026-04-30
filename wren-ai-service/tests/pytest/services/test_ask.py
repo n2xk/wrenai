@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -197,3 +198,96 @@ async def test_ask_service_resumes_clarification_session_with_slot_value():
     assert "统计渠道990011" in routed_request.query
     assert "租户平台990001" in routed_request.query
     assert routed_request.slot_values == {"tenant_plat_id": "990001"}
+
+
+@pytest.mark.asyncio
+async def test_ask_service_resumes_clarification_session_with_multiple_slot_values():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._clarification_sessions["clarify-2"] = {
+        "status": "needs_clarification",
+        "clarification_session_id": "clarify-2",
+        "original_question": "帮我看看这个渠道最近效果怎么样",
+        "pending_slots": [
+            "tenant_plat_id",
+            "channel_id",
+            "date_range",
+            "metric_focus",
+        ],
+        "resolved_slots": {},
+        "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+    }
+    ask_service._ask_results["query-3"] = AskResultResponse(status="understanding")
+
+    ask_request = AskRequest(
+        query="租户平台990001，渠道990011，2026-04-01到2026-04-07，看ROI",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-2",
+    )
+    ask_request.query_id = "query-3"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert "帮我看看这个渠道最近效果怎么样" in routed_request.query
+    assert "租户平台990001" in routed_request.query
+    assert "渠道990011" in routed_request.query
+    assert "时间范围2026-04-01到2026-04-07" in routed_request.query
+    assert routed_request.slot_values == {
+        "tenant_plat_id": "990001",
+        "channel_id": "990011",
+        "date_range": {
+            "start_date": "2026-04-01",
+            "end_date": "2026-04-07",
+        },
+        "metric_focus": "ROI",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ask_service_does_not_resume_expired_clarification_session():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._clarification_sessions["clarify-expired"] = {
+        "status": "needs_clarification",
+        "clarification_session_id": "clarify-expired",
+        "original_question": "统计渠道990011首充用户",
+        "pending_slots": ["tenant_plat_id"],
+        "resolved_slots": {},
+        "expires_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+    }
+    ask_service._ask_results["query-4"] = AskResultResponse(status="understanding")
+
+    ask_request = AskRequest(
+        query="990001",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-expired",
+    )
+    ask_request.query_id = "query-4"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert routed_request.query == "990001"
+    assert routed_request.slot_values == {}
+    assert "clarify-expired" not in ask_service._clarification_sessions

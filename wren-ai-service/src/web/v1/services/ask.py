@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
@@ -17,6 +18,7 @@ from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
+DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 AskPath = Literal[
     "historical",
     "sql_pairs",
@@ -354,15 +356,57 @@ class AskService:
         ask_request: AskRequest,
         pending_slots: list[str],
     ) -> dict[str, Any]:
+        query = ask_request.query or ""
         slot_values = dict(ask_request.slot_values or {})
         if "tenant_plat_id" in pending_slots and "tenant_plat_id" not in slot_values:
             match = re.search(
-                r"(?:租户平台|平台|tenant_plat_id)?\s*([0-9]{4,})",
-                ask_request.query or "",
+                r"(?:租户平台|平台|tenant_plat_id)\s*[:：#]?\s*([0-9]{4,})",
+                query,
                 flags=re.IGNORECASE,
             )
+            if not match and "channel_id" not in pending_slots:
+                match = re.search(r"([0-9]{4,})", query)
             if match:
                 slot_values["tenant_plat_id"] = match.group(1)
+        if "channel_id" in pending_slots and "channel_id" not in slot_values:
+            match = re.search(
+                r"(?:渠道|channel[_\s-]?id)\s*[:：#]?\s*([0-9]{3,})",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if not match and "tenant_plat_id" not in pending_slots:
+                match = re.search(r"([0-9]{3,})", query)
+            if match:
+                slot_values["channel_id"] = match.group(1)
+        dates = DATE_PATTERN.findall(query)
+        if "date_range" in pending_slots and "date_range" not in slot_values:
+            if len(dates) >= 2:
+                slot_values["date_range"] = {
+                    "start_date": dates[0],
+                    "end_date": dates[1],
+                }
+            elif len(dates) == 1:
+                slot_values["date_range"] = {"date": dates[0]}
+        if (
+            "cohort_start_date" in pending_slots
+            and "cohort_start_date" not in slot_values
+            and dates
+        ):
+            slot_values["cohort_start_date"] = dates[0]
+        if (
+            "cohort_end_date" in pending_slots
+            and "cohort_end_date" not in slot_values
+            and len(dates) >= 2
+        ):
+            slot_values["cohort_end_date"] = dates[1]
+        if "metric_focus" in pending_slots and "metric_focus" not in slot_values:
+            metric_match = re.search(
+                r"(ROI|投放|回本|充值|存款|投注|流水|首存|首充|续存|留存|流量|综合日报)",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if metric_match:
+                slot_values["metric_focus"] = metric_match.group(1)
         return slot_values
 
     def _format_slot_values_for_query(self, slot_values: dict[str, Any]) -> str:
@@ -370,9 +414,39 @@ class AskService:
         for key, value in slot_values.items():
             if key == "tenant_plat_id":
                 formatted_values.append(f"租户平台{value}")
+            elif key == "channel_id":
+                formatted_values.append(f"渠道{value}")
+            elif key == "date_range" and isinstance(value, dict):
+                start_date = value.get("start_date")
+                end_date = value.get("end_date")
+                single_date = value.get("date")
+                if start_date and end_date:
+                    formatted_values.append(f"时间范围{start_date}到{end_date}")
+                elif single_date:
+                    formatted_values.append(f"日期{single_date}")
+            elif key == "cohort_start_date":
+                formatted_values.append(f"首存cohort开始日期{value}")
+            elif key == "cohort_end_date":
+                formatted_values.append(f"首存cohort结束日期{value}")
+            elif key == "metric_focus":
+                formatted_values.append(f"关注指标{value}")
             else:
                 formatted_values.append(f"{key}={value}")
         return "，".join(formatted_values)
+
+    def _clarification_session_expired(self, session: dict[str, Any]) -> bool:
+        expires_at = session.get("expires_at")
+        if not expires_at:
+            return False
+
+        try:
+            expires_at_dt = datetime.fromisoformat(str(expires_at))
+        except ValueError:
+            return False
+
+        if expires_at_dt.tzinfo is None:
+            expires_at_dt = expires_at_dt.replace(tzinfo=UTC)
+        return expires_at_dt <= datetime.now(UTC)
 
     def _resume_clarification_request(self, ask_request: AskRequest) -> None:
         session_id = ask_request.clarification_session_id
@@ -381,6 +455,9 @@ class AskService:
 
         session = self._clarification_sessions.get(session_id)
         if not session:
+            return
+        if self._clarification_session_expired(session):
+            self._clarification_sessions.pop(session_id, None)
             return
 
         pending_slots = list(session.get("pending_slots") or [])
@@ -405,6 +482,8 @@ class AskService:
         if not clarification_state:
             return
         if clarification_state.get("status") != "needs_clarification":
+            return
+        if self._clarification_session_expired(clarification_state):
             return
         session_id = clarification_state.get("clarification_session_id")
         if not session_id:
