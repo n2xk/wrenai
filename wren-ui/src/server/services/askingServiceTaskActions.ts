@@ -18,6 +18,25 @@ interface AskingTaskActionServiceLike {
     | 'bindThreadResponse'
   >;
   threadResponseRepository: Pick<any, 'findOneBy'>;
+  askPolicyRuleRepository?: {
+    findAllForScope(filter: {
+      workspaceId: string;
+      knowledgeBaseIds?: string[] | null;
+      includeWorkspaceRules?: boolean;
+      status?: 'active' | 'disabled' | null;
+    }): Promise<
+      Array<{
+        id: number;
+        name: string;
+        version?: number | null;
+        queryContainsAny?: string[] | null;
+        templateIds?: string[] | null;
+        forbiddenTemplates?: string[] | null;
+        requiredSlots?: string[] | null;
+        reasonCode?: string | null;
+      }>
+    >;
+  };
   skillService?: any;
   getThreadById(threadId: number): Promise<any>;
   resolveAskingRuntimeIdentity(
@@ -68,6 +87,52 @@ type AskTaskRuntimeIdentity = PersistedRuntimeIdentity & {
   kbSnapshotId?: string | null;
   deployHash?: string | null;
   actorUserId?: string | null;
+};
+
+const buildRequestAskPolicy = async ({
+  service,
+  runtimeIdentity,
+  knowledgeBaseIds,
+}: {
+  service: AskingTaskActionServiceLike;
+  runtimeIdentity: PersistedRuntimeIdentity;
+  knowledgeBaseIds: string[];
+}) => {
+  const workspaceId = runtimeIdentity.workspaceId;
+  if (!workspaceId || !service.askPolicyRuleRepository) {
+    return null;
+  }
+
+  const rules = await service.askPolicyRuleRepository.findAllForScope({
+    workspaceId,
+    knowledgeBaseIds,
+    includeWorkspaceRules: true,
+    status: 'active',
+  });
+  if (!rules.length) {
+    return null;
+  }
+
+  const maxRuleVersion = Math.max(
+    ...rules.map((rule) => Number(rule.version) || 1),
+  );
+
+  return {
+    policy_id: `workspace:${workspaceId}:ask_policy`,
+    version: `ui_policy_v${maxRuleVersion}_${rules.length}`,
+    rules: rules.map((rule) => ({
+      id: `ui_rule_${rule.id}`,
+      reason_code: rule.reasonCode || `ui_rule_${rule.id}`,
+      query_contains_any: rule.queryContainsAny || [],
+      template_ids: rule.templateIds || [],
+      forbidden_templates: rule.forbiddenTemplates || [],
+      required_slots: rule.requiredSlots || [],
+      metadata: {
+        id: rule.id,
+        name: rule.name,
+      },
+    })),
+  };
 };
 
 export const createAskingTaskAction = async (
@@ -139,6 +204,11 @@ export const createAskingTaskAction = async (
   });
   const { runtimeIdentity: _runtimeIdentity, ...askContextWithoutIdentity } =
     askRuntimeContext;
+  const askPolicy = await buildRequestAskPolicy({
+    service,
+    runtimeIdentity: taskRuntimeIdentity,
+    knowledgeBaseIds,
+  });
 
   const response = await service.askingTaskTracker.createAskingTask({
     query: input.question,
@@ -160,9 +230,13 @@ export const createAskingTaskAction = async (
     ...(input.clarificationSessionId
       ? { clarificationSessionId: input.clarificationSessionId }
       : {}),
+    ...(input.clarificationState
+      ? { clarificationState: input.clarificationState }
+      : {}),
     ...(input.slotValues && Object.keys(input.slotValues).length > 0
       ? { slotValues: input.slotValues }
       : {}),
+    ...(askPolicy ? { askPolicy } : {}),
     ...askContextWithoutIdentity,
   });
 

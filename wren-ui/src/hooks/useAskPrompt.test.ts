@@ -122,7 +122,14 @@ describe('useAskPrompt helpers', () => {
           },
         } as any,
       ]),
-    ).toEqual({ clarificationSessionId: 'ask-latest' });
+    ).toEqual({
+      clarificationSessionId: 'ask-latest',
+      clarificationState: {
+        status: 'needs_clarification',
+        clarificationSessionId: 'ask-latest',
+        pendingSlots: ['tenant_plat_id'],
+      },
+    });
   });
 
   it('does not reuse stale clarification when a later ask response exists', () => {

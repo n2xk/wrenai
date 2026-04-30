@@ -41,6 +41,12 @@ export default async function handler(
             typeof req.body?.clarificationSessionId === 'string'
               ? req.body.clarificationSessionId
               : undefined,
+          clarificationState:
+            req.body?.clarificationState &&
+            typeof req.body.clarificationState === 'object' &&
+            !Array.isArray(req.body.clarificationState)
+              ? req.body.clarificationState
+              : undefined,
           slotValues:
             req.body?.slotValues &&
             typeof req.body.slotValues === 'object' &&

@@ -33,6 +33,7 @@ type ThreadConversationStageProps = {
   isHistoricalRuntimeReadonly: boolean;
   onCreateResponse: ComponentProps<typeof Prompt>['onCreateResponse'];
   promptProps: Omit<ComponentProps<typeof Prompt>, 'ref' | 'onCreateResponse'>;
+  composerContent?: ReactNode;
   workbench?: ReactNode;
 };
 
@@ -47,6 +48,7 @@ export default function ThreadConversationStage({
   isHistoricalRuntimeReadonly,
   onCreateResponse,
   promptProps,
+  composerContent,
   workbench,
 }: ThreadConversationStageProps) {
   const hasWorkbench = Boolean(workbench);
@@ -83,6 +85,7 @@ export default function ThreadConversationStage({
                 ))}
               </ComposerSelectedScopeRow>
             ) : null}
+            {composerContent}
             {hasExecutableRuntime ? (
               <Prompt
                 ref={promptRef as never}

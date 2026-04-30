@@ -24,6 +24,7 @@ export interface AskPromptData {
 
 export interface AskPromptSubmitDefaults {
   clarificationSessionId?: string | null;
+  clarificationState?: Record<string, unknown> | null;
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
   slotValues?: Record<string, unknown> | null;
@@ -87,7 +88,28 @@ export const isNeedPreparing = (askingTask: NullableAskingTask) =>
 
 export const resolvePendingClarificationSubmitDefaults = (
   responses?: Array<{ askingTask?: AskingTask | null }> | null,
-): Pick<AskPromptSubmitDefaults, 'clarificationSessionId'> => {
+): Pick<
+  AskPromptSubmitDefaults,
+  'clarificationSessionId' | 'clarificationState'
+> => {
+  const latestPendingClarification =
+    resolveLatestPendingClarificationState(responses);
+
+  return latestPendingClarification?.clarificationSessionId
+    ? {
+        clarificationSessionId:
+          latestPendingClarification.clarificationSessionId,
+        clarificationState: latestPendingClarification as Record<
+          string,
+          unknown
+        >,
+      }
+    : {};
+};
+
+export const resolveLatestPendingClarificationState = (
+  responses?: Array<{ askingTask?: AskingTask | null }> | null,
+) => {
   const latestAskingResponse = (responses || [])
     .slice()
     .reverse()
@@ -98,11 +120,8 @@ export const resolvePendingClarificationSubmitDefaults = (
   return latestPendingClarification?.status === 'needs_clarification' &&
     latestPendingClarification?.clarificationSessionId &&
     (latestPendingClarification.pendingSlots || []).length > 0
-    ? {
-        clarificationSessionId:
-          latestPendingClarification.clarificationSessionId,
-      }
-    : {};
+    ? latestPendingClarification
+    : null;
 };
 
 const resolveTextAnswerStatusFromAskingTask = (

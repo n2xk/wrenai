@@ -21,6 +21,7 @@ export enum Path {
   SettingsWorkspace = '/settings/workspace',
   SettingsConnectors = '/settings/connectors',
   SettingsSkills = '/settings/skills',
+  SettingsAskPolicies = '/settings/ask-policies',
   SettingsUsers = '/settings/users',
   SettingsPlatformUsers = '/settings/platform/users',
   SettingsPermissions = '/settings/permissions',

@@ -1,0 +1,441 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
+import {
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import type { TableColumnsType } from 'antd';
+import PlusOutlined from '@ant-design/icons/PlusOutlined';
+
+import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
+import useAuthSession from '@/hooks/useAuthSession';
+import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
+import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import {
+  buildRuntimeScopeUrl,
+  readRuntimeScopeSelectorFromObject,
+} from '@/runtime/client/runtimeScope';
+import { resolveAbortSafeErrorMessage } from '@/utils/abort';
+import { getAbsoluteTime } from '@/utils/time';
+import { appMessage as message } from '@/utils/antdAppBridge';
+import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
+import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
+
+type AskPolicyRule = {
+  id: number;
+  name: string;
+  status: 'active' | 'disabled';
+  version: number;
+  workspaceId: string;
+  knowledgeBaseId?: string | null;
+  queryContainsAny: string[];
+  templateIds: string[];
+  forbiddenTemplates: string[];
+  requiredSlots: string[];
+  reasonCode: string;
+  description?: string | null;
+  updatedAt?: string | null;
+};
+
+type AskPolicyRuleFormValues = {
+  name: string;
+  status: 'active' | 'disabled';
+  scope: 'knowledge_base' | 'workspace';
+  queryContainsAny?: string[];
+  templateIds?: string[];
+  forbiddenTemplates?: string[];
+  requiredSlots?: string[];
+  reasonCode?: string;
+  description?: string;
+};
+
+const policyPageStyles = `
+  .ask-policy-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .ask-policy-table.console-table .ant-table-thead > tr > th {
+    background: #f7f9fc;
+    color: #475467;
+    font-size: 13px;
+  }
+
+  .ask-policy-table.console-table .ant-table-tbody > tr > td {
+    vertical-align: top;
+  }
+`;
+
+const toArray = (value?: string[] | null) =>
+  Array.isArray(value) ? value.filter(Boolean) : [];
+
+const renderTagList = (values?: string[] | null, empty = '未配置') => {
+  const items = toArray(values);
+  if (!items.length) {
+    return <Typography.Text type="secondary">{empty}</Typography.Text>;
+  }
+
+  return (
+    <Space size={[4, 4]} wrap>
+      {items.map((item) => (
+        <Tag key={item}>{item}</Tag>
+      ))}
+    </Space>
+  );
+};
+
+export default function ManageAskPoliciesPage() {
+  const router = useRouter();
+  const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeScopePage = useProtectedRuntimeScopePage();
+  const authSession = useAuthSession();
+  const showPlatformManagement = resolvePlatformManagementFromAuthSession(
+    authSession.data,
+  );
+  const [form] = Form.useForm<AskPolicyRuleFormValues>();
+  const [items, setItems] = useState<AskPolicyRule[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingRule, setEditingRule] = useState<AskPolicyRule | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const runtimeScopeSelector = useMemo(
+    () => readRuntimeScopeSelectorFromObject(router.query),
+    [router.query],
+  );
+  const shellProps = {
+    title: '问数策略',
+    ...buildSettingsConsoleShellProps({
+      activeKey: 'settingsAskPolicies',
+      onNavigate: runtimeScopeNavigation.pushWorkspace,
+      showPlatformAdmin: showPlatformManagement,
+    }),
+  } as const;
+
+  const listUrl = useMemo(
+    () =>
+      buildRuntimeScopeUrl(
+        '/api/v1/ask-policy-rules',
+        {},
+        runtimeScopeSelector,
+      ),
+    [runtimeScopeSelector],
+  );
+
+  const loadRules = useCallback(async () => {
+    if (!runtimeScopePage.hasRuntimeScope || !router.isReady) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(listUrl, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || '加载问数策略失败，请稍后重试。');
+      }
+      setItems(Array.isArray(payload?.items) ? payload.items : []);
+    } catch (error) {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '加载问数策略失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [listUrl, router.isReady, runtimeScopePage.hasRuntimeScope]);
+
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
+
+  const openCreateModal = () => {
+    setEditingRule(null);
+    form.setFieldsValue({
+      name: '',
+      status: 'active',
+      scope: 'knowledge_base',
+      queryContainsAny: [],
+      templateIds: [],
+      forbiddenTemplates: [],
+      requiredSlots: [],
+      reasonCode: '',
+      description: '',
+    });
+    setModalOpen(true);
+  };
+
+  const openEditModal = (rule: AskPolicyRule) => {
+    setEditingRule(rule);
+    form.setFieldsValue({
+      name: rule.name,
+      status: rule.status,
+      scope: rule.knowledgeBaseId ? 'knowledge_base' : 'workspace',
+      queryContainsAny: toArray(rule.queryContainsAny),
+      templateIds: toArray(rule.templateIds),
+      forbiddenTemplates: toArray(rule.forbiddenTemplates),
+      requiredSlots: toArray(rule.requiredSlots),
+      reasonCode: rule.reasonCode,
+      description: rule.description || '',
+    });
+    setModalOpen(true);
+  };
+
+  const saveRule = async () => {
+    const values = await form.validateFields();
+    setSaving(true);
+    try {
+      const response = await fetch(
+        editingRule
+          ? buildRuntimeScopeUrl(
+              `/api/v1/ask-policy-rules/${editingRule.id}`,
+              {},
+              runtimeScopeSelector,
+            )
+          : listUrl,
+        {
+          method: editingRule ? 'PATCH' : 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.error || '保存问数策略失败，请稍后重试。');
+      }
+      message.success('问数策略已保存');
+      setModalOpen(false);
+      await loadRules();
+    } catch (error) {
+      const errorMessage = resolveAbortSafeErrorMessage(
+        error,
+        '保存问数策略失败，请稍后重试。',
+      );
+      if (errorMessage) {
+        message.error(errorMessage);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRule = async (rule: AskPolicyRule) => {
+    const response = await fetch(
+      buildRuntimeScopeUrl(
+        `/api/v1/ask-policy-rules/${rule.id}`,
+        {},
+        runtimeScopeSelector,
+      ),
+      { method: 'DELETE', credentials: 'include' },
+    );
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || '删除问数策略失败，请稍后重试。');
+    }
+    message.success('问数策略已删除');
+    await loadRules();
+  };
+
+  const columns: TableColumnsType<AskPolicyRule> = [
+    {
+      title: '策略',
+      dataIndex: 'name',
+      key: 'name',
+      width: 260,
+      render: (_value, record) => (
+        <Space orientation="vertical" size={4}>
+          <Space size={6} wrap>
+            <Typography.Text strong>{record.name}</Typography.Text>
+            <Tag color={record.status === 'active' ? 'green' : 'default'}>
+              {record.status === 'active' ? '启用' : '停用'}
+            </Tag>
+            <Tag>{record.knowledgeBaseId ? '当前知识库' : '工作空间'}</Tag>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {record.reasonCode}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: '触发词',
+      dataIndex: 'queryContainsAny',
+      key: 'queryContainsAny',
+      render: (values) => renderTagList(values),
+    },
+    {
+      title: '禁用模板',
+      dataIndex: 'forbiddenTemplates',
+      key: 'forbiddenTemplates',
+      render: (values) => renderTagList(values, '不限制'),
+    },
+    {
+      title: '必填槽位',
+      dataIndex: 'requiredSlots',
+      key: 'requiredSlots',
+      render: (values) => renderTagList(values, '不要求'),
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      width: 180,
+      render: (value) => (
+        <Typography.Text type="secondary">
+          {value ? getAbsoluteTime(value) : '-'}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 140,
+      render: (_value, record) => (
+        <Space size={8}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => openEditModal(record)}
+          >
+            编辑
+          </Button>
+          <Popconfirm
+            title="删除问数策略？"
+            description="删除后后续问数不会再注入该策略。"
+            onConfirm={() =>
+              deleteRule(record).catch((error) =>
+                message.error(error.message || '删除问数策略失败'),
+              )
+            }
+          >
+            <Button type="link" danger size="small">
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <ConsoleShellLayout {...shellProps}>
+      <style jsx global>
+        {policyPageStyles}
+      </style>
+      <Space orientation="vertical" size={18} style={{ width: '100%' }}>
+        <div className="ask-policy-toolbar">
+          <Space orientation="vertical" size={2}>
+            <Typography.Title level={4} style={{ marginBottom: 0 }}>
+              问数策略
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              用可版本化的策略约束模板采纳、必填业务槽位和问数路由。
+            </Typography.Text>
+          </Space>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreateModal}
+          >
+            新建策略
+          </Button>
+        </div>
+        <Table
+          className="ask-policy-table console-table"
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={items}
+          pagination={false}
+        />
+      </Space>
+
+      <Modal
+        title={editingRule ? '编辑问数策略' : '新建问数策略'}
+        open={modalOpen}
+        onCancel={() => setModalOpen(false)}
+        onOk={saveRule}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        width={720}
+      >
+        <Form form={form} layout="vertical" requiredMark={false}>
+          <Form.Item
+            name="name"
+            label="策略名称"
+            rules={[{ required: true, message: '请输入策略名称' }]}
+          >
+            <Input placeholder="例如：渠道首充必须补充租户平台" />
+          </Form.Item>
+          <Space size={12} style={{ width: '100%' }} align="start">
+            <Form.Item name="status" label="状态" style={{ width: 180 }}>
+              <Select
+                options={[
+                  { label: '启用', value: 'active' },
+                  { label: '停用', value: 'disabled' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="scope" label="作用范围" style={{ width: 220 }}>
+              <Select
+                disabled={Boolean(editingRule)}
+                options={[
+                  { label: '当前知识库', value: 'knowledge_base' },
+                  { label: '整个工作空间', value: 'workspace' },
+                ]}
+              />
+            </Form.Item>
+          </Space>
+          <Form.Item name="queryContainsAny" label="触发词">
+            <Select
+              mode="tags"
+              tokenSeparators={[',', '，']}
+              placeholder="输入后回车，例如：渠道、首充"
+            />
+          </Form.Item>
+          <Form.Item name="forbiddenTemplates" label="命中后禁止采用的模板 ID">
+            <Select
+              mode="tags"
+              tokenSeparators={[',', '，']}
+              placeholder="例如：T08、sql_pair_123"
+            />
+          </Form.Item>
+          <Form.Item name="requiredSlots" label="必填槽位">
+            <Select
+              mode="tags"
+              tokenSeparators={[',', '，']}
+              placeholder="例如：tenant_plat_id、date_range"
+            />
+          </Form.Item>
+          <Form.Item name="reasonCode" label="原因代码">
+            <Input placeholder="例如：policy_missing_tenant_for_channel_metric" />
+          </Form.Item>
+          <Form.Item name="description" label="说明">
+            <Input.TextArea
+              rows={3}
+              placeholder="说明策略用途，便于诊断和回归测试定位。"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </ConsoleShellLayout>
+  );
+}

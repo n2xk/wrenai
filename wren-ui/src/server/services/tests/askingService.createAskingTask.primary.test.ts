@@ -309,6 +309,77 @@ describe('AskingService', () => {
       );
     });
 
+    it('injects active workspace ask policy rules into AI request', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      service.threadRepository = {
+        findOneBy: jest.fn(),
+      };
+      service.askingTaskTracker = {
+        createAskingTask: jest
+          .fn()
+          .mockResolvedValue({ queryId: 'query-policy' }),
+      };
+      service.askPolicyRuleRepository = {
+        findAllForScope: jest.fn().mockResolvedValue([
+          {
+            id: 7,
+            name: '渠道首充必须补租户',
+            version: 3,
+            queryContainsAny: ['渠道', '首充'],
+            templateIds: [],
+            forbiddenTemplates: ['T08'],
+            requiredSlots: ['tenant_plat_id'],
+            reasonCode: 'policy_missing_tenant_for_channel_metric',
+          },
+        ]),
+      };
+      service.getAskingHistory = jest.fn();
+      service.resolveAskingRuntimeIdentity =
+        AskingService.prototype['resolveAskingRuntimeIdentity'].bind(service);
+      service.skillService = {};
+
+      await service.createAskingTask(
+        { question: '统计渠道990011首充用户' },
+        {
+          runtimeIdentity: {
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-42',
+            actorUserId: 'user-1',
+          },
+          language: 'zh-CN',
+        },
+      );
+
+      expect(
+        service.askPolicyRuleRepository.findAllForScope,
+      ).toHaveBeenCalledWith({
+        workspaceId: 'workspace-1',
+        knowledgeBaseIds: ['kb-1'],
+        includeWorkspaceRules: true,
+        status: 'active',
+      });
+      expect(service.askingTaskTracker.createAskingTask).toHaveBeenCalledWith(
+        expect.objectContaining({
+          askPolicy: expect.objectContaining({
+            policy_id: 'workspace:workspace-1:ask_policy',
+            version: 'ui_policy_v3_1',
+            rules: [
+              expect.objectContaining({
+                id: 'ui_rule_7',
+                reason_code: 'policy_missing_tenant_for_channel_metric',
+                query_contains_any: ['渠道', '首充'],
+                forbidden_templates: ['T08'],
+                required_slots: ['tenant_plat_id'],
+              }),
+            ],
+          }),
+        }),
+      );
+    });
+
     it('resolves first asks from canonical runtime scope without a project bridge when deployment history exists', async () => {
       const service = Object.create(AskingService.prototype) as any;
       service.threadRepository = {

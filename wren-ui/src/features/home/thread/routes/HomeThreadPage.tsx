@@ -14,7 +14,10 @@ import type { ThreadResponse } from '@/types/home';
 import { Path } from '@/utils/enum';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt from '@/hooks/useAskPrompt';
-import { resolvePendingClarificationSubmitDefaults } from '@/hooks/askPromptUtils';
+import {
+  resolveLatestPendingClarificationState,
+  resolvePendingClarificationSubmitDefaults,
+} from '@/hooks/askPromptUtils';
 import useAdjustAnswer from '@/hooks/useAdjustAnswer';
 import useModalAction from '@/hooks/useModalAction';
 import {
@@ -34,6 +37,7 @@ import {
 import useThreadDetail from '@/hooks/useThreadDetail';
 import useThreadResponsePolling from '@/hooks/useThreadResponsePolling';
 import ThreadConversationStage from '@/features/home/thread/components/ThreadConversationStage';
+import ClarificationSlotForm from '@/features/home/thread/components/ClarificationSlotForm';
 import ThreadPageOverlays from '@/features/home/thread/components/ThreadPageOverlays';
 import ThreadWorkbench from '@/features/home/thread/components/ThreadWorkbench';
 import { resolveComposerIntent } from '@/features/home/thread/homeIntentRouting';
@@ -210,6 +214,10 @@ export default function HomeThread() {
   });
   const clarificationSubmitDefaults = useMemo(
     () => resolvePendingClarificationSubmitDefaults(data?.thread?.responses),
+    [data?.thread?.responses],
+  );
+  const latestPendingClarification = useMemo(
+    () => resolveLatestPendingClarificationState(data?.thread?.responses),
     [data?.thread?.responses],
   );
   const askPrompt = useAskPrompt(
@@ -956,6 +964,49 @@ export default function HomeThread() {
     ],
   );
 
+  const handleClarificationSlotSubmit = useCallback(
+    async (slotValues: Record<string, string>) => {
+      const clarificationSessionId =
+        latestPendingClarification?.clarificationSessionId;
+      if (!clarificationSessionId) {
+        message.warning('补充会话已失效，请重新提问。');
+        return;
+      }
+
+      const originalQuestion =
+        latestPendingClarification.originalQuestion?.trim() || primaryQuestion;
+      const askTask = await askPrompt.onSubmit(originalQuestion, {
+        clarificationSessionId,
+        clarificationState: latestPendingClarification as Record<
+          string,
+          unknown
+        >,
+        slotValues,
+      });
+      if (!askTask?.taskId) {
+        return;
+      }
+
+      pendingThreadResponseSeedRef.current = {
+        question: askTask.question,
+        sourceResponseId: null,
+        taskId: askTask.taskId,
+      };
+      autoCreateResponseTaskIdRef.current = askTask.taskId;
+      const createdResponse = await onCreateResponse({
+        question: askTask.question,
+        taskId: askTask.taskId,
+      });
+
+      if (createdResponse) {
+        pendingThreadResponseSeedRef.current = null;
+      } else if (autoCreateResponseTaskIdRef.current === askTask.taskId) {
+        autoCreateResponseTaskIdRef.current = null;
+      }
+    },
+    [askPrompt, latestPendingClarification, onCreateResponse, primaryQuestion],
+  );
+
   const shouldRenderWorkbench = useMemo(() => {
     if (!isWorkbenchOpen || !selectedResponse) {
       return false;
@@ -1097,6 +1148,13 @@ export default function HomeThread() {
               ...askPrompt,
               onSubmit: handlePromptSubmit,
             }}
+            composerContent={
+              <ClarificationSlotForm
+                clarificationState={latestPendingClarification}
+                loading={askPrompt.loading}
+                onSubmit={handleClarificationSlotSubmit}
+              />
+            }
             workbench={
               shouldRenderWorkbench && selectedResponse ? (
                 <ThreadWorkbench

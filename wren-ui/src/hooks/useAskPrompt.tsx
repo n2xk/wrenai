@@ -370,7 +370,7 @@ export default function useAskPrompt(
   );
 
   const onSubmit = useCallback(
-    async (value: string) => {
+    async (value: string, submitOverrides?: AskPromptSubmitDefaults) => {
       if (submitInFlightRef.current) {
         return;
       }
@@ -386,14 +386,20 @@ export default function useAskPrompt(
       setOriginalQuestion(normalizedQuestion);
 
       const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
+      const resolvedSubmitDefaults = {
+        ...submitDefaults,
+        ...submitOverrides,
+      };
       try {
         const task = await createAskingTaskRest(selector, {
           question: normalizedQuestion,
           threadId,
-          knowledgeBaseIds: submitDefaults?.knowledgeBaseIds,
-          selectedSkillIds: submitDefaults?.selectedSkillIds,
-          clarificationSessionId: submitDefaults?.clarificationSessionId,
-          slotValues: submitDefaults?.slotValues,
+          knowledgeBaseIds: resolvedSubmitDefaults?.knowledgeBaseIds,
+          selectedSkillIds: resolvedSubmitDefaults?.selectedSkillIds,
+          clarificationSessionId:
+            resolvedSubmitDefaults?.clarificationSessionId,
+          clarificationState: resolvedSubmitDefaults?.clarificationState,
+          slotValues: resolvedSubmitDefaults?.slotValues,
         });
         const askingTaskId = task.id;
         if (!askingTaskId) {
@@ -429,6 +435,7 @@ export default function useAskPrompt(
       fetchAskingTaskWithGuard,
       runtimeScopeSelector,
       submitDefaults?.knowledgeBaseIds,
+      submitDefaults?.clarificationState,
       submitDefaults?.clarificationSessionId,
       submitDefaults?.selectedSkillIds,
       submitDefaults?.slotValues,

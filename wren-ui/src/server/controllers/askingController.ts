@@ -70,6 +70,7 @@ export class AskingController {
         knowledgeBaseIds?: string[];
         selectedSkillIds?: string[];
         clarificationSessionId?: string | null;
+        clarificationState?: Record<string, unknown> | null;
         slotValues?: Record<string, unknown> | null;
       };
     },

@@ -9,6 +9,7 @@ import {
 import { TextBasedAnswerBackgroundTracker } from '../backgrounds/textBasedAnswerBackgroundTracker';
 import {
   IAskingTaskRepository,
+  IAskPolicyRuleRepository,
   IKnowledgeBaseRepository,
   IViewRepository,
 } from '../repositories';
@@ -60,6 +61,7 @@ export class AskingService implements IAskingService {
   private telemetry: PostHogTelemetry;
   private askingTaskTracker: IAskingTaskTracker;
   private askingTaskRepository: IAskingTaskRepository;
+  private askPolicyRuleRepository?: IAskPolicyRuleRepository;
   private adjustmentBackgroundTracker: AdjustmentBackgroundTaskTracker;
   private knowledgeBaseRepository?: Pick<
     IKnowledgeBaseRepository,
@@ -270,6 +272,7 @@ export class AskingService implements IAskingService {
     threadRepository,
     threadResponseRepository,
     askingTaskRepository,
+    askPolicyRuleRepository,
     queryService,
     askingTaskTracker,
     skillService,
@@ -325,6 +328,7 @@ export class AskingService implements IAskingService {
       threadResponseRepository,
     });
     this.askingTaskRepository = askingTaskRepository;
+    this.askPolicyRuleRepository = askPolicyRuleRepository;
     this.askingTaskTracker = askingTaskTracker;
     this.knowledgeBaseRepository = knowledgeBaseRepository;
     this.skillService = skillService;

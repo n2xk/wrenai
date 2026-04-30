@@ -167,7 +167,9 @@ export interface AskInput {
   runtimeIdentity?: AskRuntimeIdentity;
   skills?: AskSkillCandidate[];
   clarificationSessionId?: string | null;
+  clarificationState?: Record<string, unknown> | null;
   slotValues?: Record<string, unknown> | null;
+  askPolicy?: Record<string, unknown> | null;
 }
 
 export interface AsyncQueryResponse {

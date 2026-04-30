@@ -237,6 +237,7 @@ export type AskingTask = {
 
 export type AskingTaskInput = {
   clarificationSessionId?: string | null;
+  clarificationState?: Record<string, any> | null;
   knowledgeBaseIds?: string[] | null;
   question: string;
   selectedSkillIds?: string[] | null;

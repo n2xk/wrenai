@@ -26,6 +26,8 @@ import {
   BusinessTermRepository,
   ExternalDependencyRepository,
   ApiHistoryRepository,
+  AskClarificationSessionRepository,
+  AskPolicyRuleRepository,
   DashboardItemRefreshJobRepository,
   WorkspaceRepository,
   UserRepository,
@@ -134,6 +136,9 @@ export const initComponents = () => {
   const businessTermRepository = new BusinessTermRepository(knex);
   const externalDependencyRepository = new ExternalDependencyRepository(knex);
   const apiHistoryRepository = new ApiHistoryRepository(knex);
+  const askClarificationSessionRepository =
+    new AskClarificationSessionRepository(knex);
+  const askPolicyRuleRepository = new AskPolicyRuleRepository(knex);
   const dashboardItemRefreshJobRepository =
     new DashboardItemRefreshJobRepository(knex);
   const workspaceRepository = new WorkspaceRepository(knex);
@@ -232,6 +237,7 @@ export const initComponents = () => {
   const askingTaskTracker = new AskingTaskTracker({
     wrenAIAdaptor,
     askingTaskRepository,
+    askClarificationSessionRepository,
     threadResponseRepository,
     viewRepository,
   });
@@ -403,6 +409,7 @@ export const initComponents = () => {
     queryService,
     askingTaskTracker,
     askingTaskRepository,
+    askPolicyRuleRepository,
     knowledgeBaseRepository,
     skillService,
     backgroundTrackerWorkspaceId: serverConfig.backgroundTrackerWorkspaceId,
@@ -467,6 +474,8 @@ export const initComponents = () => {
     sqlPairRepository,
     askingTaskRepository,
     apiHistoryRepository,
+    askClarificationSessionRepository,
+    askPolicyRuleRepository,
     instructionRepository,
     businessTermRepository,
     externalDependencyRepository,
@@ -535,7 +544,7 @@ export const initComponents = () => {
   };
 };
 type Components = ReturnType<typeof initComponents>;
-const COMPONENTS_RUNTIME_VERSION = 9;
+const COMPONENTS_RUNTIME_VERSION = 10;
 export const components: Components = getVersionedGlobalSingleton({
   factory: initComponents,
   singletonKey: '__wrenComponents__',

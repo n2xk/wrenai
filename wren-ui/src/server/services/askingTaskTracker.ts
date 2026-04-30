@@ -7,6 +7,7 @@ import {
 } from '@server/models/adaptor';
 import {
   AskingTask,
+  IAskClarificationSessionRepository,
   IAskingTaskRepository,
   IThreadResponseRepository,
   IViewRepository,
@@ -43,11 +44,13 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   private runningJobs = new Set<string>();
   private threadResponseRepository: IThreadResponseRepository;
   private viewRepository: IViewRepository;
+  private askClarificationSessionRepository?: IAskClarificationSessionRepository;
   private unregisterShutdown?: () => void;
 
   constructor({
     wrenAIAdaptor,
     askingTaskRepository,
+    askClarificationSessionRepository,
     threadResponseRepository,
     viewRepository,
     pollingInterval = 1000, // 1 second
@@ -55,6 +58,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }: {
     wrenAIAdaptor: IWrenAIAdaptor;
     askingTaskRepository: IAskingTaskRepository;
+    askClarificationSessionRepository?: IAskClarificationSessionRepository;
     threadResponseRepository: IThreadResponseRepository;
     viewRepository: IViewRepository;
     pollingInterval?: number;
@@ -62,6 +66,7 @@ export class AskingTaskTracker implements IAskingTaskTracker {
   }) {
     this.wrenAIAdaptor = wrenAIAdaptor;
     this.askingTaskRepository = askingTaskRepository;
+    this.askClarificationSessionRepository = askClarificationSessionRepository;
     this.threadResponseRepository = threadResponseRepository;
     this.viewRepository = viewRepository;
     this.pollingInterval = pollingInterval;
@@ -618,15 +623,62 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       if (existingTask) {
         existingTask.taskId = task.id;
       }
+      await this.persistClarificationSession(task, trackedTask);
       return;
     }
 
     // update the task
-    await this.askingTaskRepository.updateOne(taskRecord.id, {
-      detail: trackedTask.result,
-      ...(trackedTask.runtimeIdentity
-        ? toPersistedRuntimeIdentityPatch(trackedTask.runtimeIdentity)
-        : {}),
+    const updatedTask = await this.askingTaskRepository.updateOne(
+      taskRecord.id,
+      {
+        detail: trackedTask.result,
+        ...(trackedTask.runtimeIdentity
+          ? toPersistedRuntimeIdentityPatch(trackedTask.runtimeIdentity)
+          : {}),
+      },
+    );
+    await this.persistClarificationSession(updatedTask, trackedTask);
+  }
+
+  private async persistClarificationSession(
+    taskRecord: AskingTask,
+    trackedTask: TrackedTask,
+  ): Promise<void> {
+    const repository = this.askClarificationSessionRepository;
+    const clarificationState =
+      (trackedTask.result as any)?.diagnostics?.clarificationState ||
+      trackedTask.result?.clarificationState ||
+      null;
+    const sessionId = clarificationState?.clarificationSessionId;
+    if (!repository || !sessionId) {
+      return;
+    }
+
+    const runtimeIdentity =
+      trackedTask.runtimeIdentity ||
+      toPersistedRuntimeIdentityPatch(taskRecord as any);
+
+    await repository.upsertBySessionId({
+      sessionId,
+      projectId: runtimeIdentity?.projectId ?? taskRecord.projectId ?? null,
+      workspaceId:
+        runtimeIdentity?.workspaceId ?? taskRecord.workspaceId ?? null,
+      knowledgeBaseId:
+        runtimeIdentity?.knowledgeBaseId ?? taskRecord.knowledgeBaseId ?? null,
+      kbSnapshotId:
+        runtimeIdentity?.kbSnapshotId ?? taskRecord.kbSnapshotId ?? null,
+      deployHash: runtimeIdentity?.deployHash ?? taskRecord.deployHash ?? null,
+      actorUserId:
+        runtimeIdentity?.actorUserId ?? taskRecord.actorUserId ?? null,
+      threadId: trackedTask.threadId ?? taskRecord.threadId ?? null,
+      askingTaskId: taskRecord.id,
+      status: (clarificationState.status as any) || 'needs_clarification',
+      originalQuestion:
+        clarificationState.originalQuestion || trackedTask.question || null,
+      pendingSlots: clarificationState.pendingSlots || [],
+      resolvedSlots: clarificationState.resolvedSlots || {},
+      clarificationState: clarificationState as Record<string, any>,
+      expiresAt: clarificationState.expiresAt || null,
     });
   }
 

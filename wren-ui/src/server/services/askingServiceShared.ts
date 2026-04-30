@@ -19,6 +19,7 @@ import { IAskingTaskTracker, TrackedAskingResult } from './askingTaskTracker';
 import { IQueryService, PreviewDataResponse } from './queryService';
 import {
   IAskingTaskRepository,
+  IAskPolicyRuleRepository,
   IKnowledgeBaseRepository,
   IViewRepository,
 } from '../repositories';
@@ -55,6 +56,7 @@ export interface AskingTaskInput {
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
   clarificationSessionId?: string | null;
+  clarificationState?: Record<string, unknown> | null;
   slotValues?: Record<string, unknown> | null;
 }
 
@@ -118,6 +120,7 @@ export interface AskingServiceConstructorArgs {
   threadRepository: IThreadRepository;
   threadResponseRepository: IThreadResponseRepository;
   askingTaskRepository: IAskingTaskRepository;
+  askPolicyRuleRepository?: IAskPolicyRuleRepository;
   queryService: IQueryService;
   askingTaskTracker: IAskingTaskTracker;
   knowledgeBaseRepository?: Pick<

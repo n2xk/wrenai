@@ -22,6 +22,8 @@ export * from './instructionRepository';
 export * from './businessTermRepository';
 export * from './externalDependencyRepository';
 export * from './apiHistoryRepository';
+export * from './askClarificationSessionRepository';
+export * from './askPolicyRuleRepository';
 export * from './dashboardItemRefreshJobRepository';
 export * from './workspaceRepository';
 export * from './userRepository';

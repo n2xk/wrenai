@@ -204,6 +204,7 @@ export const createAskingTaskAction = async (
       knowledgeBaseIds?: string[];
       selectedSkillIds?: string[];
       clarificationSessionId?: string | null;
+      clarificationState?: Record<string, unknown> | null;
       slotValues?: Record<string, unknown> | null;
     };
   },
@@ -216,6 +217,7 @@ export const createAskingTaskAction = async (
     knowledgeBaseIds,
     selectedSkillIds,
     clarificationSessionId,
+    clarificationState,
     slotValues,
   } = args.data;
   if (threadId) {
@@ -228,6 +230,7 @@ export const createAskingTaskAction = async (
     ...(knowledgeBaseIds ? { knowledgeBaseIds } : {}),
     ...(selectedSkillIds ? { selectedSkillIds } : {}),
     ...(clarificationSessionId ? { clarificationSessionId } : {}),
+    ...(clarificationState ? { clarificationState } : {}),
     ...(slotValues && Object.keys(slotValues).length > 0 ? { slotValues } : {}),
   };
 

@@ -114,6 +114,9 @@ export const buildApiContextFromRequest = async ({
     businessTermRepository: components.businessTermRepository,
     externalDependencyRepository: components.externalDependencyRepository,
     apiHistoryRepository: components.apiHistoryRepository,
+    askClarificationSessionRepository:
+      components.askClarificationSessionRepository,
+    askPolicyRuleRepository: components.askPolicyRuleRepository,
     dashboardItemRefreshJobRepository:
       components.dashboardItemRefreshJobRepository,
     workspaceRepository: components.workspaceRepository,

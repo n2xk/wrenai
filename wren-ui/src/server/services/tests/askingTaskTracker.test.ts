@@ -256,6 +256,80 @@ describe('AskingTaskTracker', () => {
     });
   });
 
+  it('persists clarification sessions from asking diagnostics', async () => {
+    const tracker = createTracker();
+    const askingTaskRepository = (tracker as any).askingTaskRepository;
+    const askClarificationSessionRepository = {
+      upsertBySessionId: jest.fn(),
+    };
+    (tracker as any).askClarificationSessionRepository =
+      askClarificationSessionRepository;
+    askingTaskRepository.findByQueryId.mockResolvedValue({
+      id: 88,
+      projectId: null,
+      workspaceId: 'workspace-7',
+      knowledgeBaseId: 'kb-7',
+      kbSnapshotId: 'snapshot-7',
+      deployHash: 'deploy-7',
+      actorUserId: 'user-7',
+      threadId: 101,
+    });
+    askingTaskRepository.updateOne.mockResolvedValue({
+      id: 88,
+      projectId: null,
+      workspaceId: 'workspace-7',
+      knowledgeBaseId: 'kb-7',
+      kbSnapshotId: 'snapshot-7',
+      deployHash: 'deploy-7',
+      actorUserId: 'user-7',
+      threadId: 101,
+    });
+
+    await (tracker as any).updateTaskInDatabase(
+      { queryId: 'query-clarify' },
+      {
+        queryId: 'query-clarify',
+        lastPolled: Date.now(),
+        question: '统计渠道990011首充用户',
+        result: {
+          status: AskResultStatus.FINISHED,
+          response: [],
+          clarificationState: {
+            status: 'needs_clarification',
+            clarificationSessionId: 'query-clarify',
+            originalQuestion: '统计渠道990011首充用户',
+            pendingSlots: ['tenant_plat_id'],
+            resolvedSlots: {},
+            expiresAt: '2026-04-30T10:00:00+00:00',
+          },
+        },
+        isFinalized: true,
+        runtimeIdentity: {
+          projectId: null,
+          workspaceId: 'workspace-7',
+          knowledgeBaseId: 'kb-7',
+          kbSnapshotId: 'snapshot-7',
+          deployHash: 'deploy-7',
+          actorUserId: 'user-7',
+        },
+      },
+    );
+
+    expect(
+      askClarificationSessionRepository.upsertBySessionId,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'query-clarify',
+        workspaceId: 'workspace-7',
+        knowledgeBaseId: 'kb-7',
+        askingTaskId: 88,
+        threadId: 101,
+        status: 'needs_clarification',
+        pendingSlots: ['tenant_plat_id'],
+      }),
+    );
+  });
+
   it('persists finalized text-to-sql results onto the bound thread response', async () => {
     const tracker = createTracker();
     const threadResponseRepository = ((

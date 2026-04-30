@@ -33,6 +33,8 @@ import {
   IBusinessTermRepository,
   IExternalDependencyRepository,
   IApiHistoryRepository,
+  IAskClarificationSessionRepository,
+  IAskPolicyRuleRepository,
   IDashboardItemRefreshJobRepository,
   IKnowledgeBaseRepository,
   IKBSnapshotRepository,
@@ -125,6 +127,8 @@ export interface IContext {
   businessTermRepository: IBusinessTermRepository;
   externalDependencyRepository: IExternalDependencyRepository;
   apiHistoryRepository: IApiHistoryRepository;
+  askClarificationSessionRepository: IAskClarificationSessionRepository;
+  askPolicyRuleRepository: IAskPolicyRuleRepository;
   dashboardItemRefreshJobRepository: IDashboardItemRefreshJobRepository;
   workspaceRepository: IWorkspaceRepository;
   knowledgeBaseRepository: IKnowledgeBaseRepository;

@@ -125,8 +125,14 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         ...(input.clarificationSessionId
           ? { clarification_session_id: input.clarificationSessionId }
           : {}),
+        ...(input.clarificationState
+          ? { clarification_state: input.clarificationState }
+          : {}),
         ...(input.slotValues && Object.keys(input.slotValues).length > 0
           ? { slot_values: input.slotValues }
+          : {}),
+        ...(input.askPolicy && Object.keys(input.askPolicy).length > 0
+          ? { ask_policy: input.askPolicy }
           : {}),
       });
       return { queryId: res.data.query_id };
