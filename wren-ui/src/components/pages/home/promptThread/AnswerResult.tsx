@@ -54,6 +54,45 @@ const adjustmentType = {
   [ThreadResponseAdjustmentType.REASONING]: '已调整推理步骤',
 };
 
+const clarificationSlotLabels: Record<string, string> = {
+  tenant_plat_id: '租户平台',
+  start_date: '开始日期',
+  end_date: '结束日期',
+  date_range: '统计周期',
+};
+
+const formatClarificationSlot = (slot: string) =>
+  clarificationSlotLabels[slot] || slot;
+
+const resolveClarificationPresentation = (
+  askingTask: ThreadResponse['askingTask'] | undefined,
+) => {
+  const diagnostics = askingTask?.diagnostics;
+  const clarificationState = diagnostics?.clarificationState;
+  const semanticDecision = diagnostics?.semanticPlan?.decision;
+  const isClarificationRequired =
+    clarificationState?.status === 'needs_clarification' ||
+    semanticDecision?.route === 'clarification_required';
+
+  if (!isClarificationRequired) {
+    return null;
+  }
+
+  const pendingSlots = (clarificationState?.pendingSlots || []).filter(Boolean);
+  const slotsText = pendingSlots.map(formatClarificationSlot).join('、');
+  const originalQuestion = clarificationState?.originalQuestion?.trim();
+
+  return {
+    description: [
+      slotsText ? `需要补充：${slotsText}` : '需要补充更多查询条件',
+      originalQuestion ? `原问题：${originalQuestion}` : null,
+      '你可以在下一条回复中直接输入补充值，系统会继续处理原问题。',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  };
+};
+
 const ResponseCard = styled.div<{ $selected?: boolean }>`
   position: relative;
   padding: 2px 0 6px;
@@ -527,6 +566,10 @@ export default function AnswerResult(props: Props) {
       isTemplateDecisionSqlFlow,
       messages.template,
     ],
+  );
+  const clarificationPresentation = useMemo(
+    () => resolveClarificationPresentation(askingTask),
+    [askingTask],
   );
   const normalizedView: ViewInfo | undefined = view || undefined;
   const sqlText = sql || '';
@@ -1123,6 +1166,27 @@ export default function AnswerResult(props: Props) {
     );
   };
 
+  const renderClarificationBanner = () => {
+    if (
+      isChartFollowUp ||
+      isRecommendationFollowUp ||
+      !clarificationPresentation
+    ) {
+      return null;
+    }
+
+    return (
+      <TemplateDecisionBanner onClick={(event) => event.stopPropagation()}>
+        <TemplateDecisionBannerHeader>
+          <Tag color="gold">需要补充信息</Tag>
+        </TemplateDecisionBannerHeader>
+        <TemplateDecisionBannerText>
+          {clarificationPresentation.description}
+        </TemplateDecisionBannerText>
+      </TemplateDecisionBanner>
+    );
+  };
+
   return (
     <div data-jsid="answerResult">
       <ResponseCard $selected={isSelected} onClick={selectCurrentResponse}>
@@ -1161,6 +1225,7 @@ export default function AnswerResult(props: Props) {
                 />
               ) : null}
               {renderTemplateDecisionBanner()}
+              {renderClarificationBanner()}
               {previewTeaser}
               {showAnswerBody ? <TextBasedAnswer {...props} /> : null}
 

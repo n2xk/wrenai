@@ -23,8 +23,10 @@ export interface AskPromptData {
 }
 
 export interface AskPromptSubmitDefaults {
+  clarificationSessionId?: string | null;
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
+  slotValues?: Record<string, unknown> | null;
 }
 
 export type NullableAskingTask = AskingTask | null | undefined;
@@ -82,6 +84,26 @@ export const isNeedRecommendedQuestions = (askingTask: NullableAskingTask) => {
 
 export const isNeedPreparing = (askingTask: NullableAskingTask) =>
   askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+
+export const resolvePendingClarificationSubmitDefaults = (
+  responses?: Array<{ askingTask?: AskingTask | null }> | null,
+): Pick<AskPromptSubmitDefaults, 'clarificationSessionId'> => {
+  const latestAskingResponse = (responses || [])
+    .slice()
+    .reverse()
+    .find((response) => Boolean(response.askingTask));
+  const latestPendingClarification =
+    latestAskingResponse?.askingTask?.diagnostics?.clarificationState;
+
+  return latestPendingClarification?.status === 'needs_clarification' &&
+    latestPendingClarification?.clarificationSessionId &&
+    (latestPendingClarification.pendingSlots || []).length > 0
+    ? {
+        clarificationSessionId:
+          latestPendingClarification.clarificationSessionId,
+      }
+    : {};
+};
 
 const resolveTextAnswerStatusFromAskingTask = (
   askingTask: NullableAskingTask,

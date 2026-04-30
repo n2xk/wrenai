@@ -190,10 +190,33 @@ export type AskTemplateDecision = {
   requiredExternalDependencies?: string[] | null;
 };
 
+export type AskSemanticPlan = {
+  version?: string | null;
+  decision?: {
+    route?: string | null;
+    reason?: string | null;
+    [key: string]: any;
+  } | null;
+  clarificationRequest?: Record<string, any> | null;
+  clarificationState?: Record<string, any> | null;
+  [key: string]: any;
+};
+
+export type AskClarificationState = {
+  status?: string | null;
+  clarificationSessionId?: string | null;
+  originalQuestion?: string | null;
+  pendingSlots?: string[] | null;
+  resolvedSlots?: Record<string, any> | null;
+  expiresAt?: string | null;
+};
+
 export type AskingTask = {
   candidates: ResultCandidate[];
   diagnostics?: {
     askPath?: string | null;
+    clarificationState?: AskClarificationState | null;
+    semanticPlan?: AskSemanticPlan | null;
     templateDecision?: AskTemplateDecision | null;
     traceId?: string | null;
   } | null;
@@ -213,9 +236,11 @@ export type AskingTask = {
 };
 
 export type AskingTaskInput = {
+  clarificationSessionId?: string | null;
   knowledgeBaseIds?: string[] | null;
   question: string;
   selectedSkillIds?: string[] | null;
+  slotValues?: Record<string, any> | null;
   threadId?: number | null;
 };
 

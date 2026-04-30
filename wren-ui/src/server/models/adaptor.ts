@@ -166,6 +166,8 @@ export interface AskInput {
   configurations?: ProjectConfigurations;
   runtimeIdentity?: AskRuntimeIdentity;
   skills?: AskSkillCandidate[];
+  clarificationSessionId?: string | null;
+  slotValues?: Record<string, unknown> | null;
 }
 
 export interface AsyncQueryResponse {
@@ -279,11 +281,36 @@ export interface AskTemplateDecision {
   requiredExternalDependencies?: string[] | null;
 }
 
+export interface AskSemanticPlan {
+  version?: string | null;
+  decision?: {
+    route?: string | null;
+    reason?: string | null;
+    [key: string]: unknown;
+  } | null;
+  clarification_request?: Record<string, unknown> | null;
+  clarificationRequest?: Record<string, unknown> | null;
+  clarification_state?: Record<string, unknown> | null;
+  clarificationState?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+export interface AskClarificationState {
+  status?: string | null;
+  clarificationSessionId?: string | null;
+  originalQuestion?: string | null;
+  pendingSlots?: string[] | null;
+  resolvedSlots?: Record<string, unknown> | null;
+  expiresAt?: string | null;
+}
+
 export interface AskDiagnostics {
   traceId?: string | null;
   askPath?: string | null;
   shadowCompare?: AskShadowCompare | null;
   templateDecision?: AskTemplateDecision | null;
+  semanticPlan?: AskSemanticPlan | null;
+  clarificationState?: AskClarificationState | null;
 }
 
 export interface AskDetailInput {
@@ -317,6 +344,8 @@ export type AskResult = AskResponse<
   askPath?: string | null;
   shadowCompare?: AskShadowCompare | null;
   templateDecision?: AskTemplateDecision | null;
+  semanticPlan?: AskSemanticPlan | null;
+  clarificationState?: AskClarificationState | null;
   invalidSql?: string;
   traceId?: string;
   thinking?: ThinkingTrace | null;

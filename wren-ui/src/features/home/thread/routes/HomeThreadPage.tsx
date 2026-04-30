@@ -14,6 +14,7 @@ import type { ThreadResponse } from '@/types/home';
 import { Path } from '@/utils/enum';
 import Prompt from '@/components/pages/home/prompt';
 import useAskPrompt from '@/hooks/useAskPrompt';
+import { resolvePendingClarificationSubmitDefaults } from '@/hooks/askPromptUtils';
 import useAdjustAnswer from '@/hooks/useAdjustAnswer';
 import useModalAction from '@/hooks/useModalAction';
 import {
@@ -207,9 +208,13 @@ export default function HomeThread() {
       runtimeScopeNavigation.pushWorkspace(Path.Home);
     },
   });
+  const clarificationSubmitDefaults = useMemo(
+    () => resolvePendingClarificationSubmitDefaults(data?.thread?.responses),
+    [data?.thread?.responses],
+  );
   const askPrompt = useAskPrompt(
     threadId ?? undefined,
-    undefined,
+    clarificationSubmitDefaults,
     updateThreadQuery,
   );
   const upsertThreadResponse = useCallback(

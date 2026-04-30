@@ -392,6 +392,8 @@ export default function useAskPrompt(
           threadId,
           knowledgeBaseIds: submitDefaults?.knowledgeBaseIds,
           selectedSkillIds: submitDefaults?.selectedSkillIds,
+          clarificationSessionId: submitDefaults?.clarificationSessionId,
+          slotValues: submitDefaults?.slotValues,
         });
         const askingTaskId = task.id;
         if (!askingTaskId) {
@@ -427,7 +429,9 @@ export default function useAskPrompt(
       fetchAskingTaskWithGuard,
       runtimeScopeSelector,
       submitDefaults?.knowledgeBaseIds,
+      submitDefaults?.clarificationSessionId,
       submitDefaults?.selectedSkillIds,
+      submitDefaults?.slotValues,
       threadId,
     ],
   );

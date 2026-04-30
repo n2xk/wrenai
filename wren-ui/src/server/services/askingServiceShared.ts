@@ -54,6 +54,8 @@ export interface AskingTaskInput {
   question: string;
   knowledgeBaseIds?: string[];
   selectedSkillIds?: string[];
+  clarificationSessionId?: string | null;
+  slotValues?: Record<string, unknown> | null;
 }
 
 export interface AskingDetailTaskInput {

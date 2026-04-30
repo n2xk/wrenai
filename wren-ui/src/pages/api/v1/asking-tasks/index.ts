@@ -37,6 +37,16 @@ export default async function handler(
           selectedSkillIds: Array.isArray(req.body?.selectedSkillIds)
             ? req.body.selectedSkillIds
             : undefined,
+          clarificationSessionId:
+            typeof req.body?.clarificationSessionId === 'string'
+              ? req.body.clarificationSessionId
+              : undefined,
+          slotValues:
+            req.body?.slotValues &&
+            typeof req.body.slotValues === 'object' &&
+            !Array.isArray(req.body.slotValues)
+              ? req.body.slotValues
+              : undefined,
         },
       },
       ctx,

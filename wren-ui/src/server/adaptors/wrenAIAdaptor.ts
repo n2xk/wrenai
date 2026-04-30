@@ -122,6 +122,12 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
         configurations: input.configurations,
         runtime_identity: transformRuntimeIdentity(input.runtimeIdentity),
         skills: transformSkills(input.skills),
+        ...(input.clarificationSessionId
+          ? { clarification_session_id: input.clarificationSessionId }
+          : {}),
+        ...(input.slotValues && Object.keys(input.slotValues).length > 0
+          ? { slot_values: input.slotValues }
+          : {}),
       });
       return { queryId: res.data.query_id };
     } catch (err: any) {

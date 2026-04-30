@@ -203,26 +203,40 @@ export const createAskingTaskAction = async (
       threadId?: number;
       knowledgeBaseIds?: string[];
       selectedSkillIds?: string[];
+      clarificationSessionId?: string | null;
+      slotValues?: Record<string, unknown> | null;
     };
   },
   ctx: IContext,
 ): Promise<Task> => {
   await assertKnowledgeBaseReadAccess(ctx);
-  const { question, threadId, knowledgeBaseIds, selectedSkillIds } = args.data;
+  const {
+    question,
+    threadId,
+    knowledgeBaseIds,
+    selectedSkillIds,
+    clarificationSessionId,
+    slotValues,
+  } = args.data;
   if (threadId) {
     await ensureThreadScope(ctx, threadId);
   }
   await assertExecutableRuntimeScope(ctx);
 
-  const task = await ctx.askingService.createAskingTask(
-    { question, knowledgeBaseIds, selectedSkillIds },
-    {
-      runtimeScopeId: getCurrentRuntimeScopeId(ctx),
-      runtimeIdentity: getCurrentPersistedRuntimeIdentity(ctx),
-      threadId,
-      language: await getCurrentLanguage(ctx),
-    },
-  );
+  const taskInput = {
+    question,
+    ...(knowledgeBaseIds ? { knowledgeBaseIds } : {}),
+    ...(selectedSkillIds ? { selectedSkillIds } : {}),
+    ...(clarificationSessionId ? { clarificationSessionId } : {}),
+    ...(slotValues && Object.keys(slotValues).length > 0 ? { slotValues } : {}),
+  };
+
+  const task = await ctx.askingService.createAskingTask(taskInput, {
+    runtimeScopeId: getCurrentRuntimeScopeId(ctx),
+    runtimeIdentity: getCurrentPersistedRuntimeIdentity(ctx),
+    threadId,
+    language: await getCurrentLanguage(ctx),
+  });
 
   ctx.telemetry.sendEvent(TelemetryEvent.HOME_ASK_CANDIDATE, {
     question,

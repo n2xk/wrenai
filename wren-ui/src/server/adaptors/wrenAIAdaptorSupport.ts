@@ -250,6 +250,47 @@ const transformAskTemplateDecision = (body: any) => {
   };
 };
 
+const transformAskClarificationState = (body: any) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+
+  return {
+    status: body.status ?? null,
+    clarificationSessionId:
+      body.clarification_session_id ?? body.clarificationSessionId ?? null,
+    originalQuestion: body.original_question ?? body.originalQuestion ?? null,
+    pendingSlots: Array.isArray(body.pending_slots)
+      ? body.pending_slots
+      : Array.isArray(body.pendingSlots)
+        ? body.pendingSlots
+        : null,
+    resolvedSlots:
+      body.resolved_slots && typeof body.resolved_slots === 'object'
+        ? body.resolved_slots
+        : body.resolvedSlots && typeof body.resolvedSlots === 'object'
+          ? body.resolvedSlots
+          : null,
+    expiresAt: body.expires_at ?? body.expiresAt ?? null,
+  };
+};
+
+const transformAskSemanticPlan = (body: any) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return null;
+  }
+
+  return {
+    ...body,
+    clarificationRequest:
+      body.clarification_request ?? body.clarificationRequest ?? null,
+    clarificationState:
+      transformAskClarificationState(
+        body.clarification_state ?? body.clarificationState,
+      ) || null,
+  };
+};
+
 export const transformTextBasedAnswerResult = (
   body: any,
 ): TextBasedAnswerResult => {
@@ -345,6 +386,12 @@ export const transformAskResult = (body: any): AskResult => {
     shadowCompare: transformAskShadowCompare(body?.shadow_compare),
     templateDecision: transformAskTemplateDecision(
       body?.template_decision || body?.metadata?.template_decision,
+    ),
+    semanticPlan: transformAskSemanticPlan(
+      body?.semantic_plan || body?.metadata?.semantic_plan,
+    ),
+    clarificationState: transformAskClarificationState(
+      body?.clarification_state || body?.metadata?.clarification_state,
     ),
     invalidSql: body?.invalid_sql,
     traceId: body?.trace_id,

@@ -157,6 +157,12 @@ export const createAskingTaskAction = async (
     threadResponseId,
     runtimeIdentity: taskRuntimeIdentity,
     retrievalScopeIds,
+    ...(input.clarificationSessionId
+      ? { clarificationSessionId: input.clarificationSessionId }
+      : {}),
+    ...(input.slotValues && Object.keys(input.slotValues).length > 0
+      ? { slotValues: input.slotValues }
+      : {}),
     ...askContextWithoutIdentity,
   });
 

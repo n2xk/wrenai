@@ -318,7 +318,7 @@ describe('apiUtils', () => {
       expect(buildAskDiagnostics({} as any)).toBeUndefined();
     });
 
-    it('returns ask trace, path, template decision and shadow compare when present', () => {
+    it('returns ask trace, path, template decision, semantic plan, clarification and shadow compare when present', () => {
       expect(
         buildAskDiagnostics({
           traceId: 'trace-1',
@@ -327,6 +327,15 @@ describe('apiUtils', () => {
             mode: 'anchored_template',
             templateId: 'template-1',
             sqlSource: 'anchored_template',
+          },
+          semanticPlan: {
+            version: 'p1_structured_v1',
+            decision: { route: 'clarification_required' },
+          },
+          clarificationState: {
+            status: 'needs_clarification',
+            clarificationSessionId: 'ask-1',
+            pendingSlots: ['tenant_plat_id'],
           },
           shadowCompare: {
             enabled: true,
@@ -344,6 +353,15 @@ describe('apiUtils', () => {
           mode: 'anchored_template',
           templateId: 'template-1',
           sqlSource: 'anchored_template',
+        },
+        semanticPlan: {
+          version: 'p1_structured_v1',
+          decision: { route: 'clarification_required' },
+        },
+        clarificationState: {
+          status: 'needs_clarification',
+          clarificationSessionId: 'ask-1',
+          pendingSlots: ['tenant_plat_id'],
         },
         shadowCompare: {
           enabled: true,

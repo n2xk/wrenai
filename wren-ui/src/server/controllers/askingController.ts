@@ -69,6 +69,8 @@ export class AskingController {
         threadId?: number;
         knowledgeBaseIds?: string[];
         selectedSkillIds?: string[];
+        clarificationSessionId?: string | null;
+        slotValues?: Record<string, unknown> | null;
       };
     },
     ctx: IContext,

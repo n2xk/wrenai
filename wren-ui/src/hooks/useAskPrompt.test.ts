@@ -4,7 +4,10 @@ import {
   canGenerateAnswer,
   isReadyToThreadResponse,
 } from './useAskPrompt';
-import { handleUpdateThreadCache } from './askPromptUtils';
+import {
+  handleUpdateThreadCache,
+  resolvePendingClarificationSubmitDefaults,
+} from './askPromptUtils';
 import {
   AskingTask,
   AskingTaskStatus,
@@ -91,5 +94,61 @@ describe('useAskPrompt helpers', () => {
       content:
         '问题依赖当前知识库中缺失的外部指标：投放金额。在用户补充这些指标前，不能直接编造结果。',
     });
+  });
+
+  it('resolves the latest pending clarification session for follow-up submit', () => {
+    expect(
+      resolvePendingClarificationSubmitDefaults([
+        {
+          askingTask: {
+            diagnostics: {
+              clarificationState: {
+                status: 'needs_clarification',
+                clarificationSessionId: 'ask-old',
+                pendingSlots: ['tenant_plat_id'],
+              },
+            },
+          },
+        } as any,
+        {
+          askingTask: {
+            diagnostics: {
+              clarificationState: {
+                status: 'needs_clarification',
+                clarificationSessionId: 'ask-latest',
+                pendingSlots: ['tenant_plat_id'],
+              },
+            },
+          },
+        } as any,
+      ]),
+    ).toEqual({ clarificationSessionId: 'ask-latest' });
+  });
+
+  it('does not reuse stale clarification when a later ask response exists', () => {
+    expect(
+      resolvePendingClarificationSubmitDefaults([
+        {
+          askingTask: {
+            diagnostics: {
+              clarificationState: {
+                status: 'needs_clarification',
+                clarificationSessionId: 'ask-old',
+                pendingSlots: ['tenant_plat_id'],
+              },
+            },
+          },
+        } as any,
+        {
+          askingTask: {
+            diagnostics: {
+              semanticPlan: {
+                decision: { route: 'normal_text_to_sql' },
+              },
+            },
+          },
+        } as any,
+      ]),
+    ).toEqual({});
   });
 });
