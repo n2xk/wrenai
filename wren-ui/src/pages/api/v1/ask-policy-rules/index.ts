@@ -40,7 +40,7 @@ export default async function handler(
       const items = await ctx.askPolicyRuleRepository.findAllForScope({
         workspaceId,
         knowledgeBaseId: ctx.runtimeScope?.knowledgeBase?.id || null,
-        includeWorkspaceRules: true,
+        includeWorkspaceRules: false,
       });
       return res.status(200).json({ items });
     }
@@ -57,10 +57,7 @@ export default async function handler(
       const rule = await ctx.askPolicyRuleRepository.createOne({
         projectId: ctx.runtimeScope?.project?.id ?? null,
         workspaceId,
-        knowledgeBaseId:
-          req.body?.scope === 'workspace'
-            ? null
-            : ctx.runtimeScope?.knowledgeBase?.id || null,
+        knowledgeBaseId: ctx.runtimeScope?.knowledgeBase?.id || null,
         actorUserId: ctx.requestActor?.userId || null,
         name,
         status: normalizeStatus(req.body?.status),

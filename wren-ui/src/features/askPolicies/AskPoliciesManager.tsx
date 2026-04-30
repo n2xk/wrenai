@@ -39,7 +39,6 @@ type AskPolicyRule = {
 type AskPolicyRuleFormValues = {
   name: string;
   status: 'active' | 'disabled';
-  scope: 'knowledge_base' | 'workspace';
   queryContainsAny?: string[];
   templateIds?: string[];
   forbiddenTemplates?: string[];
@@ -53,7 +52,6 @@ type AskPoliciesManagerProps = {
   hasRuntimeScope: boolean;
   routerReady?: boolean;
   embedded?: boolean;
-  lockScopeToKnowledgeBase?: boolean;
   mutationDisabled?: boolean;
   mutationDisabledHint?: string | null;
   title?: string;
@@ -91,7 +89,6 @@ const policyManagerStyles = `
   }
 
   .ask-policy-name-row,
-  .ask-policy-meta-row,
   .ask-policy-action-row {
     display: flex;
     align-items: center;
@@ -129,18 +126,11 @@ const policyManagerStyles = `
     font-weight: 500;
   }
 
-  .ask-policy-status.ant-tag,
-  .ask-policy-scope.ant-tag {
+  .ask-policy-status.ant-tag {
     margin-inline-end: 0;
     border-radius: 999px;
     font-size: 12px;
     line-height: 20px;
-  }
-
-  .ask-policy-scope.ant-tag {
-    border-color: rgba(91, 75, 219, 0.14);
-    background: rgba(91, 75, 219, 0.06);
-    color: #5b4bdb;
   }
 
   .ask-policy-empty-value {
@@ -189,7 +179,6 @@ export default function AskPoliciesManager({
   hasRuntimeScope,
   routerReady = true,
   embedded = false,
-  lockScopeToKnowledgeBase = false,
   mutationDisabled = false,
   mutationDisabledHint,
   title = '问数策略',
@@ -210,16 +199,6 @@ export default function AskPoliciesManager({
         runtimeScopeSelector,
       ),
     [runtimeScopeSelector],
-  );
-  const scopeOptions = useMemo(
-    () =>
-      lockScopeToKnowledgeBase
-        ? [{ label: '当前知识库', value: 'knowledge_base' as const }]
-        : [
-            { label: '当前知识库', value: 'knowledge_base' as const },
-            { label: '整个工作空间', value: 'workspace' as const },
-          ],
-    [lockScopeToKnowledgeBase],
   );
 
   const loadRules = useCallback(async () => {
@@ -267,7 +246,6 @@ export default function AskPoliciesManager({
     form.setFieldsValue({
       name: '',
       status: 'active',
-      scope: 'knowledge_base',
       queryContainsAny: [],
       templateIds: [],
       forbiddenTemplates: [],
@@ -278,11 +256,8 @@ export default function AskPoliciesManager({
     setDrawerOpen(true);
   };
 
-  const isRuleLockedByScope = (rule: AskPolicyRule) =>
-    lockScopeToKnowledgeBase && !rule.knowledgeBaseId;
-
   const openEditDrawer = (rule: AskPolicyRule) => {
-    if (mutationDisabled || isRuleLockedByScope(rule)) {
+    if (mutationDisabled) {
       if (mutationDisabledHint) {
         message.info(mutationDisabledHint);
       }
@@ -293,7 +268,6 @@ export default function AskPoliciesManager({
     form.setFieldsValue({
       name: rule.name,
       status: rule.status,
-      scope: rule.knowledgeBaseId ? 'knowledge_base' : 'workspace',
       queryContainsAny: toArray(rule.queryContainsAny),
       templateIds: toArray(rule.templateIds),
       forbiddenTemplates: toArray(rule.forbiddenTemplates),
@@ -322,7 +296,7 @@ export default function AskPoliciesManager({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...values,
-            scope: lockScopeToKnowledgeBase ? 'knowledge_base' : values.scope,
+            scope: 'knowledge_base',
           }),
         },
       );
@@ -385,14 +359,6 @@ export default function AskPoliciesManager({
               {record.status === 'active' ? '启用' : '停用'}
             </Tag>
           </div>
-          <div className="ask-policy-meta-row">
-            <Tag className="ask-policy-scope">
-              {record.knowledgeBaseId ? '当前知识库' : '工作空间'}
-            </Tag>
-            {isRuleLockedByScope(record) ? (
-              <Tag className="ask-policy-scope">继承</Tag>
-            ) : null}
-          </div>
           <Typography.Text
             className="ask-policy-reason"
             ellipsis={{ tooltip: record.reasonCode }}
@@ -436,14 +402,12 @@ export default function AskPoliciesManager({
       key: 'action',
       width: 140,
       render: (_value, record) => {
-        const ruleMutationDisabled =
-          mutationDisabled || isRuleLockedByScope(record);
         return (
           <div className="ask-policy-action-row">
             <Button
               type="text"
               size="small"
-              disabled={ruleMutationDisabled}
+              disabled={mutationDisabled}
               onClick={() => openEditDrawer(record)}
             >
               编辑
@@ -456,13 +420,13 @@ export default function AskPoliciesManager({
                   message.error(error.message || '删除问数策略失败'),
                 )
               }
-              disabled={ruleMutationDisabled}
+              disabled={mutationDisabled}
             >
               <Button
                 type="text"
                 danger
                 size="small"
-                disabled={ruleMutationDisabled}
+                disabled={mutationDisabled}
               >
                 删除
               </Button>
@@ -551,12 +515,6 @@ export default function AskPoliciesManager({
                   { label: '启用', value: 'active' },
                   { label: '停用', value: 'disabled' },
                 ]}
-              />
-            </Form.Item>
-            <Form.Item name="scope" label="作用范围" style={{ width: 220 }}>
-              <Select
-                disabled={Boolean(editingRule) || lockScopeToKnowledgeBase}
-                options={scopeOptions}
               />
             </Form.Item>
           </Space>

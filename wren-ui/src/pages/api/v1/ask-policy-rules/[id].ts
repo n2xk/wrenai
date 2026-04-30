@@ -36,12 +36,17 @@ export default async function handler(
 
     const ctx = await buildApiContextFromRequest({ req });
     const workspaceId = ctx.runtimeScope?.workspace?.id;
+    const knowledgeBaseId = ctx.runtimeScope?.knowledgeBase?.id || null;
     if (!workspaceId) {
       throw new ApiError('Workspace scope is required.', 400);
     }
 
     const existing = await ctx.askPolicyRuleRepository.findOneBy({ id });
-    if (!existing || existing.workspaceId !== workspaceId) {
+    if (
+      !existing ||
+      existing.workspaceId !== workspaceId ||
+      existing.knowledgeBaseId !== knowledgeBaseId
+    ) {
       throw new ApiError('Policy rule not found.', 404);
     }
 

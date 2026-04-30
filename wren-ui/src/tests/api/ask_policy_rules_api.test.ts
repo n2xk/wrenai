@@ -91,6 +91,7 @@ describe('pages/api/v1/ask-policy-rules routes', () => {
     repository.findOneBy.mockResolvedValue({
       id: 2,
       workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
       name: '旧策略',
       status: 'active',
       version: 1,
@@ -117,7 +118,7 @@ describe('pages/api/v1/ask-policy-rules routes', () => {
     expect(repository.findAllForScope).toHaveBeenCalledWith({
       workspaceId: 'workspace-1',
       knowledgeBaseId: 'kb-1',
-      includeWorkspaceRules: true,
+      includeWorkspaceRules: false,
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ items: [{ id: 1, name: '安全策略' }] });
@@ -173,6 +174,30 @@ describe('pages/api/v1/ask-policy-rules routes', () => {
     expect(res.statusCode).toBe(201);
   });
 
+  it('always creates knowledge-base scoped ask policy rules from the management API', async () => {
+    const handler = (await import('../../pages/api/v1/ask-policy-rules'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        name: '固定知识库范围',
+        scope: 'workspace',
+      },
+    });
+    const res = createRes();
+
+    await handler(req, res);
+
+    expect(repository.createOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        name: '固定知识库范围',
+      }),
+    );
+    expect(res.statusCode).toBe(201);
+  });
+
   it('does not allow patching a policy rule from another workspace', async () => {
     const handler = (await import('../../pages/api/v1/ask-policy-rules/[id]'))
       .default;
@@ -185,6 +210,29 @@ describe('pages/api/v1/ask-policy-rules routes', () => {
     repository.findOneBy.mockResolvedValue({
       id: 9,
       workspaceId: 'workspace-2',
+    });
+
+    await handler(req, res);
+
+    expect(mockAssertKnowledgeBaseWriteAccess).not.toHaveBeenCalled();
+    expect(repository.updateOne).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: 'Policy rule not found.' });
+  });
+
+  it('does not allow patching a workspace-level policy rule from the knowledge page', async () => {
+    const handler = (await import('../../pages/api/v1/ask-policy-rules/[id]'))
+      .default;
+    const req = createReq({
+      method: 'PATCH',
+      query: { id: '9' },
+      body: { name: 'x' },
+    });
+    const res = createRes();
+    repository.findOneBy.mockResolvedValue({
+      id: 9,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: null,
     });
 
     await handler(req, res);

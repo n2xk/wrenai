@@ -203,7 +203,6 @@ function KnowledgeMainStage({
         {activeWorkbenchSection === 'askPolicies' ? (
           <AskPoliciesManager
             embedded
-            lockScopeToKnowledgeBase
             runtimeScopeSelector={runtimeSelector}
             hasRuntimeScope={Boolean(
               runtimeSelector.workspaceId && runtimeSelector.knowledgeBaseId,
