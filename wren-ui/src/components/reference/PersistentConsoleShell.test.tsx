@@ -63,12 +63,11 @@ describe('PersistentConsoleShell helpers', () => {
       stretchContent: true,
     });
     expect(resolvePersistentShellLayoutProps('/knowledge')).toEqual({
-      flushBottomPadding: true,
-      mainPaddingTop: '8px',
+      mainPadding: '10px 16px 12px 10px',
       stretchContent: true,
     });
     expect(resolvePersistentShellLayoutProps('/home/dashboard')).toEqual({
-      mainPaddingTop: '8px',
+      mainPadding: '10px 16px 12px 10px',
       stretchContent: true,
     });
     expect(resolvePersistentShellLayoutProps('/home')).toEqual({});

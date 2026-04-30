@@ -191,7 +191,9 @@ export const Sidebar = styled(Sider)`
 export const Main = styled(Content)<{
   $flush?: boolean;
   $flushBottom?: boolean;
+  $padding?: string;
   $stretchContent?: boolean;
+  $paddingBottom?: string;
   $paddingTop?: string;
 }>`
   ${(props) => {
@@ -200,8 +202,14 @@ export const Main = styled(Content)<{
         return '0';
       }
 
+      if (props.$padding) {
+        return props.$padding;
+      }
+
       const top = props.$paddingTop || (mobile ? '16px' : '24px');
-      const bottom = props.$flushBottom ? '0' : mobile ? '16px' : '24px';
+      const bottom =
+        props.$paddingBottom ||
+        (props.$flushBottom ? '0' : mobile ? '16px' : '24px');
 
       return mobile ? `${top} 16px ${bottom}` : `${top} 24px ${bottom} 4px`;
     };

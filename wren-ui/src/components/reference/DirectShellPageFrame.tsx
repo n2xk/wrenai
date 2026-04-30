@@ -13,6 +13,8 @@ import { usePersistentShellEmbedded } from './PersistentShellContext';
 type Props = {
   activeNav: NovaShellNavKey;
   flushBottomPadding?: boolean;
+  mainPadding?: string;
+  mainPaddingBottom?: string;
   mainPaddingTop?: string;
   stretchContent?: boolean;
   children: ReactNode;
@@ -21,6 +23,8 @@ type Props = {
 export default function DirectShellPageFrame({
   activeNav,
   flushBottomPadding = false,
+  mainPadding,
+  mainPaddingBottom,
   mainPaddingTop,
   stretchContent = false,
   children,
@@ -82,6 +86,8 @@ export default function DirectShellPageFrame({
       onHistoryDelete={handleHistoryDelete}
       onHistorySearchChange={homeSidebar.setSearchKeyword}
       flushBottomPadding={flushBottomPadding}
+      mainPadding={mainPadding}
+      mainPaddingBottom={mainPaddingBottom}
       mainPaddingTop={mainPaddingTop}
       stretchContent={stretchContent}
     >

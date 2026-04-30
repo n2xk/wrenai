@@ -72,15 +72,14 @@ export const resolvePersistentShellLayoutProps = (pathname?: string | null) => {
       };
     case Path.Knowledge:
       return {
-        flushBottomPadding: true,
-        mainPaddingTop: '8px',
+        mainPadding: '10px 16px 12px 10px',
         stretchContent: true,
       };
     case Path.HomeDashboard:
     case Path.HomeSpreadsheets:
     case Path.HomeSpreadsheet:
       return {
-        mainPaddingTop: '8px',
+        mainPadding: '10px 16px 12px 10px',
         stretchContent: true,
       };
     default:

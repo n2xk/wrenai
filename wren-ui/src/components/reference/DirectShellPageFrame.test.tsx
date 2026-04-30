@@ -30,6 +30,8 @@ jest.mock('./DolaAppShell', () => ({
     onHistoryRename,
     onHistoryDelete,
     flushBottomPadding,
+    mainPadding,
+    mainPaddingBottom,
     mainPaddingTop,
     stretchContent,
   }: any) => {
@@ -42,6 +44,8 @@ jest.mock('./DolaAppShell', () => ({
         'data-history-rename': String(Boolean(onHistoryRename)),
         'data-history-delete': String(Boolean(onHistoryDelete)),
         'data-flush-bottom': String(Boolean(flushBottomPadding)),
+        'data-main-padding': mainPadding || '',
+        'data-main-padding-bottom': mainPaddingBottom || '',
         'data-main-padding-top': mainPaddingTop || '',
         'data-stretch-content': String(Boolean(stretchContent)),
       },
@@ -100,6 +104,8 @@ describe('DirectShellPageFrame', () => {
       <DirectShellPageFrame
         activeNav="knowledge"
         flushBottomPadding
+        mainPadding="10px 16px 12px 10px"
+        mainPaddingBottom="16px"
         mainPaddingTop="8px"
         stretchContent
       >
@@ -108,6 +114,8 @@ describe('DirectShellPageFrame', () => {
     );
 
     expect(html).toContain('data-flush-bottom="true"');
+    expect(html).toContain('data-main-padding="10px 16px 12px 10px"');
+    expect(html).toContain('data-main-padding-bottom="16px"');
     expect(html).toContain('data-main-padding-top="8px"');
     expect(html).toContain('data-stretch-content="true"');
   });

@@ -3,9 +3,9 @@ import styled from 'styled-components';
 export const WorkbenchSectionTabs = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   width: fit-content;
-  padding: 4px;
+  padding: 3px;
   border-radius: var(--nova-radius-control);
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.88);
@@ -13,8 +13,8 @@ export const WorkbenchSectionTabs = styled.div`
 `;
 
 export const WorkbenchSectionTab = styled.button<{ $active?: boolean }>`
-  height: 32px;
-  padding: 0 14px;
+  height: 30px;
+  padding: 0 12px;
   border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(91, 75, 219, 0.18)' : 'transparent')};
@@ -24,7 +24,7 @@ export const WorkbenchSectionTab = styled.button<{ $active?: boolean }>`
   font-weight: ${(props) => (props.$active ? 600 : 500)};
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
   transition:
     border-color 0.18s ease,

@@ -9,21 +9,21 @@ export const SummaryCard = styled.div`
     rgba(255, 255, 255, 0.96) 100%
   );
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
-  padding: 16px 18px;
+  padding: 14px 16px;
 `;
 
 export const SummaryHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 `;
 
 export const SummaryTopRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  min-height: 32px;
+  gap: 16px;
+  min-height: 30px;
 
   @media (max-width: 980px) {
     flex-direction: column;
@@ -36,12 +36,12 @@ export const SummaryInfo = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 `;
 
 export const SummaryDescription = styled.div`
   max-width: none;
   color: #6b7280;
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.55;
 `;

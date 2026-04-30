@@ -27,7 +27,7 @@ export const AssetsLoadingOverlay = styled.div`
 export const AssetGalleryGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(292px, 1fr));
-  gap: 12px;
+  gap: 10px;
 `;
 
 export const AssetGalleryCard = styled.button<{ $active?: boolean }>`
@@ -60,7 +60,7 @@ export const AssetGalleryHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 4px 9px;
   background: #fafbfc;
   border-bottom: 1px solid #edf1f5;
 `;
@@ -69,7 +69,7 @@ export const AssetGalleryTitle = styled.div`
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 `;
 
 export const AssetGalleryLabel = styled.span`
@@ -91,19 +91,19 @@ export const AssetGalleryBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px 8px;
+  padding: 8px 10px 7px;
 `;
 
 export const AssetGalleryInfoGrid = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 `;
 
 export const AssetGalleryInfoRow = styled.div`
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
-  gap: 8px;
+  gap: 7px;
   align-items: start;
 `;
 
@@ -140,7 +140,7 @@ export const AssetGalleryFooter = styled.div`
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 0 12px 8px;
+  padding: 0 10px 7px;
 `;
 
 export const AssetGalleryChips = styled.div`

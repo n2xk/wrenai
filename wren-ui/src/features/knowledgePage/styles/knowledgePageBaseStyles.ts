@@ -80,7 +80,7 @@ export const RailTabs = styled.div`
 export const KbList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -117,7 +117,7 @@ export const KbCreateButton = styled(Button)`
 `;
 
 export const KbCreateInlineWrap = styled.div`
-  margin-top: 6px;
+  margin-top: 1px;
   padding-top: 8px;
   border-top: 1px solid #f1f5f9;
 `;
@@ -290,7 +290,7 @@ export const EmptyInner = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   text-align: center;
 `;
 
@@ -347,7 +347,7 @@ export const PrimaryBlackButton = styled.button`
   font-weight: 500;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 0 16px;
   cursor: pointer;
 

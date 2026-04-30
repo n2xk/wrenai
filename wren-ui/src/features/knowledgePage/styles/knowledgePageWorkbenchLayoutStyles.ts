@@ -10,7 +10,7 @@ export const LibraryStage = styled.div`
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   background: transparent;
 `;
 
@@ -20,7 +20,7 @@ export const WorkbenchGrid = styled.div`
   grid-template-columns: 252px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   width: 100%;
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
   align-content: stretch;
   min-height: 100%;
@@ -44,7 +44,7 @@ export const SidePanel = styled.div`
   border: 1px solid var(--nova-outline-soft);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--nova-shadow-soft);
-  padding: 12px;
+  padding: 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;

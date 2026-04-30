@@ -21,18 +21,18 @@ export const WorkbenchStatCard = styled.div`
     rgba(248, 246, 251, 0.92) 0%,
     rgba(255, 255, 255, 0.98) 100%
   );
-  padding: clamp(10px, 1vw, 14px) clamp(8px, 1.1vw, 16px);
+  padding: clamp(8px, 0.9vw, 12px) clamp(8px, 1vw, 14px);
 `;
 
 export const WorkbenchStatLabel = styled.div`
   color: var(--nova-text-secondary);
   font-size: clamp(10px, 0.85vw, 12px);
-  margin-bottom: clamp(4px, 0.7vw, 8px);
+  margin-bottom: clamp(3px, 0.55vw, 6px);
 `;
 
 export const WorkbenchStatValue = styled.div`
   color: var(--nova-text-primary);
-  font-size: clamp(13px, 1.6vw, 24px);
+  font-size: clamp(13px, 1.5vw, 22px);
   line-height: 1.15;
   font-weight: 700;
   overflow-wrap: anywhere;

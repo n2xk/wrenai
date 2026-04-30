@@ -56,7 +56,7 @@ const SIDEBAR_KB_ITEM_ESTIMATED_HEIGHT = 34;
 const SIDEBAR_KB_VIRTUAL_OVERSCAN = 6;
 const SIDEBAR_KB_ITEMS_CONTAINER_STYLE = {
   display: 'grid',
-  gap: 3,
+  gap: 8,
 };
 const areSidebarKnowledgeItemsEqual = (
   previous: KnowledgeSidebarItem<KnowledgeBaseRecord>[],
