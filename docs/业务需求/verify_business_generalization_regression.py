@@ -548,10 +548,17 @@ def render_markdown(results: list[BusinessResult]) -> str:
         f"- pass：{counts.get('pass', 0)}",
         f"- needs_manual：{counts.get('needs_manual', 0)}",
         f"- fail：{counts.get('fail', 0)}",
+    ]
+    if counts.get("needs_manual", 0):
+        lines.append(
+            "- needs_manual 后续核验：运行 `docs/业务需求/verify_business_manual_cases.py`，"
+            "最新结果见 `docs/业务需求/业务泛化人工核验结果-2026-04-30.md`。"
+        )
+    lines.extend([
         "",
         "| 用例 | 自动结论 | 状态 | 类型 | route | 模式 | SQL来源 | 模板 | 降级原因 | query_id | 备注 |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-    ]
+    ])
     for result in results:
         notes = "；".join(result.automated_notes or []) or "-"
         lines.append(
