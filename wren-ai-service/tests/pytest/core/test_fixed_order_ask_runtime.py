@@ -1,4 +1,5 @@
 from src.core.fixed_order_ask_runtime import (
+    build_minimal_semantic_plan,
     build_reusable_template_sql,
     build_template_decision,
     detect_missing_external_source_requirement,
@@ -350,6 +351,52 @@ def test_detect_missing_tenant_plat_id_requirement_uses_unique_history_context()
     )
 
     assert result is None
+
+
+def test_build_minimal_semantic_plan_exposes_blocking_slot_clarification():
+    plan = build_minimal_semantic_plan(
+        "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况"
+    )
+
+    assert plan["version"] == "p1_minimal_v1"
+    assert plan["source"] == "deterministic"
+    assert plan["filters"] == {
+        "channel_id": 990011,
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-03",
+    }
+    assert plan["missing_slots"] == ["tenant_plat_id"]
+    assert plan["clarification_request"]["slot"] == "tenant_plat_id"
+    assert plan["clarification_request"]["blocking"] is True
+    assert "租户平台" in plan["clarification_request"]["prompt"]
+
+
+def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
+    plan = build_minimal_semantic_plan(
+        "那只看渠道990011在2026-04-02的首存 cohort 呢？",
+        histories=[
+            {
+                "question": (
+                    "统计租户平台990001下渠道990011在2026-04-01到"
+                    "2026-04-03首存cohort从D1到D7的累计收入"
+                )
+            }
+        ],
+        template_decision={
+            "template_id": "T04",
+            "mode": "anchored_template",
+            "sql_source": "anchored_template",
+            "business_signature": {"expectedGrain": "first_deposit_date + channel_id"},
+        },
+    )
+
+    assert plan["filters"]["tenant_plat_id"] == 990001
+    assert plan["filters"]["channel_id"] == 990011
+    assert plan["filters"]["date"] == "2026-04-02"
+    assert plan["grain"] == "first_deposit_date + channel_id"
+    assert plan["missing_slots"] == []
+    assert plan["clarification_request"] is None
+    assert plan["template"]["template_id"] == "T04"
 
 
 def test_build_template_decision_keeps_same_family_low_margin_business_template_anchor():

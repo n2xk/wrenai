@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from cachetools import TTLCache
 from langfuse.decorators import observe
@@ -228,6 +228,7 @@ class _AskResultResponse(BaseModel):
     response: Optional[List[AskResult]] = None
     ask_path: Optional[AskPath] = None
     template_decision: Optional[AskTemplateDecision] = None
+    semantic_plan: Optional[dict[str, Any]] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     shadow_compare: Optional[AskShadowCompare] = None
@@ -469,8 +470,9 @@ class AskService:
         metadata = result.get("metadata", {})
         ask_path = metadata.get("ask_path")
         template_decision = metadata.get("template_decision")
+        semantic_plan = metadata.get("semantic_plan")
         cached_result = self._ask_results.get(query_id)
-        if cached_result is not None and (ask_path or template_decision):
+        if cached_result is not None and (ask_path or template_decision or semantic_plan):
             update_payload = {}
             if ask_path:
                 update_payload["ask_path"] = ask_path
@@ -478,6 +480,8 @@ class AskService:
                 update_payload["template_decision"] = AskTemplateDecision.model_validate(
                     template_decision
                 )
+            if semantic_plan:
+                update_payload["semantic_plan"] = semantic_plan
             self._ask_results[query_id] = cached_result.model_copy(
                 update=update_payload
             )

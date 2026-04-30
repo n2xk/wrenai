@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any, Dict, List
 
 import aiohttp
@@ -16,6 +17,47 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+MYSQL_DATE_ADD_INTERVAL_RE = re.compile(
+    r"DATE_ADD\(\s*(?P<expr>(?:'[^']*'|\"[^\"]*\"|[^,])+?)\s*,\s*"
+    r"INTERVAL\s+(?P<amount>\d+)\s+DAY\s*\)",
+    re.IGNORECASE,
+)
+MYSQL_DATE_SUB_INTERVAL_RE = re.compile(
+    r"DATE_SUB\(\s*(?P<expr>(?:'[^']*'|\"[^\"]*\"|[^,])+?)\s*,\s*"
+    r"INTERVAL\s+(?P<amount>\d+)\s+DAY\s*\)",
+    re.IGNORECASE,
+)
+
+
+def _normalize_date_add_expression(expr: str) -> str:
+    normalized = expr.strip()
+    literal_match = re.fullmatch(r"['\"](\d{4}-\d{2}-\d{2})['\"]", normalized)
+    if literal_match:
+        return f"DATE '{literal_match.group(1)}'"
+    return normalized
+
+
+def normalize_mysql_date_interval_functions(sql: str) -> str:
+    """Convert common MySQL DATE_ADD/SUB interval syntax for Wren engine parsing.
+
+    The SQL generation prompt intentionally favors MySQL/TiDB syntax, but the
+    current preview path still validates through a Trino-style parser. This
+    deterministic retry keeps generated SQL from failing on otherwise valid
+    day-boundary filters such as DATE_ADD('2026-04-07', INTERVAL 1 DAY).
+    """
+
+    def replace_add(match: re.Match[str]) -> str:
+        expr = _normalize_date_add_expression(match.group("expr"))
+        return f"DATE_ADD('day', {match.group('amount')}, {expr})"
+
+    def replace_sub(match: re.Match[str]) -> str:
+        expr = _normalize_date_add_expression(match.group("expr"))
+        return f"DATE_ADD('day', -{match.group('amount')}, {expr})"
+
+    return MYSQL_DATE_SUB_INTERVAL_RE.sub(
+        replace_sub,
+        MYSQL_DATE_ADD_INTERVAL_RE.sub(replace_add, sql),
+    )
 
 
 @component
@@ -137,9 +179,27 @@ class SQLGenPostProcessor:
                     sql_mode=sql_mode,
                 )
 
+                validated_sql = generation_result
+                if not success:
+                    retry_sql = normalize_mysql_date_interval_functions(
+                        generation_result
+                    )
+                    error_message = addition.get("error_message", "")
+                    if retry_sql != generation_result and "INTERVAL" in error_message:
+                        success, _, addition = await self._engine.execute_sql(
+                            retry_sql,
+                            session,
+                            runtime_scope_id=runtime_scope_id,
+                            limit=1,
+                            dry_run=True,
+                            sql_mode=sql_mode,
+                        )
+                        if success:
+                            validated_sql = retry_sql
+
                 if success:
                     valid_generation_result = {
-                        "sql": generation_result,
+                        "sql": validated_sql,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
                 else:
@@ -163,9 +223,27 @@ class SQLGenPostProcessor:
                     sql_mode=sql_mode,
                 )
 
+                validated_sql = generation_result
+                if not has_data:
+                    retry_sql = normalize_mysql_date_interval_functions(
+                        generation_result
+                    )
+                    error_message = addition.get("error_message", "")
+                    if retry_sql != generation_result and "INTERVAL" in error_message:
+                        has_data, _, addition = await self._engine.execute_sql(
+                            retry_sql,
+                            session,
+                            runtime_scope_id=runtime_scope_id,
+                            limit=1,
+                            dry_run=False,
+                            sql_mode=sql_mode,
+                        )
+                        if has_data:
+                            validated_sql = retry_sql
+
                 if has_data:
                     valid_generation_result = {
-                        "sql": generation_result,
+                        "sql": validated_sql,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
                 else:

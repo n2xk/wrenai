@@ -61,6 +61,7 @@ class AskExecutionState:
     ask_path: Optional[str] = None
     current_sql_correction_retries: int = 0
     template_decision: Optional[dict[str, Any]] = None
+    semantic_plan: Optional[dict[str, Any]] = None
 
 
 def _normalize_instruction(value: Any) -> Optional[str]:
@@ -699,6 +700,131 @@ def detect_missing_tenant_plat_id_requirement(
         "missing_parameters": ["tenant_plat_id"],
         "content": content,
         "reasoning": reasoning,
+    }
+
+
+def _extract_date_range_from_text(text: Optional[str]) -> dict[str, str]:
+    dates = DATE_PATTERN.findall(text or "")
+    if len(dates) >= 2:
+        return {"start_date": dates[0], "end_date": dates[1]}
+    if len(dates) == 1:
+        return {"date": dates[0]}
+    return {}
+
+
+def _collapse_single_or_list(values: list[Any]) -> Any:
+    if len(values) == 1:
+        return values[0]
+    return values
+
+
+def _extract_query_features(query: Optional[str]) -> list[str]:
+    if not query:
+        return []
+
+    features: list[str] = []
+    for feature, patterns in TEMPLATE_FEATURE_PATTERNS.items():
+        if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in patterns):
+            features.append(feature)
+    return features
+
+
+def _extract_template_decision_grain(
+    template_decision: Optional[dict[str, Any]],
+) -> Optional[str]:
+    if not isinstance(template_decision, dict):
+        return None
+
+    signature = template_decision.get("business_signature")
+    if not isinstance(signature, dict):
+        return None
+
+    grain = _get_mapping_value(
+        signature,
+        "expectedGrain",
+        "expected_grain",
+        "resultGrain",
+        "result_grain",
+    )
+    return str(grain) if grain else None
+
+
+def _build_template_plan_fragment(
+    template_decision: Optional[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    if not isinstance(template_decision, dict):
+        return None
+
+    return {
+        "template_id": template_decision.get("template_id"),
+        "template_title": template_decision.get("template_title"),
+        "mode": template_decision.get("mode"),
+        "sql_source": template_decision.get("sql_source"),
+        "fallback_reason": template_decision.get("fallback_reason"),
+        "missing_parameters": template_decision.get("missing_parameters") or [],
+    }
+
+
+def build_minimal_semantic_plan(
+    query: Optional[str],
+    *,
+    histories: Sequence[Any] | None = None,
+    template_decision: Optional[dict[str, Any]] = None,
+    intent: Optional[str] = None,
+) -> dict[str, Any]:
+    """Build a deterministic, diagnostics-only SemanticPlan skeleton.
+
+    This is intentionally not a new LLM call. It exposes slots, coarse features,
+    and a clarification request shape so P1 can wire UI/API state machines later
+    without changing the current ask route behavior.
+    """
+
+    tenant_ids = _extract_tenant_plat_ids_from_text(query)
+    if not tenant_ids:
+        tenant_ids = _resolve_history_tenant_plat_ids(histories)
+    channel_ids = _extract_channel_ids_from_text(query)
+    date_range = _extract_date_range_from_text(query)
+    missing_slot_requirement = detect_missing_tenant_plat_id_requirement(
+        query,
+        histories=histories,
+    )
+    missing_slots = (
+        missing_slot_requirement.get("missing_parameters", [])
+        if missing_slot_requirement
+        else []
+    )
+
+    filters: dict[str, Any] = {}
+    if tenant_ids:
+        filters["tenant_plat_id"] = _collapse_single_or_list(tenant_ids)
+    if channel_ids:
+        filters["channel_id"] = _collapse_single_or_list(channel_ids)
+    filters.update(date_range)
+
+    clarification_request = None
+    if missing_slot_requirement:
+        clarification_request = {
+            "slot": missing_slot_requirement["slot"],
+            "prompt": missing_slot_requirement["content"],
+            "hint_values": [],
+            "blocking": True,
+            "resume_strategy": "resubmit_with_slot_value",
+        }
+
+    return {
+        "version": "p1_minimal_v1",
+        "source": "deterministic",
+        "intent": intent or "TEXT_TO_SQL",
+        "subject": None,
+        "features": _extract_query_features(query),
+        "metrics": [],
+        "dimensions": [],
+        "filters": filters,
+        "grain": _extract_template_decision_grain(template_decision),
+        "missing_slots": missing_slots,
+        "clarification_request": clarification_request,
+        "template": _build_template_plan_fragment(template_decision),
+        "confidence": 1.0,
     }
 
 
@@ -2841,6 +2967,7 @@ class BaseFixedOrderAskRuntime:
         ask_path: Optional[str],
         orchestrator: str,
         template_decision: Optional[dict[str, Any]] = None,
+        semantic_plan: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         metadata = result.setdefault("metadata", {})
         metadata["orchestrator"] = orchestrator
@@ -2848,6 +2975,8 @@ class BaseFixedOrderAskRuntime:
             metadata["ask_path"] = ask_path
         if template_decision:
             metadata["template_decision"] = template_decision
+        if semantic_plan:
+            metadata["semantic_plan"] = semantic_plan
         return result
 
     def _resolve_text_to_sql_path(
@@ -2870,6 +2999,20 @@ class BaseFixedOrderAskRuntime:
 
     def _build_initial_state(self, ask_request: AskRequestLike) -> AskExecutionState:
         return AskExecutionState(user_query=ask_request.query)
+
+    def _sync_semantic_plan_state(
+        self,
+        state: AskExecutionState,
+        *,
+        histories: Sequence[AskHistoryLike],
+        intent: Optional[str] = None,
+    ) -> None:
+        state.semantic_plan = build_minimal_semantic_plan(
+            state.user_query,
+            histories=histories,
+            template_decision=state.template_decision,
+            intent=intent,
+        )
 
     def _extract_general_answer_content(
         self, pipeline_result: Any, *, pipeline_name: str
@@ -2951,6 +3094,7 @@ class BaseFixedOrderAskRuntime:
                         general_type=general_type,
                         ask_path=state.ask_path,
                         template_decision=state.template_decision,
+                        semantic_plan=state.semantic_plan,
                     )
             except Exception as exc:
                 logger.exception("general assistance pipeline - OTHERS: %s", exc)
@@ -2966,6 +3110,7 @@ class BaseFixedOrderAskRuntime:
                         general_type=general_type,
                         ask_path=state.ask_path,
                         template_decision=state.template_decision,
+                        semantic_plan=state.semantic_plan,
                         error=build_ask_error(code="OTHERS", message=str(exc)),
                     )
 
@@ -3337,6 +3482,7 @@ class BaseFixedOrderAskRuntime:
             "trace_id": trace_id,
             "is_followup": is_followup,
             "template_decision": state.template_decision,
+            "semantic_plan": state.semantic_plan,
             **payload,
         }
 
@@ -3386,6 +3532,7 @@ class BaseFixedOrderAskRuntime:
                 general_type="DATA_ASSISTANCE",
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
             set_result(
                 status="finished",
@@ -3398,6 +3545,7 @@ class BaseFixedOrderAskRuntime:
                 general_type="DATA_ASSISTANCE",
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
         return self._attach_result_metadata(
@@ -3405,6 +3553,7 @@ class BaseFixedOrderAskRuntime:
             ask_path=state.ask_path,
             orchestrator=orchestrator,
             template_decision=state.template_decision,
+            semantic_plan=state.semantic_plan,
         )
 
     async def _maybe_handle_missing_slot_rule(
@@ -3440,6 +3589,7 @@ class BaseFixedOrderAskRuntime:
 
         state.intent_reasoning = missing_slot_requirement["reasoning"]
         state.ask_path = "general"
+        self._sync_semantic_plan_state(state, histories=histories)
 
         if not is_stopped():
             set_result(
@@ -3452,6 +3602,7 @@ class BaseFixedOrderAskRuntime:
                 general_type="DATA_ASSISTANCE",
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
             set_result(
                 status="finished",
@@ -3464,6 +3615,7 @@ class BaseFixedOrderAskRuntime:
                 general_type="DATA_ASSISTANCE",
                 ask_path=state.ask_path,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
         return self._attach_result_metadata(
@@ -3471,6 +3623,7 @@ class BaseFixedOrderAskRuntime:
             ask_path=state.ask_path,
             orchestrator=orchestrator,
             template_decision=state.template_decision,
+            semantic_plan=state.semantic_plan,
         )
 
     async def _handle_intent_result(
@@ -3496,6 +3649,7 @@ class BaseFixedOrderAskRuntime:
 
         if state.rephrased_question:
             state.user_query = state.rephrased_question
+        self._sync_semantic_plan_state(state, histories=histories, intent=intent)
 
         if intent == "MISLEADING_QUERY":
             state.ask_path = "general"
@@ -3529,6 +3683,7 @@ class BaseFixedOrderAskRuntime:
                     general_type="MISLEADING_QUERY",
                     ask_path=state.ask_path,
                     template_decision=state.template_decision,
+                    semantic_plan=state.semantic_plan,
                 )
             return self._attach_result_metadata(
                 self._mixed_answer_composer.compose_general(
@@ -3538,6 +3693,7 @@ class BaseFixedOrderAskRuntime:
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
         if intent == "GENERAL":
@@ -3573,12 +3729,14 @@ class BaseFixedOrderAskRuntime:
                     general_type="DATA_ASSISTANCE",
                     ask_path=state.ask_path,
                     template_decision=state.template_decision,
+                    semantic_plan=state.semantic_plan,
                 )
             return self._attach_result_metadata(
                 self._mixed_answer_composer.compose_general(results),
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
         if intent == "USER_GUIDE":
@@ -3611,12 +3769,14 @@ class BaseFixedOrderAskRuntime:
                     general_type="USER_GUIDE",
                     ask_path=state.ask_path,
                     template_decision=state.template_decision,
+                    semantic_plan=state.semantic_plan,
                 )
             return self._attach_result_metadata(
                 self._mixed_answer_composer.compose_general(results),
                 ask_path=state.ask_path,
                 orchestrator=orchestrator,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
         if not is_stopped():
@@ -3716,6 +3876,7 @@ class BaseFixedOrderAskRuntime:
                     ),
                     orchestrator=orchestrator,
                     template_decision=state.template_decision,
+                    semantic_plan=state.semantic_plan,
                 )
             if not documents and state.sql_samples:
                 logger.info(
@@ -3962,6 +4123,7 @@ class BaseFixedOrderAskRuntime:
             ),
             orchestrator=orchestrator,
             template_decision=state.template_decision,
+            semantic_plan=state.semantic_plan,
         )
 
 
@@ -4038,6 +4200,7 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         inactive_sample=inactive_template_sample,
                     )
                     self._sync_template_decision_state_metrics(state)
+                    self._sync_semantic_plan_state(state, histories=histories)
                     state.effective_instructions = [
                         *state.instructions,
                         *build_template_instruction(state.template_decision),
@@ -4153,6 +4316,7 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                 ),
                 orchestrator=orchestrator,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
 
@@ -4214,6 +4378,7 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     histories=histories,
                 )
                 self._sync_template_decision_state_metrics(state)
+                self._sync_semantic_plan_state(state, histories=histories)
                 state.effective_instructions = [
                     *state.instructions,
                     *build_template_instruction(state.template_decision),
@@ -4351,6 +4516,7 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                 ),
                 orchestrator=orchestrator,
                 template_decision=state.template_decision,
+                semantic_plan=state.semantic_plan,
             )
 
 

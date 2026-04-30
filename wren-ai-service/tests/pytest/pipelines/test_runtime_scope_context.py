@@ -263,6 +263,51 @@ async def test_sql_gen_post_processor_forwards_sql_mode_to_engine(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_sql_gen_post_processor_retries_mysql_date_add_for_preview_parser(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "src.pipelines.generation.utils.sql.aiohttp.ClientSession",
+        lambda: _DummyClientSession(),
+    )
+
+    engine = SimpleNamespace(
+        execute_sql=AsyncMock(
+            side_effect=[
+                (
+                    False,
+                    [],
+                    {
+                        "error_message": (
+                            "ParsingException: mismatched input '1'. "
+                            "Expecting INTERVAL"
+                        ),
+                        "error_sql": "select bad",
+                    },
+                ),
+                (True, [], {"correlation_id": "corr-3"}),
+            ]
+        )
+    )
+    post_processor = SQLGenPostProcessor(engine=engine)
+
+    result = await post_processor.run(
+        replies=[
+            (
+                "SELECT * FROM dwd_order_deposit WHERE callback_time < "
+                "DATE_ADD('2026-04-07', INTERVAL 1 DAY)"
+            )
+        ],
+        runtime_scope_id="deploy-3",
+        sql_mode="dialect",
+    )
+
+    assert engine.execute_sql.await_count == 2
+    assert "DATE_ADD('day', 1, DATE '2026-04-07')" in engine.execute_sql.await_args.args[0]
+    assert result["valid_generation_result"]["sql"] == engine.execute_sql.await_args.args[0]
+
+
+@pytest.mark.asyncio
 async def test_sql_gen_post_processor_converts_engine_exceptions_into_invalid_result(
     monkeypatch,
 ):

@@ -2,6 +2,7 @@ from src.pipelines.generation.sql_correction import get_sql_correction_system_pr
 from src.pipelines.generation.utils.sql import (
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
+    normalize_mysql_date_interval_functions,
 )
 
 
@@ -48,3 +49,16 @@ def test_generation_and_correction_prompts_share_mysql_rules():
 
     assert "### MYSQL / TIDB DIALECT RULES ###" in generation_prompt
     assert "### MYSQL / TIDB DIALECT RULES ###" in correction_prompt
+
+
+def test_normalize_mysql_date_interval_functions_for_engine_preview_retry():
+    sql = (
+        "SELECT * FROM dwd_order_deposit WHERE callback_time < "
+        "DATE_ADD('2026-04-07', INTERVAL 1 DAY) "
+        "AND callback_time >= DATE_SUB('2026-04-07', INTERVAL 7 DAY)"
+    )
+
+    normalized = normalize_mysql_date_interval_functions(sql)
+
+    assert "DATE_ADD('day', 1, DATE '2026-04-07')" in normalized
+    assert "DATE_ADD('day', -7, DATE '2026-04-07')" in normalized
