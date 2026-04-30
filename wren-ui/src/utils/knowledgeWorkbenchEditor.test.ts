@@ -20,6 +20,7 @@ describe('knowledgeWorkbenchEditor', () => {
         suggestedQuestions: ['订单明细里最近 30 天的订单趋势'],
       }),
     ).toEqual({
+      ...EMPTY_SQL_TEMPLATE_VALUES,
       scope: 'all',
       description: '订单明细里最近 30 天的订单趋势',
       templateMode: 'reference',
@@ -103,6 +104,7 @@ describe('knowledgeWorkbenchEditor', () => {
           id: 1,
           question: 'GMV',
           sql: 'select 1',
+          parameterSchema: { required: ['tenant_plat_id'] },
           updatedAt: null,
         },
         currentValues: { description: 'GMV', sql: 'select 2', scope: 'all' },
@@ -135,6 +137,18 @@ describe('knowledgeWorkbenchEditor', () => {
         initialValues: EMPTY_SQL_TEMPLATE_VALUES,
       }),
     ).toBe(false);
+  });
+
+  it('detects semantic SQL template profile changes', () => {
+    expect(
+      hasSqlTemplateDraftChanges({
+        currentValues: {
+          ...EMPTY_SQL_TEMPLATE_VALUES,
+          requiredSlotsText: 'tenant_plat_id',
+        },
+        initialValues: EMPTY_SQL_TEMPLATE_VALUES,
+      }),
+    ).toBe(true);
   });
 
   it('keeps rule draft clean when current values equal baseline', () => {

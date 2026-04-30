@@ -1,8 +1,10 @@
 import type { Instruction } from '@/types/knowledge';
 import {
+  buildSqlTemplateFormValues,
+  buildSqlTemplatePayload,
   parseInstructionDraft,
   shouldUseRuleSqlListCache,
-} from './useKnowledgeRuleSqlManager';
+} from './knowledgeRuleSqlManagerUtils';
 
 const buildInstruction = (
   overrides: Partial<Instruction> = {},
@@ -123,5 +125,65 @@ describe('useKnowledgeRuleSqlManager helpers', () => {
         ttlMs: 10_000,
       }),
     ).toBe(false);
+  });
+
+  it('maps simple SQL template fields to parameter schema and business signature', () => {
+    expect(
+      buildSqlTemplatePayload({
+        scope: 'all',
+        description: '渠道日汇总',
+        templateMode: 'executable_template',
+        sql: 'select * from daily_channel',
+        requiredSlotsText: 'tenant_plat_id\nstart_date\nend_date',
+        expectedGrain: 'biz_date + channel_id',
+        positiveScenariosText: '渠道日基础汇总',
+        negativeScenariosText: '单玩家充值明细',
+        externalDependenciesText: 'ad_spend',
+        parameterSchemaJson:
+          '{"properties":{"tenant_plat_id":{"type":"string"}}}',
+        businessSignatureJson: '{"features":["channel_summary"]}',
+      }),
+    ).toMatchObject({
+      assetKind: 'sql_template',
+      templateLevel: 'L3',
+      templateMode: 'executable_template',
+      parameterSchema: {
+        properties: { tenant_plat_id: { type: 'string' } },
+        required: ['tenant_plat_id', 'start_date', 'end_date'],
+      },
+      businessSignature: {
+        features: ['channel_summary'],
+        expectedGrain: 'biz_date + channel_id',
+        positiveCues: ['渠道日基础汇总'],
+        negativeCues: ['单玩家充值明细'],
+        externalDependencies: ['ad_spend'],
+      },
+    });
+  });
+
+  it('hydrates SQL template simple fields from existing metadata', () => {
+    expect(
+      buildSqlTemplateFormValues({
+        id: 1,
+        question: '渠道日汇总',
+        sql: 'select 1',
+        assetKind: 'sql_template',
+        templateMode: 'anchored_template',
+        parameterSchema: { required: ['tenant_plat_id'] },
+        businessSignature: {
+          expectedGrain: 'biz_date + channel_id',
+          positiveCues: ['渠道日基础汇总'],
+          negativeCues: ['单玩家充值明细'],
+          externalDependencies: ['ad_spend'],
+        },
+      }),
+    ).toMatchObject({
+      templateMode: 'anchored_template',
+      requiredSlotsText: 'tenant_plat_id',
+      expectedGrain: 'biz_date + channel_id',
+      positiveScenariosText: '渠道日基础汇总',
+      negativeScenariosText: '单玩家充值明细',
+      externalDependenciesText: 'ad_spend',
+    });
   });
 });

@@ -21,6 +21,13 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
         sql: 'select 1',
         scope: 'all',
         templateMode: 'reference',
+        requiredSlotsText: 'tenant_plat_id',
+        expectedGrain: 'biz_date',
+        positiveScenariosText: '渠道日汇总',
+        negativeScenariosText: '单玩家明细',
+        externalDependenciesText: 'ad_spend',
+        parameterSchemaJson: '{ "required": ["tenant_plat_id"] }',
+        businessSignatureJson: '{ "positiveCues": ["渠道日汇总"] }',
       })),
     };
 
@@ -56,7 +63,7 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
       description: 'Orders',
       sql: 'select * from orders',
       scope: 'all',
-      templateMode: 'business',
+      templateMode: 'anchored_template',
     });
     hook.syncRuleDraftBaseline({
       summary: 'Rules',
@@ -79,6 +86,13 @@ describe('useKnowledgeWorkbenchDraftBaselineState', () => {
       'sql',
       'scope',
       'templateMode',
+      'requiredSlotsText',
+      'expectedGrain',
+      'positiveScenariosText',
+      'negativeScenariosText',
+      'externalDependenciesText',
+      'parameterSchemaJson',
+      'businessSignatureJson',
     ]);
     expect(ruleForm.getFieldsValue).toHaveBeenCalledWith([
       'summary',

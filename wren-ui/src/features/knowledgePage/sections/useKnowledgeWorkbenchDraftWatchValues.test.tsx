@@ -66,12 +66,54 @@ describe('useKnowledgeWorkbenchDraftWatchValues', () => {
       'templateMode',
       sqlTemplateForm,
     );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      7,
+      'requiredSlotsText',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      8,
+      'expectedGrain',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      9,
+      'positiveScenariosText',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      10,
+      'negativeScenariosText',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      11,
+      'externalDependenciesText',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      12,
+      'parameterSchemaJson',
+      sqlTemplateForm,
+    );
+    expect(mockUseWatch).toHaveBeenNthCalledWith(
+      13,
+      'businessSignatureJson',
+      sqlTemplateForm,
+    );
     expect(hook).toEqual({
       watchedRuleContent: 'ruleForm:content',
       watchedRuleScope: 'ruleForm:scope',
       watchedRuleSummary: 'ruleForm:summary',
+      watchedSqlBusinessSignatureJson: 'sqlForm:businessSignatureJson',
       watchedSqlContent: 'sqlForm:sql',
       watchedSqlDescription: 'sqlForm:description',
+      watchedSqlExpectedGrain: 'sqlForm:expectedGrain',
+      watchedSqlExternalDependenciesText: 'sqlForm:externalDependenciesText',
+      watchedSqlNegativeScenariosText: 'sqlForm:negativeScenariosText',
+      watchedSqlParameterSchemaJson: 'sqlForm:parameterSchemaJson',
+      watchedSqlPositiveScenariosText: 'sqlForm:positiveScenariosText',
+      watchedSqlRequiredSlotsText: 'sqlForm:requiredSlotsText',
       watchedSqlTemplateMode: 'sqlForm:templateMode',
     });
   });

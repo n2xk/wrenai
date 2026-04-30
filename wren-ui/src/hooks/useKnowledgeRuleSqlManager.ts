@@ -92,13 +92,7 @@ export default function useKnowledgeRuleSqlManager({
   const applySqlTemplateFormValues = useCallback(
     (sqlPair?: SqlPair | null) => {
       const draft = buildSqlTemplateFormValues(sqlPair);
-      sqlTemplateForm.setFieldsValue({
-        sql: draft.sql,
-        scope: draft.scope,
-        description: draft.description,
-        templateMode: draft.templateMode,
-        businessSignatureJson: draft.businessSignatureJson,
-      });
+      sqlTemplateForm.setFieldsValue(draft);
     },
     [sqlTemplateForm],
   );

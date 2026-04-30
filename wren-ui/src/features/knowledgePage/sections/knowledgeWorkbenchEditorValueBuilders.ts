@@ -4,10 +4,11 @@ import {
   EMPTY_SQL_TEMPLATE_VALUES,
 } from '@/utils/knowledgeWorkbenchEditor';
 import {
+  buildSqlTemplateFormValues,
   parseInstructionDraft,
   type RuleDetailFormValues,
   type SqlTemplateFormValues,
-} from '@/hooks/useKnowledgeRuleSqlManager';
+} from '@/hooks/knowledgeRuleSqlManagerUtils';
 
 export const buildSqlTemplateEditorValues = ({
   sqlPair,
@@ -17,18 +18,7 @@ export const buildSqlTemplateEditorValues = ({
   draftValues?: Partial<SqlTemplateFormValues>;
 }): SqlTemplateFormValues => ({
   ...EMPTY_SQL_TEMPLATE_VALUES,
-  ...(sqlPair
-    ? {
-        sql: sqlPair.sql || '',
-        description: sqlPair.question || '',
-        templateMode:
-          sqlPair.templateMode === 'anchored_template' ||
-          sqlPair.templateMode === 'executable_template' ||
-          sqlPair.assetKind === 'sql_template'
-            ? 'business'
-            : 'reference',
-      }
-    : null),
+  ...(sqlPair ? buildSqlTemplateFormValues(sqlPair) : null),
   ...(draftValues || null),
 });
 

@@ -3,6 +3,7 @@ import type {
   CreateSqlPairInput,
   Instruction,
   SqlPair,
+  SqlPairTemplateMode,
 } from '@/types/knowledge';
 import {
   SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
@@ -22,7 +23,13 @@ export type SqlTemplateFormValues = {
   sql: string;
   scope: 'all' | 'matched';
   description: string;
-  templateMode: 'reference' | 'business';
+  templateMode: SqlPairTemplateMode;
+  requiredSlotsText?: string;
+  expectedGrain?: string;
+  positiveScenariosText?: string;
+  negativeScenariosText?: string;
+  externalDependenciesText?: string;
+  parameterSchemaJson?: string;
   businessSignatureJson?: string;
 };
 
@@ -37,6 +44,183 @@ const parseTextList = (value?: string) =>
   );
 
 const formatTextList = (value?: string[]) => (value || []).join('\n');
+
+const SQL_TEMPLATE_MODES: SqlPairTemplateMode[] = [
+  'reference',
+  'trusted_reference',
+  'anchored_template',
+  'executable_template',
+];
+
+const isSqlPairTemplateMode = (
+  value?: string | null,
+): value is SqlPairTemplateMode =>
+  SQL_TEMPLATE_MODES.includes(value as SqlPairTemplateMode);
+
+export const resolveSqlTemplateFormMode = (
+  sqlPair?: Pick<SqlPair, 'templateMode' | 'assetKind'> | null,
+): SqlPairTemplateMode => {
+  if (isSqlPairTemplateMode(sqlPair?.templateMode as string | null)) {
+    return sqlPair?.templateMode as SqlPairTemplateMode;
+  }
+  return sqlPair?.assetKind === 'sql_template'
+    ? 'anchored_template'
+    : 'reference';
+};
+
+const pickTextList = (
+  value: Record<string, any> | null | undefined,
+  ...keys: string[]
+) => {
+  for (const key of keys) {
+    const raw = value?.[key];
+    if (Array.isArray(raw)) {
+      return formatTextList(
+        raw.map((item) => `${item}`.trim()).filter(Boolean),
+      );
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.trim();
+    }
+  }
+  return '';
+};
+
+const pickTextValue = (
+  value: Record<string, any> | null | undefined,
+  ...keys: string[]
+) => {
+  for (const key of keys) {
+    const raw = value?.[key];
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.trim();
+    }
+  }
+  return '';
+};
+
+const buildSqlTemplateMetadata = (
+  templateMode: SqlPairTemplateMode,
+): Pick<
+  CreateSqlPairInput,
+  | 'assetKind'
+  | 'templateLevel'
+  | 'templateMode'
+  | 'sourceType'
+  | 'scopeType'
+  | 'approvedAt'
+  | 'approvedBy'
+  | 'effectiveFrom'
+  | 'effectiveTo'
+  | 'status'
+> => {
+  if (templateMode === 'anchored_template') {
+    return {
+      ...SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
+      templateMode,
+      status: 'active',
+    };
+  }
+  if (templateMode === 'executable_template') {
+    return {
+      ...SQL_PAIR_BUSINESS_TEMPLATE_PRESET,
+      templateLevel: 'L3',
+      templateMode,
+      status: 'active',
+    };
+  }
+  if (templateMode === 'trusted_reference') {
+    return {
+      ...SQL_PAIR_REFERENCE_PRESET,
+      templateLevel: 'L1',
+      templateMode,
+      approvedAt: null,
+      approvedBy: null,
+      effectiveFrom: null,
+      effectiveTo: null,
+      status: 'active',
+    };
+  }
+  return {
+    ...SQL_PAIR_REFERENCE_PRESET,
+    approvedAt: null,
+    approvedBy: null,
+    effectiveFrom: null,
+    effectiveTo: null,
+    status: 'active',
+  };
+};
+
+const mergeParameterSchema = ({
+  parameterSchema,
+  requiredSlotsText,
+}: {
+  parameterSchema: Record<string, any> | null;
+  requiredSlotsText?: string;
+}) => {
+  const required = parseTextList(requiredSlotsText);
+  if (!parameterSchema && required.length === 0) {
+    return null;
+  }
+  return {
+    ...(parameterSchema || {}),
+    required,
+  };
+};
+
+const mergeBusinessSignature = ({
+  businessSignature,
+  expectedGrain,
+  externalDependenciesText,
+  negativeScenariosText,
+  positiveScenariosText,
+}: {
+  businessSignature: Record<string, any> | null;
+  expectedGrain?: string;
+  externalDependenciesText?: string;
+  negativeScenariosText?: string;
+  positiveScenariosText?: string;
+}) => {
+  const nextSignature = {
+    ...(businessSignature || {}),
+  };
+  const positiveCues = parseTextList(positiveScenariosText);
+  const negativeCues = parseTextList(negativeScenariosText);
+  const externalDependencies = parseTextList(externalDependenciesText);
+  const normalizedExpectedGrain = expectedGrain?.trim() || '';
+  const shouldWritePositiveCues =
+    positiveCues.length > 0 ||
+    Object.prototype.hasOwnProperty.call(nextSignature, 'positiveCues');
+  const shouldWriteNegativeCues =
+    negativeCues.length > 0 ||
+    Object.prototype.hasOwnProperty.call(nextSignature, 'negativeCues');
+  const shouldWriteExternalDependencies =
+    externalDependencies.length > 0 ||
+    Object.prototype.hasOwnProperty.call(nextSignature, 'externalDependencies');
+
+  if (shouldWritePositiveCues) {
+    nextSignature.positiveCues = positiveCues;
+    delete nextSignature.positive_cues;
+  }
+  if (shouldWriteNegativeCues) {
+    nextSignature.negativeCues = negativeCues;
+    delete nextSignature.negative_cues;
+  }
+  if (shouldWriteExternalDependencies) {
+    nextSignature.externalDependencies = externalDependencies;
+    delete nextSignature.external_dependencies;
+  }
+  if (normalizedExpectedGrain) {
+    nextSignature.expectedGrain = normalizedExpectedGrain;
+    delete nextSignature.expected_grain;
+    delete nextSignature.resultGrain;
+    delete nextSignature.result_grain;
+  } else {
+    delete nextSignature.expectedGrain;
+  }
+
+  return Object.keys(nextSignature).length > 0 ? nextSignature : null;
+};
 
 const parseOptionalJsonObject = (value?: string) => {
   const trimmed = value?.trim();
@@ -162,33 +346,65 @@ export const buildInstructionPayload = (
 export const buildSqlTemplatePayload = (
   values: SqlTemplateFormValues,
 ): CreateSqlPairInput => {
-  const templateMetadata =
-    values.templateMode === 'business'
-      ? SQL_PAIR_BUSINESS_TEMPLATE_PRESET
-      : SQL_PAIR_REFERENCE_PRESET;
+  const templateMetadata = buildSqlTemplateMetadata(values.templateMode);
+  const parameterSchema = mergeParameterSchema({
+    parameterSchema: parseOptionalJsonObject(values.parameterSchemaJson),
+    requiredSlotsText: values.requiredSlotsText,
+  });
+  const businessSignature = mergeBusinessSignature({
+    businessSignature: parseOptionalJsonObject(values.businessSignatureJson),
+    expectedGrain: values.expectedGrain,
+    externalDependenciesText: values.externalDependenciesText,
+    negativeScenariosText: values.negativeScenariosText,
+    positiveScenariosText: values.positiveScenariosText,
+  });
 
   return {
     sql: values.sql,
     question: values.description,
     ...templateMetadata,
-    businessSignature: parseOptionalJsonObject(values.businessSignatureJson),
+    parameterSchema,
+    businessSignature,
   };
 };
 
 export const buildSqlTemplateFormValues = (
   sqlPair?: SqlPair | null,
-): SqlTemplateFormValues => ({
-  sql: sqlPair?.sql || '',
-  scope: 'all',
-  description: sqlPair?.question || '',
-  templateMode:
-    sqlPair?.templateMode === 'anchored_template' ||
-    sqlPair?.templateMode === 'executable_template' ||
-    sqlPair?.assetKind === 'sql_template'
-      ? 'business'
-      : 'reference',
-  businessSignatureJson: formatJsonObject(sqlPair?.businessSignature),
-});
+): SqlTemplateFormValues => {
+  const businessSignature = sqlPair?.businessSignature || null;
+  const parameterSchema = sqlPair?.parameterSchema || null;
+  return {
+    sql: sqlPair?.sql || '',
+    scope: 'all',
+    description: sqlPair?.question || '',
+    templateMode: resolveSqlTemplateFormMode(sqlPair),
+    requiredSlotsText: pickTextList(parameterSchema, 'required'),
+    expectedGrain: pickTextValue(
+      businessSignature,
+      'expectedGrain',
+      'expected_grain',
+      'resultGrain',
+      'result_grain',
+    ),
+    positiveScenariosText: pickTextList(
+      businessSignature,
+      'positiveCues',
+      'positive_cues',
+    ),
+    negativeScenariosText: pickTextList(
+      businessSignature,
+      'negativeCues',
+      'negative_cues',
+    ),
+    externalDependenciesText: pickTextList(
+      businessSignature,
+      'externalDependencies',
+      'external_dependencies',
+    ),
+    parameterSchemaJson: formatJsonObject(parameterSchema),
+    businessSignatureJson: formatJsonObject(businessSignature),
+  };
+};
 
 const hasSameQuestions = (left: string[] = [], right: string[] = []) =>
   left.length === right.length &&

@@ -38,6 +38,13 @@ const createWatchValues = (): KnowledgeWorkbenchDraftWatchValues => ({
   watchedRuleSummary: 'rule-summary',
   watchedSqlContent: 'select 1',
   watchedSqlDescription: 'sql-description',
+  watchedSqlBusinessSignatureJson: '{}',
+  watchedSqlExpectedGrain: 'biz_date',
+  watchedSqlExternalDependenciesText: 'ad_spend',
+  watchedSqlNegativeScenariosText: '单玩家明细',
+  watchedSqlParameterSchemaJson: '{}',
+  watchedSqlPositiveScenariosText: '渠道日汇总',
+  watchedSqlRequiredSlotsText: 'tenant_plat_id',
   watchedSqlTemplateMode: 'reference',
 });
 
@@ -52,6 +59,13 @@ const createBaselineState = (): KnowledgeWorkbenchDraftBaselineState => ({
     sql: 'select baseline',
     scope: 'all',
     templateMode: 'reference',
+    requiredSlotsText: '',
+    expectedGrain: '',
+    positiveScenariosText: '',
+    negativeScenariosText: '',
+    externalDependenciesText: '',
+    parameterSchemaJson: '',
+    businessSignatureJson: '',
   },
   syncRuleDraftBaseline: jest.fn(),
   syncSqlDraftBaseline: jest.fn(),
@@ -90,6 +104,8 @@ describe('knowledgeWorkbenchDraftStateHelpers', () => {
       sqlListMode: 'recent',
       watchedRuleSummary: 'rule-summary',
       watchedSqlContent: 'select 1',
+      watchedSqlRequiredSlotsText: 'tenant_plat_id',
+      watchedSqlExpectedGrain: 'biz_date',
     });
   });
 

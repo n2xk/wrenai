@@ -3,7 +3,11 @@ import type {
   RuleDetailFormValues,
   SqlTemplateFormValues,
 } from '@/hooks/useKnowledgeRuleSqlManager';
-import type { Instruction, SqlPair } from '@/types/knowledge';
+import type {
+  Instruction,
+  SqlPair,
+  SqlPairTemplateMode,
+} from '@/types/knowledge';
 import {
   filterKnowledgeInstructions,
   filterKnowledgeSqlTemplates,
@@ -25,6 +29,13 @@ export function useKnowledgeWorkbenchDraftDerivedState({
   watchedRuleSummary,
   watchedSqlContent,
   watchedSqlDescription,
+  watchedSqlBusinessSignatureJson,
+  watchedSqlExpectedGrain,
+  watchedSqlExternalDependenciesText,
+  watchedSqlNegativeScenariosText,
+  watchedSqlParameterSchemaJson,
+  watchedSqlPositiveScenariosText,
+  watchedSqlRequiredSlotsText,
   watchedSqlTemplateMode,
 }: {
   ruleDraftBaseline: RuleDetailFormValues;
@@ -40,7 +51,14 @@ export function useKnowledgeWorkbenchDraftDerivedState({
   watchedRuleSummary?: string;
   watchedSqlContent?: string;
   watchedSqlDescription?: string;
-  watchedSqlTemplateMode?: 'reference' | 'business';
+  watchedSqlBusinessSignatureJson?: string;
+  watchedSqlExpectedGrain?: string;
+  watchedSqlExternalDependenciesText?: string;
+  watchedSqlNegativeScenariosText?: string;
+  watchedSqlParameterSchemaJson?: string;
+  watchedSqlPositiveScenariosText?: string;
+  watchedSqlRequiredSlotsText?: string;
+  watchedSqlTemplateMode?: SqlPairTemplateMode;
 }) {
   const visibleSqlList = useMemo(
     () =>
@@ -87,13 +105,27 @@ export function useKnowledgeWorkbenchDraftDerivedState({
           description: watchedSqlDescription,
           sql: watchedSqlContent,
           templateMode: watchedSqlTemplateMode,
+          requiredSlotsText: watchedSqlRequiredSlotsText,
+          expectedGrain: watchedSqlExpectedGrain,
+          positiveScenariosText: watchedSqlPositiveScenariosText,
+          negativeScenariosText: watchedSqlNegativeScenariosText,
+          externalDependenciesText: watchedSqlExternalDependenciesText,
+          parameterSchemaJson: watchedSqlParameterSchemaJson,
+          businessSignatureJson: watchedSqlBusinessSignatureJson,
         },
         initialValues: sqlDraftBaseline,
       }),
     [
       sqlDraftBaseline,
+      watchedSqlBusinessSignatureJson,
       watchedSqlContent,
       watchedSqlDescription,
+      watchedSqlExpectedGrain,
+      watchedSqlExternalDependenciesText,
+      watchedSqlNegativeScenariosText,
+      watchedSqlParameterSchemaJson,
+      watchedSqlPositiveScenariosText,
+      watchedSqlRequiredSlotsText,
       watchedSqlTemplateMode,
     ],
   );

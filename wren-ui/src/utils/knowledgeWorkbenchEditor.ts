@@ -1,9 +1,10 @@
 import type { AssetFieldView, AssetView } from '@/features/knowledgePage/types';
 import {
+  buildSqlTemplateFormValues,
   parseInstructionDraft,
   type RuleDetailFormValues,
   type SqlTemplateFormValues,
-} from '@/hooks/useKnowledgeRuleSqlManager';
+} from '@/hooks/knowledgeRuleSqlManagerUtils';
 import type { Instruction, SqlPair } from '@/types/knowledge';
 
 const RECENT_LIST_LIMIT = 6;
@@ -13,6 +14,13 @@ export const EMPTY_SQL_TEMPLATE_VALUES: SqlTemplateFormValues = {
   scope: 'all',
   description: '',
   templateMode: 'reference',
+  requiredSlotsText: '',
+  expectedGrain: '',
+  positiveScenariosText: '',
+  negativeScenariosText: '',
+  externalDependenciesText: '',
+  parameterSchemaJson: '',
+  businessSignatureJson: '',
 };
 
 export const EMPTY_RULE_EDITOR_VALUES: RuleDetailFormValues = {
@@ -85,6 +93,13 @@ export const buildSqlTemplateDraftFromAsset = (
     scope: 'all',
     description: question,
     templateMode: 'reference',
+    requiredSlotsText: '',
+    expectedGrain: '',
+    positiveScenariosText: '',
+    negativeScenariosText: '',
+    externalDependenciesText: '',
+    parameterSchemaJson: '',
+    businessSignatureJson: '',
     sql:
       trimmedSourceSql ||
       [
@@ -204,26 +219,27 @@ export const hasSqlTemplateDraftChanges = ({
 }) => {
   const resolvedInitialValues: SqlTemplateFormValues = {
     ...EMPTY_SQL_TEMPLATE_VALUES,
-    ...(editingSqlPair
-      ? {
-          sql: editingSqlPair.sql || '',
-          description: editingSqlPair.question || '',
-          templateMode:
-            editingSqlPair.templateMode === 'anchored_template' ||
-            editingSqlPair.templateMode === 'executable_template' ||
-            editingSqlPair.assetKind === 'sql_template'
-              ? 'business'
-              : 'reference',
-        }
-      : null),
+    ...(editingSqlPair ? buildSqlTemplateFormValues(editingSqlPair) : null),
     ...(initialValues || null),
   };
+  const fieldsToCompare: Array<keyof SqlTemplateFormValues> = [
+    'description',
+    'sql',
+    'requiredSlotsText',
+    'expectedGrain',
+    'positiveScenariosText',
+    'negativeScenariosText',
+    'externalDependenciesText',
+    'parameterSchemaJson',
+    'businessSignatureJson',
+  ];
 
   return (
-    collapseWhitespace(currentValues?.description) !==
-      collapseWhitespace(resolvedInitialValues.description) ||
-    collapseWhitespace(currentValues?.sql) !==
-      collapseWhitespace(resolvedInitialValues.sql) ||
+    fieldsToCompare.some(
+      (field) =>
+        collapseWhitespace(currentValues?.[field] as string | undefined) !==
+        collapseWhitespace(resolvedInitialValues[field] as string | undefined),
+    ) ||
     (currentValues?.scope || 'all') !== resolvedInitialValues.scope ||
     (currentValues?.templateMode || 'reference') !==
       resolvedInitialValues.templateMode

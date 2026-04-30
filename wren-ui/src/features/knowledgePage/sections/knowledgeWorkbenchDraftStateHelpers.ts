@@ -1,4 +1,5 @@
 import { Instruction, SqlPair } from '@/types/knowledge';
+import type { SqlPairTemplateMode } from '@/types/knowledge';
 import type { AssetView } from '@/features/knowledgePage/types';
 import type {
   RuleDetailFormValues,
@@ -34,7 +35,14 @@ export type KnowledgeWorkbenchDraftWatchValues = {
   watchedRuleSummary?: string;
   watchedSqlContent?: string;
   watchedSqlDescription?: string;
-  watchedSqlTemplateMode?: 'reference' | 'business';
+  watchedSqlBusinessSignatureJson?: string;
+  watchedSqlExpectedGrain?: string;
+  watchedSqlExternalDependenciesText?: string;
+  watchedSqlNegativeScenariosText?: string;
+  watchedSqlParameterSchemaJson?: string;
+  watchedSqlPositiveScenariosText?: string;
+  watchedSqlRequiredSlotsText?: string;
+  watchedSqlTemplateMode?: SqlPairTemplateMode;
 };
 
 export type KnowledgeWorkbenchDraftBaselineState = {
@@ -84,8 +92,19 @@ export function buildKnowledgeWorkbenchDraftDerivedStateInput({
     watchedRuleContent: watchValues.watchedRuleContent,
     watchedRuleScope: watchValues.watchedRuleScope,
     watchedRuleSummary: watchValues.watchedRuleSummary,
+    watchedSqlBusinessSignatureJson:
+      watchValues.watchedSqlBusinessSignatureJson,
     watchedSqlContent: watchValues.watchedSqlContent,
     watchedSqlDescription: watchValues.watchedSqlDescription,
+    watchedSqlExpectedGrain: watchValues.watchedSqlExpectedGrain,
+    watchedSqlExternalDependenciesText:
+      watchValues.watchedSqlExternalDependenciesText,
+    watchedSqlNegativeScenariosText:
+      watchValues.watchedSqlNegativeScenariosText,
+    watchedSqlParameterSchemaJson: watchValues.watchedSqlParameterSchemaJson,
+    watchedSqlPositiveScenariosText:
+      watchValues.watchedSqlPositiveScenariosText,
+    watchedSqlRequiredSlotsText: watchValues.watchedSqlRequiredSlotsText,
     watchedSqlTemplateMode: watchValues.watchedSqlTemplateMode,
   };
 }
