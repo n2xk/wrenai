@@ -4,37 +4,35 @@ import SetupConnectionPage from '../../../pages/setup/connection';
 import SetupModelsPage from '../../../pages/setup/models';
 import SetupRelationshipsPage from '../../../pages/setup/relationships';
 
-jest.mock('@/features/setup/ManageSetupConnectionPage', () => ({
-  __esModule: true,
-  default: () => <div>Setup Connection Feature Page</div>,
-}));
+const mockReplace = jest.fn();
 
-jest.mock('@/features/setup/ManageSetupModelsPage', () => ({
+jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   __esModule: true,
-  default: () => <div>Setup Models Feature Page</div>,
-}));
-
-jest.mock('@/features/setup/ManageSetupRelationshipsPage', () => ({
-  __esModule: true,
-  default: () => <div>Setup Relationships Feature Page</div>,
+  default: () => ({
+    replace: mockReplace,
+  }),
 }));
 
 describe('setup route entries', () => {
-  it('reuses the setup connection feature page', () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+  });
+
+  it('keeps /setup/connection as a compatibility redirect', () => {
     expect(renderToStaticMarkup(<SetupConnectionPage />)).toContain(
-      'Setup Connection Feature Page',
+      '正在进入知识库工作台',
     );
   });
 
-  it('reuses the setup models feature page', () => {
+  it('keeps /setup/models as a compatibility redirect', () => {
     expect(renderToStaticMarkup(<SetupModelsPage />)).toContain(
-      'Setup Models Feature Page',
+      '正在进入知识库工作台',
     );
   });
 
-  it('reuses the setup relationships feature page', () => {
+  it('keeps /setup/relationships as a compatibility redirect', () => {
     expect(renderToStaticMarkup(<SetupRelationshipsPage />)).toContain(
-      'Setup Relationships Feature Page',
+      '正在进入知识库工作台',
     );
   });
 });

@@ -9,7 +9,7 @@ import {
   Typography,
 } from 'antd';
 import {
-  CONNECTOR_TYPE_OPTIONS,
+  ALL_CONNECTOR_TYPE_OPTIONS,
   DATABASE_PROVIDER_OPTIONS,
   type ConnectorView,
 } from './connectorsPageUtils';
@@ -17,7 +17,7 @@ import {
 const { Paragraph, Text, Title } = Typography;
 
 const CONNECTOR_TYPE_LABELS = Object.fromEntries(
-  CONNECTOR_TYPE_OPTIONS.map((option) => [option.value, option.label]),
+  ALL_CONNECTOR_TYPE_OPTIONS.map((option) => [option.value, option.label]),
 );
 
 const DATABASE_PROVIDER_LABELS = Object.fromEntries(
@@ -69,7 +69,7 @@ export default function ConnectorsCatalogSection({
             <Text type="secondary">
               {connectors.length > 0
                 ? `当前共 ${connectors.length} 个连接器，${configuredSecretCount} 个已配置密钥。`
-                : '统一管理工作区可复用的 API、数据库与工具端点。'}
+                : '统一管理工作区可复用的数据库连接。'}
             </Text>
           </Space>
         </Col>

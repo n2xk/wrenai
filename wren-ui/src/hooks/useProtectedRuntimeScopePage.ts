@@ -25,7 +25,7 @@ export const resolveProtectedRuntimeScopeRedirect = ({
   }
 
   if (!hasRuntimeScope) {
-    return Path.OnboardingConnection;
+    return Path.Workspace;
   }
 
   return null;

@@ -17,6 +17,8 @@ export default function useConnectorEditorFields({
   const watchedDatabaseProvider = Form.useWatch('databaseProvider', form);
   const watchedSnowflakeAuthMode = Form.useWatch('dbSnowflakeAuthMode', form);
   const watchedRedshiftAuthMode = Form.useWatch('dbRedshiftAuthMode', form);
+  const watchedAthenaAuthMode = Form.useWatch('dbAthenaAuthMode', form);
+  const watchedDatabricksAuthMode = Form.useWatch('dbDatabricksAuthMode', form);
   const databaseProviderExample =
     watchedConnectorType === 'database' && watchedDatabaseProvider
       ? DATABASE_PROVIDER_EXAMPLES[watchedDatabaseProvider]
@@ -62,11 +64,43 @@ export default function useConnectorEditorFields({
     watchedRedshiftAuthMode,
   ]);
 
+  useEffect(() => {
+    if (
+      watchedConnectorType === 'database' &&
+      watchedDatabaseProvider === 'athena' &&
+      !watchedAthenaAuthMode
+    ) {
+      form.setFieldsValue({ dbAthenaAuthMode: 'classic' });
+    }
+  }, [
+    form,
+    watchedConnectorType,
+    watchedDatabaseProvider,
+    watchedAthenaAuthMode,
+  ]);
+
+  useEffect(() => {
+    if (
+      watchedConnectorType === 'database' &&
+      watchedDatabaseProvider === 'databricks' &&
+      !watchedDatabricksAuthMode
+    ) {
+      form.setFieldsValue({ dbDatabricksAuthMode: 'token' });
+    }
+  }, [
+    form,
+    watchedConnectorType,
+    watchedDatabaseProvider,
+    watchedDatabricksAuthMode,
+  ]);
+
   return {
     watchedConnectorType,
     watchedDatabaseProvider,
     watchedSnowflakeAuthMode,
     watchedRedshiftAuthMode,
+    watchedAthenaAuthMode,
+    watchedDatabricksAuthMode,
     databaseProviderExample,
   };
 }

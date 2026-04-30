@@ -191,9 +191,7 @@ describe('knowledge/connectors page', () => {
     expect(buildConnectorTestUrl()).toBe('/api/v1/connectors/test');
     expect(buildSecretReencryptApiUrl()).toBe('/api/v1/secrets/reencrypt');
     expect(CONNECTOR_TYPE_OPTIONS).toEqual([
-      { label: 'REST JSON API', value: 'rest_json' },
       { label: '数据库', value: 'database' },
-      { label: 'Python 工具', value: 'python_tool' },
     ]);
     expect(CONNECTOR_SECRET_EDIT_HINT).toContain('继续沿用现有密钥');
     expect(CONNECTOR_CLEAR_SECRET_LABEL).toContain('清空现有密钥');

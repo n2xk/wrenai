@@ -38,7 +38,9 @@ export default function ProjectSettings(props: Props) {
           setResetting(true);
           await resetCurrentProject(runtimeScopeNavigation.selector);
           clearRuntimePagePrefetchCache();
-          runtimeScopeNavigation.push(Path.OnboardingConnection);
+          runtimeScopeNavigation.push(Path.Knowledge, {
+            openAssetWizard: true,
+          });
         } catch (error) {
           appMessage.error(
             error instanceof Error

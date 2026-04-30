@@ -1,6 +1,7 @@
 import { getConfig } from '../config';
 import type {
   BIG_QUERY_CONNECTION_INFO,
+  DATABRICKS_CONNECTION_INFO,
   Project,
   REDSHIFT_CONNECTION_INFO,
   SNOWFLAKE_CONNECTION_INFO,
@@ -24,9 +25,15 @@ const DATA_SOURCE_TO_PROVIDER: Partial<
   [DataSourceName.POSTGRES]: 'postgres',
   [DataSourceName.MYSQL]: 'mysql',
   [DataSourceName.BIG_QUERY]: 'bigquery',
+  [DataSourceName.DUCKDB]: 'duckdb',
+  [DataSourceName.ORACLE]: 'oracle',
+  [DataSourceName.MSSQL]: 'mssql',
+  [DataSourceName.CLICK_HOUSE]: 'clickhouse',
+  [DataSourceName.ATHENA]: 'athena',
   [DataSourceName.SNOWFLAKE]: 'snowflake',
   [DataSourceName.REDSHIFT]: 'redshift',
   [DataSourceName.TRINO]: 'trino',
+  [DataSourceName.DATABRICKS]: 'databricks',
 };
 
 const PROVIDER_TO_DATA_SOURCE = Object.entries(DATA_SOURCE_TO_PROVIDER).reduce<
@@ -44,9 +51,14 @@ const SENSITIVE_FIELDS_BY_DATA_SOURCE: Partial<
   [DataSourceName.POSTGRES]: ['password'],
   [DataSourceName.MYSQL]: ['password'],
   [DataSourceName.BIG_QUERY]: ['credentials'],
+  [DataSourceName.ORACLE]: ['password', 'dsn'],
+  [DataSourceName.MSSQL]: ['password'],
+  [DataSourceName.CLICK_HOUSE]: ['password'],
+  [DataSourceName.ATHENA]: ['awsSecretKey', 'webIdentityToken'],
   [DataSourceName.SNOWFLAKE]: ['password', 'privateKey'],
-  [DataSourceName.REDSHIFT]: ['password', 'awsAccessKey', 'awsSecretKey'],
+  [DataSourceName.REDSHIFT]: ['password', 'awsSecretKey'],
   [DataSourceName.TRINO]: ['password'],
+  [DataSourceName.DATABRICKS]: ['accessToken', 'clientSecret'],
 };
 
 const pickDefined = <T extends Record<string, any>>(value: T) =>
@@ -82,6 +94,18 @@ const readOptionalPositiveInteger = (value: unknown) => {
 
   return undefined;
 };
+
+const readStringArray = (value: unknown) =>
+  Array.isArray(value)
+    ? value
+        .map((item) => readOptionalString(item))
+        .filter((item): item is string => Boolean(item))
+    : [];
+
+const readOptionalPlainObject = (value: unknown) =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : undefined;
 
 const decryptSecretField = (
   encryptedValue: unknown,
@@ -186,6 +210,115 @@ const buildConnectorBridgeFromProperties = (
         ...(credentials ? { secret: { credentials } } : {}),
       };
     }
+    case DataSourceName.DUCKDB:
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          initSql: readOptionalString(properties.initSql) || '',
+          extensions: readStringArray(properties.extensions),
+          configurations:
+            readOptionalPlainObject(properties.configurations) || {},
+        }),
+      };
+    case DataSourceName.ORACLE: {
+      const password = readOptionalSecretValue(properties.password);
+      const dsn = readOptionalSecretValue(properties.dsn);
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          host: readOptionalString(properties.host),
+          port: readOptionalPositiveInteger(properties.port),
+          database: readOptionalString(properties.database),
+          user: readOptionalString(properties.user ?? properties.username),
+        }),
+        ...(password || dsn
+          ? {
+              secret: pickDefined({
+                password,
+                dsn,
+              }),
+            }
+          : {}),
+      };
+    }
+    case DataSourceName.MSSQL: {
+      const password = readOptionalSecretValue(properties.password);
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          host: readOptionalString(properties.host),
+          port: readOptionalPositiveInteger(properties.port),
+          database: readOptionalString(properties.database),
+          user: readOptionalString(properties.user ?? properties.username),
+          trustServerCertificate:
+            properties.trustServerCertificate === undefined
+              ? undefined
+              : Boolean(properties.trustServerCertificate),
+        }),
+        ...(password ? { secret: { password } } : {}),
+      };
+    }
+    case DataSourceName.CLICK_HOUSE: {
+      const password = readOptionalSecretValue(properties.password);
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          host: readOptionalString(properties.host),
+          port: readOptionalPositiveInteger(properties.port),
+          database: readOptionalString(properties.database),
+          user: readOptionalString(properties.user ?? properties.username),
+          ssl:
+            properties.ssl === undefined ? undefined : Boolean(properties.ssl),
+        }),
+        ...(password ? { secret: { password } } : {}),
+      };
+    }
+    case DataSourceName.ATHENA: {
+      const awsAccessKey = readOptionalSecretValue(properties.awsAccessKey);
+      const awsSecretKey = readOptionalSecretValue(properties.awsSecretKey);
+      const webIdentityToken = readOptionalSecretValue(
+        properties.webIdentityToken,
+      );
+      const athenaAuthType =
+        webIdentityToken && readOptionalString(properties.roleArn)
+          ? 'oidc'
+          : awsAccessKey || awsSecretKey
+            ? 'classic'
+            : 'instance_profile';
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          database: readOptionalString(
+            properties.database ?? properties.schema,
+          ),
+          schema: readOptionalString(properties.schema ?? properties.database),
+          s3StagingDir: readOptionalString(properties.s3StagingDir),
+          awsRegion: readOptionalString(properties.awsRegion),
+          roleArn: readOptionalString(properties.roleArn),
+          roleSessionName: readOptionalString(properties.roleSessionName),
+          athenaAuthType,
+        }),
+        ...(awsAccessKey || awsSecretKey || webIdentityToken
+          ? {
+              secret: pickDefined({
+                awsAccessKey,
+                awsSecretKey,
+                webIdentityToken,
+              }),
+            }
+          : {}),
+      };
+    }
     case DataSourceName.SNOWFLAKE: {
       const privateKey = readOptionalSecretValue(properties.privateKey);
       const password = readOptionalSecretValue(properties.password);
@@ -260,6 +393,32 @@ const buildConnectorBridgeFromProperties = (
             properties.ssl === undefined ? undefined : Boolean(properties.ssl),
         }),
         ...(password ? { secret: { password } } : {}),
+      };
+    }
+    case DataSourceName.DATABRICKS: {
+      const accessToken = readOptionalSecretValue(properties.accessToken);
+      const clientSecret = readOptionalSecretValue(properties.clientSecret);
+      return {
+        type: 'database',
+        databaseProvider: provider,
+        displayName,
+        config: pickDefined({
+          serverHostname: readOptionalString(properties.serverHostname),
+          httpPath: readOptionalString(properties.httpPath),
+          databricksType:
+            readOptionalString(properties.databricksType) ||
+            (clientSecret ? 'service_principal' : 'token'),
+          clientId: readOptionalString(properties.clientId),
+          azureTenantId: readOptionalString(properties.azureTenantId),
+        }),
+        ...(accessToken || clientSecret
+          ? {
+              secret: pickDefined({
+                accessToken,
+                clientSecret,
+              }),
+            }
+          : {}),
       };
     }
     default:
@@ -368,6 +527,68 @@ export const buildConnectionSettingsFromConnector = ({
           datasetId: normalizedConfig.datasetId,
         } as any,
       };
+    case DataSourceName.DUCKDB:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          initSql: normalizedConfig.initSql || '',
+          extensions: Array.isArray(normalizedConfig.extensions)
+            ? normalizedConfig.extensions
+            : [],
+          configurations: normalizedConfig.configurations || {},
+        } as any,
+      };
+    case DataSourceName.ORACLE:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          host: normalizedConfig.host,
+          port: normalizedConfig.port,
+          database: normalizedConfig.database,
+          user: normalizedConfig.user ?? normalizedConfig.username,
+        } as any,
+      };
+    case DataSourceName.MSSQL:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          host: normalizedConfig.host,
+          port: normalizedConfig.port,
+          database: normalizedConfig.database,
+          user: normalizedConfig.user ?? normalizedConfig.username,
+          trustServerCertificate:
+            normalizedConfig.trustServerCertificate !== false,
+        } as any,
+      };
+    case DataSourceName.CLICK_HOUSE:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          host: normalizedConfig.host,
+          port: normalizedConfig.port,
+          database: normalizedConfig.database,
+          user: normalizedConfig.user ?? normalizedConfig.username,
+          ssl: Boolean(normalizedConfig.ssl),
+        } as any,
+      };
+    case DataSourceName.ATHENA:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          database: normalizedConfig.database ?? normalizedConfig.schema,
+          schema: normalizedConfig.schema ?? normalizedConfig.database,
+          s3StagingDir: normalizedConfig.s3StagingDir,
+          awsRegion: normalizedConfig.awsRegion,
+          roleArn: normalizedConfig.roleArn,
+          roleSessionName: normalizedConfig.roleSessionName,
+          athenaAuthType: normalizedConfig.athenaAuthType,
+        } as any,
+      };
     case DataSourceName.SNOWFLAKE:
       return {
         type: connectionType,
@@ -406,6 +627,18 @@ export const buildConnectionSettingsFromConnector = ({
           ssl: Boolean(normalizedConfig.ssl),
         } as any,
       };
+    case DataSourceName.DATABRICKS:
+      return {
+        type: connectionType,
+        properties: {
+          ...baseProperties,
+          serverHostname: normalizedConfig.serverHostname,
+          httpPath: normalizedConfig.httpPath,
+          databricksType: normalizedConfig.databricksType,
+          clientId: normalizedConfig.clientId,
+          azureTenantId: normalizedConfig.azureTenantId,
+        } as any,
+      };
     default:
       return null;
   }
@@ -424,6 +657,7 @@ export const buildConnectorSecretFromProjectConnectionInfo = (
 
 export type SupportedProjectSecretConnectionInfo =
   | BIG_QUERY_CONNECTION_INFO
+  | DATABRICKS_CONNECTION_INFO
   | REDSHIFT_CONNECTION_INFO
   | SNOWFLAKE_CONNECTION_INFO
   | TRINO_CONNECTION_INFO;

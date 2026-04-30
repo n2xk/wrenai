@@ -6,7 +6,7 @@
 
 import { IIbisAdaptor } from '../adaptors/ibisAdaptor';
 import { IWrenEngineAdaptor } from '../adaptors/wrenEngineAdaptor';
-import { Project } from '../repositories';
+import { DUCKDB_CONNECTION_INFO, Project } from '../repositories';
 import { DataSourceName } from '../types';
 import { getLogger } from '@server/utils';
 
@@ -69,6 +69,7 @@ export class ConnectionMetadataService implements IConnectionMetadataService {
   public async listTables(project: Project): Promise<CompactTable[]> {
     const { type: connectionType, connectionInfo } = project;
     if (connectionType === DataSourceName.DUCKDB) {
+      await this.prepareDuckDbRuntime(connectionInfo as DUCKDB_CONNECTION_INFO);
       const tables = await this.wrenEngineAdaptor.listTables();
       return tables;
     }
@@ -90,6 +91,47 @@ export class ConnectionMetadataService implements IConnectionMetadataService {
 
   public async getVersion(project: Project): Promise<string> {
     const { type: connectionType, connectionInfo } = project;
+    if (connectionType === DataSourceName.DUCKDB) {
+      await this.prepareDuckDbRuntime(connectionInfo as DUCKDB_CONNECTION_INFO);
+      return 'DuckDB runtime';
+    }
     return await this.ibisAdaptor.getVersion(connectionType, connectionInfo);
   }
+
+  private async prepareDuckDbRuntime(
+    connectionInfo: DUCKDB_CONNECTION_INFO,
+  ): Promise<void> {
+    await this.wrenEngineAdaptor.prepareDuckDB({
+      initSql: buildDuckDbInitSql(connectionInfo),
+      sessionProps: normalizeDuckDbSessionProps(connectionInfo),
+    });
+    await this.wrenEngineAdaptor.patchConfig({
+      'wren.datasource.type': 'duckdb',
+    });
+  }
 }
+
+const buildDuckDbInitSql = (connectionInfo: DUCKDB_CONNECTION_INFO): string => {
+  const initSql =
+    typeof connectionInfo?.initSql === 'string' ? connectionInfo.initSql : '';
+  const extensions = Array.isArray(connectionInfo?.extensions)
+    ? connectionInfo.extensions.filter(
+        (extension): extension is string =>
+          typeof extension === 'string' && extension.trim().length > 0,
+      )
+    : [];
+  const installExtensionsSql = extensions
+    .map((extension) => `INSTALL ${extension};`)
+    .join('\n');
+
+  return [installExtensionsSql, initSql].filter(Boolean).join('\n');
+};
+
+const normalizeDuckDbSessionProps = (
+  connectionInfo: DUCKDB_CONNECTION_INFO,
+) => {
+  const configurations = connectionInfo?.configurations;
+  return configurations && typeof configurations === 'object'
+    ? configurations
+    : {};
+};

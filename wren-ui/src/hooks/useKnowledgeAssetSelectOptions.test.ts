@@ -5,12 +5,13 @@ import {
 } from './useKnowledgeAssetSelectOptions';
 
 describe('useKnowledgeAssetSelectOptions helpers', () => {
-  it('maps connector options with display name and type', () => {
+  it('maps only database connector options for asset imports', () => {
     expect(
       resolveKnowledgeConnectorOptions([
-        { id: 'c1', displayName: 'Postgres 主库', type: 'postgres' },
+        { id: 'c1', displayName: 'Postgres 主库', type: 'database' },
+        { id: 'c2', displayName: 'REST API', type: 'rest_json' },
       ]),
-    ).toEqual([{ label: 'Postgres 主库 · postgres', value: 'c1' }]);
+    ).toEqual([{ label: 'Postgres 主库 · 数据库', value: 'c1' }]);
   });
 
   it('uses demo database options when demo source is selected', () => {

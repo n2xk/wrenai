@@ -130,6 +130,8 @@ export default function ManageConnectorsPage() {
         watchedDatabaseProvider={editorState.watchedDatabaseProvider}
         watchedSnowflakeAuthMode={editorState.watchedSnowflakeAuthMode}
         watchedRedshiftAuthMode={editorState.watchedRedshiftAuthMode}
+        watchedAthenaAuthMode={editorState.watchedAthenaAuthMode}
+        watchedDatabricksAuthMode={editorState.watchedDatabricksAuthMode}
         clearSecretChecked={editorState.clearSecretChecked}
         databaseProviderExample={editorState.databaseProviderExample || null}
         connectorTypeOptions={controlState.connectorTypeOptions}

@@ -21,8 +21,14 @@ const redirectRoute: Partial<
     { path: Path; params?: Record<string, string | number | boolean> }
   >
 > = {
-  [OnboardingStatus.CONNECTION_SAVED]: { path: Path.OnboardingModels },
-  [OnboardingStatus.NOT_STARTED]: { path: Path.OnboardingConnection },
+  [OnboardingStatus.CONNECTION_SAVED]: {
+    path: Path.Knowledge,
+    params: buildKnowledgeWorkbenchParams('modeling'),
+  },
+  [OnboardingStatus.NOT_STARTED]: {
+    path: Path.Knowledge,
+    params: { openAssetWizard: true },
+  },
   [OnboardingStatus.ONBOARDING_FINISHED]: {
     path: Path.Knowledge,
     params: buildKnowledgeWorkbenchParams('modeling'),
@@ -36,10 +42,7 @@ const redirectRoute: Partial<
 const resolveRedirectParams = (target: {
   path: Path;
   params?: Record<string, string | number | boolean>;
-}) =>
-  target.path === Path.Knowledge
-    ? buildKnowledgeWorkbenchParams('modeling')
-    : undefined;
+}) => target.params;
 
 export const buildOnboardingStatusSelector = (
   selector: ClientRuntimeScopeSelector,

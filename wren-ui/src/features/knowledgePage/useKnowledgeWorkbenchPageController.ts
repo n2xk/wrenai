@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
@@ -43,6 +44,32 @@ export function useKnowledgeWorkbenchPageController() {
     routerQuery,
     runtimeNavigationSelector: runtimeScopeNavigation.selector,
   });
+
+  useEffect(() => {
+    const shouldOpenAssetWizard =
+      routerQuery.openAssetWizard === '1' ||
+      routerQuery.openAssetWizard === 'true';
+    if (!router.isReady || !shouldOpenAssetWizard) {
+      return;
+    }
+
+    interactionState.actions.openAssetWizard();
+    const nextQuery = { ...router.query };
+    delete nextQuery.openAssetWizard;
+    router
+      .replace({ pathname: router.pathname, query: nextQuery }, undefined, {
+        scroll: false,
+        shallow: true,
+      })
+      .catch(() => null);
+  }, [
+    interactionState.actions.openAssetWizard,
+    router,
+    router.isReady,
+    router.pathname,
+    router.query,
+    routerQuery.openAssetWizard,
+  ]);
   const canSaveKnowledgeBase = Boolean(localState.kbNameValue?.trim());
   const { sidebarProps, mainStageProps, overlaysProps } =
     buildKnowledgeWorkbenchControllerStage(

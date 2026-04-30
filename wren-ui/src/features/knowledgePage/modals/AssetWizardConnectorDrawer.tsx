@@ -1,5 +1,5 @@
 import { Button, Drawer, Form, Space, Typography } from 'antd';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import buildManageConnectorsControlState from '@/features/settings/connectors/buildManageConnectorsControlState';
 import ConnectorEditorForm from '@/features/settings/connectors/ConnectorEditorForm';
 import useConnectorEditorFields from '@/features/settings/connectors/useConnectorEditorFields';
@@ -36,6 +36,12 @@ export default function AssetWizardConnectorDrawer({
     form.resetFields();
     onClose();
   }, [form, onClose]);
+
+  useEffect(() => {
+    if (open) {
+      form.setFieldsValue({ type: 'database' });
+    }
+  }, [form, open]);
 
   const requireWorkspaceSelector = useCallback(
     () => ({
@@ -124,8 +130,10 @@ export default function AssetWizardConnectorDrawer({
         watchedDatabaseProvider={editorFields.watchedDatabaseProvider}
         watchedSnowflakeAuthMode={editorFields.watchedSnowflakeAuthMode}
         watchedRedshiftAuthMode={editorFields.watchedRedshiftAuthMode}
+        watchedAthenaAuthMode={editorFields.watchedAthenaAuthMode}
+        watchedDatabricksAuthMode={editorFields.watchedDatabricksAuthMode}
         databaseProviderExample={editorFields.databaseProviderExample}
-        connectorTypeOptions={controlState.connectorTypeOptions}
+        connectorTypeOptions={[{ label: '数据库', value: 'database' }]}
         onClearSecretCheckedChange={setClearSecretChecked}
       />
     </Drawer>

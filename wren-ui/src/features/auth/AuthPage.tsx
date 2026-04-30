@@ -76,7 +76,7 @@ export const resolveAuthRedirectPath = (
 
   return resolvePostAuthRedirectPath({
     redirectTo,
-    fallbackPath: Path.OnboardingConnection,
+    fallbackPath: Path.Workspace,
   });
 };
 
@@ -103,7 +103,7 @@ export const resolveLoginSuccessRedirectPath = (
 
   return resolvePostAuthRedirectPath({
     redirectTo,
-    fallbackPath: Path.OnboardingConnection,
+    fallbackPath: Path.Workspace,
   });
 };
 

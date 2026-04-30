@@ -32,10 +32,28 @@ const readText = (value?: string | null) => {
   return normalized.length > 0 ? normalized : null;
 };
 
+const readJsonObject = (value?: string | null, fallback = {}) => {
+  const parsed = parseOptionalJsonObject(value || undefined);
+  return parsed ?? fallback;
+};
+
+const readCsvList = (value?: string | null) =>
+  typeof value === 'string'
+    ? value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+
 const pickDefinedObject = (value: Record<string, any>) =>
   Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== undefined),
   );
+
+const pickDefinedObjectOrNull = (value: Record<string, any>) => {
+  const picked = pickDefinedObject(value);
+  return Object.keys(picked).length > 0 ? picked : null;
+};
 
 const parsePositiveInteger = (value: string, field: string) => {
   const normalized = value.trim();
@@ -61,7 +79,17 @@ const hasStructuredDatabaseConfigInput = (values: DatabaseConnectorFormShape) =>
     readText(values.dbSnowflakeWarehouse) ||
     readText(values.dbClusterIdentifier) ||
     readText(values.dbAwsRegion) ||
-    readText(values.dbTrinoSchemas),
+    readText(values.dbTrinoSchemas) ||
+    readText(values.dbInitSql) ||
+    readText(values.dbConfigurationsText) ||
+    readText(values.dbExtensionsText) ||
+    readText(values.dbS3StagingDir) ||
+    readText(values.dbRoleArn) ||
+    readText(values.dbRoleSessionName) ||
+    readText(values.dbServerHostname) ||
+    readText(values.dbHttpPath) ||
+    readText(values.dbClientId) ||
+    readText(values.dbAzureTenantId),
   );
 
 const hasStructuredDatabaseSecretInput = (values: DatabaseConnectorFormShape) =>
@@ -70,7 +98,11 @@ const hasStructuredDatabaseSecretInput = (values: DatabaseConnectorFormShape) =>
     readText(values.dbPrivateKey) ||
     readText(values.dbCredentialsText) ||
     readText(values.dbAwsAccessKey) ||
-    readText(values.dbAwsSecretKey),
+    readText(values.dbAwsSecretKey) ||
+    readText(values.dbDsn) ||
+    readText(values.dbWebIdentityToken) ||
+    readText(values.dbAccessToken) ||
+    readText(values.dbClientSecret),
   );
 
 const buildDatabaseConnectorConfig = (values: DatabaseConnectorFormShape) => {
@@ -93,6 +125,37 @@ const buildDatabaseConnectorConfig = (values: DatabaseConnectorFormShape) => {
       return {
         host: readText(values.dbHost),
         port: parsePositiveInteger(values.dbPort || '', 'MySQL 端口'),
+        database: readText(values.dbDatabase),
+        user: readText(values.dbUser),
+        ssl: Boolean(values.dbSsl),
+      };
+    case 'duckdb':
+      return {
+        initSql: readText(values.dbInitSql) || '',
+        extensions: readCsvList(values.dbExtensionsText),
+        configurations: readJsonObject(values.dbConfigurationsText),
+      };
+    case 'oracle':
+      return pickDefinedObject({
+        host: readText(values.dbHost) || undefined,
+        port: readText(values.dbPort)
+          ? parsePositiveInteger(values.dbPort || '', 'Oracle 端口')
+          : undefined,
+        database: readText(values.dbDatabase) || undefined,
+        user: readText(values.dbUser),
+      });
+    case 'mssql':
+      return {
+        host: readText(values.dbHost),
+        port: parsePositiveInteger(values.dbPort || '', 'SQL Server 端口'),
+        database: readText(values.dbDatabase),
+        user: readText(values.dbUser),
+        trustServerCertificate: Boolean(values.dbTrustServerCertificate),
+      };
+    case 'clickhouse':
+      return {
+        host: readText(values.dbHost),
+        port: parsePositiveInteger(values.dbPort || '', 'ClickHouse 端口'),
         database: readText(values.dbDatabase),
         user: readText(values.dbUser),
         ssl: Boolean(values.dbSsl),
@@ -136,6 +199,24 @@ const buildDatabaseConnectorConfig = (values: DatabaseConnectorFormShape) => {
         username: readText(values.dbUser),
         ssl: Boolean(values.dbSsl),
       };
+    case 'athena':
+      return pickDefinedObject({
+        schema: readText(values.dbSchema),
+        database: readText(values.dbSchema),
+        s3StagingDir: readText(values.dbS3StagingDir),
+        awsRegion: readText(values.dbAwsRegion),
+        athenaAuthType: values.dbAthenaAuthMode || 'classic',
+        roleArn: readText(values.dbRoleArn) || undefined,
+        roleSessionName: readText(values.dbRoleSessionName) || undefined,
+      });
+    case 'databricks':
+      return pickDefinedObject({
+        serverHostname: readText(values.dbServerHostname),
+        httpPath: readText(values.dbHttpPath),
+        databricksType: values.dbDatabricksAuthMode || 'token',
+        clientId: readText(values.dbClientId) || undefined,
+        azureTenantId: readText(values.dbAzureTenantId) || undefined,
+      });
     default:
       throw new Error('未知数据库 Provider');
   }
@@ -150,14 +231,36 @@ const buildDatabaseConnectorSecret = (values: DatabaseConnectorFormShape) => {
   switch (provider) {
     case 'postgres':
     case 'mysql':
+    case 'mssql':
+    case 'clickhouse':
     case 'trino':
       return readText(values.dbPassword)
         ? { password: readText(values.dbPassword) }
         : null;
+    case 'duckdb':
+      return null;
+    case 'oracle':
+      return pickDefinedObjectOrNull({
+        password: readText(values.dbPassword) || undefined,
+        dsn: readText(values.dbDsn) || undefined,
+      });
     case 'bigquery': {
       const credentials = parseOptionalJsonObject(values.dbCredentialsText);
       return credentials ? { credentials } : null;
     }
+    case 'athena':
+      if ((values.dbAthenaAuthMode || 'classic') === 'oidc') {
+        return pickDefinedObjectOrNull({
+          webIdentityToken: readText(values.dbWebIdentityToken) || undefined,
+        });
+      }
+      if ((values.dbAthenaAuthMode || 'classic') === 'instance_profile') {
+        return null;
+      }
+      return pickDefinedObjectOrNull({
+        awsAccessKey: readText(values.dbAwsAccessKey) || undefined,
+        awsSecretKey: readText(values.dbAwsSecretKey) || undefined,
+      });
     case 'snowflake':
       if ((values.dbSnowflakeAuthMode || 'password') === 'privateKey') {
         return readText(values.dbPrivateKey)
@@ -178,6 +281,15 @@ const buildDatabaseConnectorSecret = (values: DatabaseConnectorFormShape) => {
       return readText(values.dbPassword)
         ? { password: readText(values.dbPassword) }
         : null;
+    case 'databricks':
+      if ((values.dbDatabricksAuthMode || 'token') === 'service_principal') {
+        return readText(values.dbClientSecret)
+          ? { clientSecret: readText(values.dbClientSecret) }
+          : null;
+      }
+      return readText(values.dbAccessToken)
+        ? { accessToken: readText(values.dbAccessToken) }
+        : null;
     default:
       return null;
   }
@@ -185,9 +297,12 @@ const buildDatabaseConnectorSecret = (values: DatabaseConnectorFormShape) => {
 
 const isDatabaseSecretRequired = (values: DatabaseConnectorFormShape) => {
   switch (values.databaseProvider?.trim()) {
+    case 'duckdb':
     case 'mysql':
     case 'trino':
       return false;
+    case 'athena':
+      return (values.dbAthenaAuthMode || 'classic') !== 'instance_profile';
     default:
       return true;
   }
@@ -220,10 +335,50 @@ export const getDatabaseConnectorFormValues = (
         dbUser: config.user || config.username || '',
         dbSsl: Boolean(config.ssl),
       };
+    case 'duckdb':
+      return {
+        dbInitSql: config.initSql || '',
+        dbExtensionsText: Array.isArray(config.extensions)
+          ? config.extensions.join(',')
+          : '',
+        dbConfigurationsText: stringifyJson(config.configurations || {}),
+      };
+    case 'oracle':
+      return {
+        dbHost: config.host || '',
+        dbPort: config.port != null ? String(config.port) : '1521',
+        dbDatabase: config.database || '',
+        dbUser: config.user || config.username || '',
+      };
+    case 'mssql':
+      return {
+        dbHost: config.host || '',
+        dbPort: config.port != null ? String(config.port) : '1433',
+        dbDatabase: config.database || '',
+        dbUser: config.user || config.username || '',
+        dbTrustServerCertificate: config.trustServerCertificate !== false,
+      };
+    case 'clickhouse':
+      return {
+        dbHost: config.host || '',
+        dbPort: config.port != null ? String(config.port) : '8443',
+        dbDatabase: config.database || '',
+        dbUser: config.user || config.username || '',
+        dbSsl: Boolean(config.ssl),
+      };
     case 'bigquery':
       return {
         dbProjectId: config.projectId || '',
         dbDatasetId: config.datasetId || '',
+      };
+    case 'athena':
+      return {
+        dbSchema: config.schema || config.database || '',
+        dbS3StagingDir: config.s3StagingDir || '',
+        dbAwsRegion: config.awsRegion || '',
+        dbAthenaAuthMode: config.athenaAuthType || 'classic',
+        dbRoleArn: config.roleArn || '',
+        dbRoleSessionName: config.roleSessionName || '',
       };
     case 'snowflake':
       return {
@@ -259,6 +414,14 @@ export const getDatabaseConnectorFormValues = (
         dbTrinoSchemas: config.schemas || '',
         dbUser: config.username || config.user || '',
         dbSsl: Boolean(config.ssl),
+      };
+    case 'databricks':
+      return {
+        dbServerHostname: config.serverHostname || '',
+        dbHttpPath: config.httpPath || '',
+        dbDatabricksAuthMode: config.databricksType || 'token',
+        dbClientId: config.clientId || '',
+        dbAzureTenantId: config.azureTenantId || '',
       };
     default:
       return {};

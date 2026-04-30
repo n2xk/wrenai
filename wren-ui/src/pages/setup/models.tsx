@@ -1,1 +1,3 @@
-export { default } from '@/features/setup/ManageSetupModelsPage';
+import SetupRedirectPage from '@/features/setup/SetupRedirectPage';
+
+export default SetupRedirectPage;

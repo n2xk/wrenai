@@ -25,10 +25,12 @@ export type KnowledgeAssetSelectOption = {
 export const resolveKnowledgeConnectorOptions = (
   connectors: ConnectorLike[],
 ): KnowledgeAssetSelectOption[] =>
-  connectors.map((connector) => ({
-    label: `${connector.displayName} · ${connector.type}`,
-    value: connector.id,
-  }));
+  connectors
+    .filter((connector) => connector.type === 'database')
+    .map((connector) => ({
+      label: `${connector.displayName} · 数据库`,
+      value: connector.id,
+    }));
 
 export const resolveKnowledgeAssetDatabaseOptions = ({
   isDemoSource,

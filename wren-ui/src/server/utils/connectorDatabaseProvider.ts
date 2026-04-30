@@ -1,8 +1,17 @@
 import { DataSourceName } from '@server/types';
-import { IbisRedshiftConnectionType } from '@server/adaptors/ibisAdaptor';
 import {
+  IbisDatabricksConnectionType,
+  IbisRedshiftConnectionType,
+} from '@server/adaptors/ibisAdaptor';
+import {
+  ATHENA_CONNECTION_INFO,
   BIG_QUERY_CONNECTION_INFO,
+  CLICK_HOUSE_CONNECTION_INFO,
+  DATABRICKS_CONNECTION_INFO,
+  DUCKDB_CONNECTION_INFO,
+  MS_SQL_CONNECTION_INFO,
   MYSQL_CONNECTION_INFO,
+  ORACLE_CONNECTION_INFO,
   POSTGRES_CONNECTION_INFO,
   REDSHIFT_CONNECTION_INFO,
   REDSHIFT_IAM_AUTH,
@@ -17,9 +26,15 @@ export const DATABASE_CONNECTOR_PROVIDERS = [
   'postgres',
   'mysql',
   'bigquery',
+  'duckdb',
+  'oracle',
+  'mssql',
+  'clickhouse',
+  'athena',
   'snowflake',
   'redshift',
   'trino',
+  'databricks',
 ] as const;
 
 export type DatabaseConnectorProvider =
@@ -45,9 +60,15 @@ const PROVIDER_TO_DATASOURCE: Record<
   postgres: DataSourceName.POSTGRES,
   mysql: DataSourceName.MYSQL,
   bigquery: DataSourceName.BIG_QUERY,
+  duckdb: DataSourceName.DUCKDB,
+  oracle: DataSourceName.ORACLE,
+  mssql: DataSourceName.MSSQL,
+  clickhouse: DataSourceName.CLICK_HOUSE,
+  athena: DataSourceName.ATHENA,
   snowflake: DataSourceName.SNOWFLAKE,
   redshift: DataSourceName.REDSHIFT,
   trino: DataSourceName.TRINO,
+  databricks: DataSourceName.DATABRICKS,
 };
 
 const AUTO_FEDERATABLE_PROVIDERS = new Set<DatabaseConnectorProvider>([
@@ -149,12 +170,24 @@ export const buildDatabaseConnectorConnectionInfo = ({
       return buildMysqlConnectionInfo(config, secret);
     case 'bigquery':
       return buildBigQueryConnectionInfo(config, secret);
+    case 'duckdb':
+      return buildDuckDbConnectionInfo(config);
+    case 'oracle':
+      return buildOracleConnectionInfo(config, secret);
+    case 'mssql':
+      return buildMsSqlConnectionInfo(config, secret);
+    case 'clickhouse':
+      return buildClickHouseConnectionInfo(config, secret);
+    case 'athena':
+      return buildAthenaConnectionInfo(config, secret);
     case 'snowflake':
       return buildSnowflakeConnectionInfo(config, secret);
     case 'redshift':
       return buildRedshiftConnectionInfo(config, secret);
     case 'trino':
       return buildTrinoConnectionInfo(config, secret);
+    case 'databricks':
+      return buildDatabricksConnectionInfo(config, secret);
     default:
       throw new Error(`Unsupported database provider: ${provider}`);
   }
@@ -327,6 +360,118 @@ const buildBigQueryConnectionInfo = (
   } as BIG_QUERY_CONNECTION_INFO;
 };
 
+const buildDuckDbConnectionInfo = (
+  config?: Record<string, any> | null,
+): DUCKDB_CONNECTION_INFO => {
+  const extensions = config?.extensions;
+  const configurations = config?.configurations;
+  return {
+    initSql: optionalString(config?.initSql) || '',
+    extensions: Array.isArray(extensions)
+      ? extensions
+          .map((extension) => optionalString(extension))
+          .filter((extension): extension is string => Boolean(extension))
+      : [],
+    configurations:
+      configurations &&
+      typeof configurations === 'object' &&
+      !Array.isArray(configurations)
+        ? configurations
+        : {},
+  };
+};
+
+const buildOracleConnectionInfo = (
+  config?: Record<string, any> | null,
+  secret?: SecretPayload | null,
+): ORACLE_CONNECTION_INFO => {
+  const user = requireString(config?.user ?? config?.username, 'Oracle 用户名');
+  const password = requireString(secret?.password, 'Oracle 密码');
+  const dsn = optionalString(secret?.dsn ?? config?.dsn) || undefined;
+  const host = optionalString(config?.host) || undefined;
+  const port =
+    config?.port === undefined || config?.port === null || config?.port === ''
+      ? undefined
+      : requirePositiveInteger(config.port, 'Oracle 端口');
+  const database = optionalString(config?.database) || undefined;
+
+  if (!dsn && !host) {
+    throw new Error('Oracle 需要 DSN 或 Host');
+  }
+
+  return {
+    user,
+    password,
+    ...(host ? { host } : {}),
+    ...(port ? { port } : {}),
+    ...(database ? { database } : {}),
+    ...(dsn ? { dsn } : {}),
+  };
+};
+
+const buildMsSqlConnectionInfo = (
+  config?: Record<string, any> | null,
+  secret?: SecretPayload | null,
+): MS_SQL_CONNECTION_INFO => ({
+  host: requireString(config?.host, 'SQL Server Host'),
+  port: requirePositiveInteger(config?.port, 'SQL Server 端口'),
+  database: requireString(config?.database, 'SQL Server 数据库名称'),
+  user: requireString(config?.user ?? config?.username, 'SQL Server 用户名'),
+  password: requireString(secret?.password, 'SQL Server 密码'),
+  trustServerCertificate: Boolean(config?.trustServerCertificate ?? true),
+});
+
+const buildClickHouseConnectionInfo = (
+  config?: Record<string, any> | null,
+  secret?: SecretPayload | null,
+): CLICK_HOUSE_CONNECTION_INFO => ({
+  host: requireString(config?.host, 'ClickHouse Host'),
+  port: requirePositiveInteger(config?.port, 'ClickHouse 端口'),
+  database: requireString(config?.database, 'ClickHouse 数据库名称'),
+  user: requireString(config?.user ?? config?.username, 'ClickHouse 用户名'),
+  password: requireString(secret?.password, 'ClickHouse 密码'),
+  ssl: Boolean(config?.ssl ?? false),
+});
+
+const buildAthenaConnectionInfo = (
+  config?: Record<string, any> | null,
+  secret?: SecretPayload | null,
+): ATHENA_CONNECTION_INFO => {
+  const schema = requireString(
+    config?.schema ?? config?.database,
+    'Athena schema',
+  );
+  const authType = optionalString(config?.athenaAuthType) || 'classic';
+  const base = {
+    database: optionalString(config?.database) || schema,
+    schema,
+    s3StagingDir: requireString(config?.s3StagingDir, 'Athena S3 暂存目录'),
+    awsRegion: requireString(config?.awsRegion, 'AWS Region'),
+  };
+
+  if (authType === 'instance_profile') {
+    return base;
+  }
+
+  if (authType === 'oidc') {
+    return {
+      ...base,
+      webIdentityToken: requireString(
+        secret?.webIdentityToken,
+        'Athena Web Identity Token',
+      ),
+      roleArn: requireString(config?.roleArn, 'AWS Role ARN'),
+      roleSessionName: optionalString(config?.roleSessionName) || undefined,
+    };
+  }
+
+  return {
+    ...base,
+    awsAccessKey: requireString(secret?.awsAccessKey, 'AWS Access Key'),
+    awsSecretKey: requireString(secret?.awsSecretKey, 'AWS Secret Key'),
+  };
+};
+
 const buildSnowflakeConnectionInfo = (
   config?: Record<string, any> | null,
   secret?: SecretPayload | null,
@@ -411,6 +556,41 @@ const buildTrinoConnectionInfo = (
     username,
     password: optionalString(secret?.password) || '',
     ssl: Boolean(config?.ssl ?? false),
+  };
+};
+
+const buildDatabricksConnectionInfo = (
+  config?: Record<string, any> | null,
+  secret?: SecretPayload | null,
+): DATABRICKS_CONNECTION_INFO => {
+  const databricksType =
+    optionalString(config?.databricksType) ||
+    IbisDatabricksConnectionType.TOKEN;
+  const serverHostname = requireString(
+    config?.serverHostname,
+    'Databricks Server Hostname',
+  );
+  const httpPath = requireString(config?.httpPath, 'Databricks HTTP Path');
+
+  if (databricksType === IbisDatabricksConnectionType.SERVICE_PRINCIPAL) {
+    return {
+      serverHostname,
+      httpPath,
+      clientId: requireString(config?.clientId, 'Databricks Client ID'),
+      clientSecret: requireString(
+        secret?.clientSecret,
+        'Databricks Client Secret',
+      ),
+      azureTenantId: optionalString(config?.azureTenantId) || undefined,
+      databricksType: IbisDatabricksConnectionType.SERVICE_PRINCIPAL,
+    };
+  }
+
+  return {
+    serverHostname,
+    httpPath,
+    accessToken: requireString(secret?.accessToken, 'Databricks Access Token'),
+    databricksType: IbisDatabricksConnectionType.TOKEN,
   };
 };
 

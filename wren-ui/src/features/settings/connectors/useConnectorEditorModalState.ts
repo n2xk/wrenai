@@ -35,7 +35,7 @@ export default function useConnectorEditorModalState({
     setEditingConnector(null);
     setClearSecretChecked(false);
     form.resetFields();
-    form.setFieldsValue({ type: 'rest_json' });
+    form.setFieldsValue({ type: 'database' });
     setModalOpen(true);
   };
 

@@ -24,12 +24,12 @@ describe('resolveAuthRedirectPath', () => {
     );
   });
 
-  it('falls back to onboarding when authenticated session has no runtime selector yet', () => {
+  it('falls back to workspace selection when authenticated session has no runtime selector yet', () => {
     expect(
       resolveAuthRedirectPath({
         authenticated: true,
       }),
-    ).toBe(Path.OnboardingConnection);
+    ).toBe(Path.Workspace);
   });
 
   it('stays on auth for unauthenticated users', () => {
@@ -70,8 +70,8 @@ describe('resolveLoginSuccessRedirectPath', () => {
     ).toBe('/home?workspaceId=workspace-1');
   });
 
-  it('falls back to onboarding when login payload lacks workspace context', () => {
-    expect(resolveLoginSuccessRedirectPath({})).toBe(Path.OnboardingConnection);
+  it('falls back to workspace selection when login payload lacks workspace context', () => {
+    expect(resolveLoginSuccessRedirectPath({})).toBe(Path.Workspace);
   });
 
   it('ignores unsafe redirect targets', () => {

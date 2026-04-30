@@ -2,6 +2,12 @@ import { Button, Modal } from 'antd';
 import type { ConnectorView } from './connectorsPageUtils';
 import ConnectorEditorForm from './ConnectorEditorForm';
 
+const CONNECTOR_EDITOR_MODAL_BODY_STYLE = {
+  maxHeight: 'calc(100vh - 220px)',
+  overflowY: 'auto',
+  paddingRight: 8,
+} as const;
+
 type ConnectorEditorModalProps = {
   open: boolean;
   editingConnector?: ConnectorView | null;
@@ -12,6 +18,8 @@ type ConnectorEditorModalProps = {
   watchedDatabaseProvider?: string;
   watchedSnowflakeAuthMode?: 'password' | 'privateKey';
   watchedRedshiftAuthMode?: 'redshift' | 'redshift_iam';
+  watchedAthenaAuthMode?: 'classic' | 'oidc' | 'instance_profile';
+  watchedDatabricksAuthMode?: 'token' | 'service_principal';
   clearSecretChecked: boolean;
   databaseProviderExample?: { config: string; secret: string } | null;
   connectorTypeOptions: Array<{ label: string; value: string }>;
@@ -33,6 +41,8 @@ export default function ConnectorEditorModal({
   watchedDatabaseProvider,
   watchedSnowflakeAuthMode,
   watchedRedshiftAuthMode,
+  watchedAthenaAuthMode,
+  watchedDatabricksAuthMode,
   clearSecretChecked,
   databaseProviderExample,
   connectorTypeOptions,
@@ -47,6 +57,8 @@ export default function ConnectorEditorModal({
     <Modal
       title={editingConnector ? '编辑连接器' : '添加连接器'}
       open={open}
+      width={780}
+      styles={{ body: CONNECTOR_EDITOR_MODAL_BODY_STYLE }}
       onCancel={onCancel}
       destroyOnHidden
       footer={[
@@ -83,6 +95,8 @@ export default function ConnectorEditorModal({
         watchedDatabaseProvider={watchedDatabaseProvider}
         watchedSnowflakeAuthMode={watchedSnowflakeAuthMode}
         watchedRedshiftAuthMode={watchedRedshiftAuthMode}
+        watchedAthenaAuthMode={watchedAthenaAuthMode}
+        watchedDatabricksAuthMode={watchedDatabricksAuthMode}
         clearSecretChecked={clearSecretChecked}
         databaseProviderExample={databaseProviderExample}
         connectorTypeOptions={connectorTypeOptions}

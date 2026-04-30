@@ -43,6 +43,23 @@ export type ConnectorFormValues = {
   dbAwsAccessKey?: string;
   dbAwsSecretKey?: string;
   dbTrinoSchemas?: string;
+  dbInitSql?: string;
+  dbConfigurationsText?: string;
+  dbExtensionsText?: string;
+  dbDsn?: string;
+  dbTrustServerCertificate?: boolean;
+  dbAthenaAuthMode?: 'classic' | 'oidc' | 'instance_profile';
+  dbS3StagingDir?: string;
+  dbRoleArn?: string;
+  dbRoleSessionName?: string;
+  dbWebIdentityToken?: string;
+  dbDatabricksAuthMode?: 'token' | 'service_principal';
+  dbServerHostname?: string;
+  dbHttpPath?: string;
+  dbAccessToken?: string;
+  dbClientId?: string;
+  dbClientSecret?: string;
+  dbAzureTenantId?: string;
 };
 
 export type ConnectorSubmitPayload = {
@@ -141,19 +158,33 @@ export const resolveConnectorWorkspaceSelector = ({
   return workspaceId ? { workspaceId } : null;
 };
 
-export const CONNECTOR_TYPE_OPTIONS = [
-  { label: 'REST JSON API', value: 'rest_json' },
+export const ALL_CONNECTOR_TYPE_OPTIONS = [
   { label: '数据库', value: 'database' },
+  { label: 'REST JSON API', value: 'rest_json' },
   { label: 'Python 工具', value: 'python_tool' },
 ];
+
+export const ENABLE_NON_DATABASE_CONNECTOR_TYPES =
+  process.env.NEXT_PUBLIC_ENABLE_NON_DATABASE_CONNECTORS === '1' ||
+  process.env.NEXT_PUBLIC_ENABLE_NON_DATABASE_CONNECTORS === 'true';
+
+export const CONNECTOR_TYPE_OPTIONS = ENABLE_NON_DATABASE_CONNECTOR_TYPES
+  ? ALL_CONNECTOR_TYPE_OPTIONS
+  : ALL_CONNECTOR_TYPE_OPTIONS.filter((option) => option.value === 'database');
 
 export const DATABASE_PROVIDER_OPTIONS = [
   { label: 'PostgreSQL', value: 'postgres' },
   { label: 'MySQL', value: 'mysql' },
   { label: 'BigQuery', value: 'bigquery' },
+  { label: 'DuckDB', value: 'duckdb' },
+  { label: 'Oracle', value: 'oracle' },
+  { label: 'SQL Server', value: 'mssql' },
+  { label: 'ClickHouse', value: 'clickhouse' },
+  { label: 'Athena', value: 'athena' },
   { label: 'Snowflake', value: 'snowflake' },
   { label: 'Redshift', value: 'redshift' },
   { label: 'Trino', value: 'trino' },
+  { label: 'Databricks', value: 'databricks' },
 ];
 
 export const SNOWFLAKE_AUTH_MODE_OPTIONS = [
@@ -164,6 +195,17 @@ export const SNOWFLAKE_AUTH_MODE_OPTIONS = [
 export const REDSHIFT_AUTH_MODE_OPTIONS = [
   { label: 'Password', value: 'redshift' },
   { label: 'IAM', value: 'redshift_iam' },
+];
+
+export const ATHENA_AUTH_MODE_OPTIONS = [
+  { label: 'AWS 凭证', value: 'classic' },
+  { label: 'OIDC Web Identity Token', value: 'oidc' },
+  { label: 'Instance Profile', value: 'instance_profile' },
+];
+
+export const DATABRICKS_AUTH_MODE_OPTIONS = [
+  { label: '个人访问令牌（PAT）', value: 'token' },
+  { label: '服务主体', value: 'service_principal' },
 ];
 
 export const CONNECTOR_SECRET_EDIT_HINT =
@@ -188,6 +230,31 @@ export const DATABASE_PROVIDER_EXAMPLES: Record<
       '{"host":"127.0.0.1","port":3306,"database":"analytics","user":"root","ssl":false}',
     secret: '{"password":"secret"}',
   },
+  duckdb: {
+    config:
+      '{"initSql":"CREATE TABLE orders AS SELECT 1 AS id;","extensions":[],"configurations":{}}',
+    secret: '{}',
+  },
+  oracle: {
+    config:
+      '{"host":"127.0.0.1","port":1521,"database":"ORCLPDB1","user":"analytics"}',
+    secret: '{"password":"secret"}',
+  },
+  mssql: {
+    config:
+      '{"host":"127.0.0.1","port":1433,"database":"analytics","user":"sa","trustServerCertificate":true}',
+    secret: '{"password":"secret"}',
+  },
+  clickhouse: {
+    config:
+      '{"host":"127.0.0.1","port":8443,"database":"analytics","user":"default","ssl":true}',
+    secret: '{"password":"secret"}',
+  },
+  athena: {
+    config:
+      '{"schema":"analytics","s3StagingDir":"s3://bucket/path","awsRegion":"us-east-1","athenaAuthType":"classic"}',
+    secret: '{"awsAccessKey":"AKIA...","awsSecretKey":"secret"}',
+  },
   bigquery: {
     config: '{"projectId":"my-gcp-project","datasetId":"analytics"}',
     secret:
@@ -207,6 +274,11 @@ export const DATABASE_PROVIDER_EXAMPLES: Record<
     config:
       '{"host":"trino.internal","port":8080,"schemas":"catalog.public","username":"analyst","ssl":false}',
     secret: '{"password":"secret"}',
+  },
+  databricks: {
+    config:
+      '{"serverHostname":"adb-123456789.12.azuredatabricks.net","httpPath":"/sql/1.0/endpoints/abc123","databricksType":"token"}',
+    secret: '{"accessToken":"dapi..."}',
   },
 };
 

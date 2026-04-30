@@ -24,7 +24,7 @@ describe('resolveProtectedRuntimeScopeRedirect', () => {
     ).toBe(Path.Auth);
   });
 
-  it('redirects authenticated users without runtime scope to onboarding', () => {
+  it('redirects authenticated users without runtime scope to workspace selection', () => {
     expect(
       resolveProtectedRuntimeScopeRedirect({
         routerReady: true,
@@ -32,7 +32,7 @@ describe('resolveProtectedRuntimeScopeRedirect', () => {
         authenticated: true,
         hasRuntimeScope: false,
       }),
-    ).toBe(Path.OnboardingConnection);
+    ).toBe(Path.Workspace);
   });
 
   it('allows authenticated users with runtime scope to continue', () => {
