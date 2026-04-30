@@ -878,11 +878,45 @@ def _sample_supports_login_without_successful_deposit(sample: Any) -> bool:
     )
 
 
+def _query_requests_plain_sql_generation(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    return bool(
+        re.search(
+            (
+                r"不(?:用|使用|要|采用).{0,10}(?:业务)?(?:报表)?模板|"
+                r"不(?:按|套用).{0,10}模板|"
+                r"避免.{0,10}(?:业务)?(?:报表)?模板|"
+                r"(?:直接|只|仅)基于.{0,18}(?:原始表|明细表|订单表|日志表|事实表)|"
+                r"(?:直接|只|仅)(?:查|查询|统计).{0,24}(?:原始表|明细表|订单表|日志表|事实表)"
+            ),
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _sample_is_business_template(sample: Any) -> bool:
+    return bool(
+        _get_sample_value(sample, "asset_kind") == "sql_template"
+        or _get_sample_value(sample, "template_mode")
+        or _get_sample_value(sample, "templateMode")
+        or _get_business_signature(sample).get("templateId")
+        or _get_business_signature(sample).get("template_id")
+    )
+
+
 def _resolve_template_route_guard_failure(
     query: Optional[str], sample: Any
 ) -> Optional[str]:
     if not _template_route_guards_enabled() or not query:
         return None
+
+    if _query_requests_plain_sql_generation(query) and _sample_is_business_template(
+        sample
+    ):
+        return "template_guard_plain_sql_requested"
 
     if _query_requests_channel_period_recharge_summary(query) and (
         _sample_has_daily_grain(sample) or _sample_has_specialized_recharge_grain(sample)

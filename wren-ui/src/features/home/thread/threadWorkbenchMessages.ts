@@ -137,6 +137,7 @@ export type ThreadWorkbenchMessages = {
       templateDryRunFailed: string;
       templateGuardChannelPeriodSummaryMismatch: string;
       templateGuardLoginWithoutDepositMismatch: string;
+      templateGuardPlainSqlRequested: string;
       templateSchemaRetrievalInsufficient: string;
       trustedReferenceSelected: string;
     };
@@ -245,6 +246,8 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
           '当前问题要求按渠道区间汇总，不适合直接套用日级或分层等其他粒度模板',
         templateGuardLoginWithoutDepositMismatch:
           '当前问题是登录未充值反查，不适合直接套用充值或首存模板',
+        templateGuardPlainSqlRequested:
+          '当前问题明确要求直接查询原始数据，未直接套用业务报表模板',
         templateSchemaRetrievalInsufficient:
           '模板缺少足够的 schema 召回支撑，未直接套用',
         trustedReferenceSelected: '已命中可信 SQL 参考',
@@ -411,6 +414,8 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
           'The question asks for channel-period aggregation, so daily or segmented templates were not applied directly',
         templateGuardLoginWithoutDepositMismatch:
           'The question asks for login-without-deposit players, so deposit/cohort templates were not applied directly',
+        templateGuardPlainSqlRequested:
+          'The question explicitly asks for raw/direct SQL, so business report templates were not applied directly',
         templateSchemaRetrievalInsufficient:
           'Schema retrieval was insufficient, so the template was not applied directly',
         trustedReferenceSelected: 'Matched a trusted SQL reference',

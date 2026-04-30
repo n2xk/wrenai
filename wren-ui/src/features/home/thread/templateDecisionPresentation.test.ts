@@ -118,6 +118,21 @@ describe('templateDecisionPresentation', () => {
     );
   });
 
+  it('maps explicit plain SQL fallback reason to localized description', () => {
+    const presentation = resolveTemplateDecisionPresentation(
+      {
+        fallbackReason: 'template_guard_plain_sql_requested',
+        mode: 'reference',
+        sqlSource: 'generated',
+      },
+      messages,
+    );
+
+    expect(presentation?.description).toContain(
+      '当前问题明确要求直接查询原始数据，未直接套用业务报表模板',
+    );
+  });
+
   it('uses business-knowledge wording for GENERAL answers without implying SQL generation', () => {
     const presentation = resolveTemplateDecisionPresentation(
       {

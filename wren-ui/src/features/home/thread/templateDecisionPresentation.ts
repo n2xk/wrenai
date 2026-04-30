@@ -68,6 +68,8 @@ const resolveDecisionReasonText = (
       messages.reasons.templateGuardChannelPeriodSummaryMismatch,
     template_guard_login_without_deposit_mismatch:
       messages.reasons.templateGuardLoginWithoutDepositMismatch,
+    template_guard_plain_sql_requested:
+      messages.reasons.templateGuardPlainSqlRequested,
     template_schema_retrieval_insufficient:
       messages.reasons.templateSchemaRetrievalInsufficient,
   };

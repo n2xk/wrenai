@@ -215,6 +215,79 @@ def test_build_template_decision_downgrades_segment_template_for_channel_period_
     assert result["sql_source"] == "generated"
 
 
+def test_build_template_decision_downgrades_template_when_plain_sql_requested():
+    result = build_template_decision(
+        [
+            {
+                "id": "T01",
+                "question": "按天查看某渠道综合日报指标",
+                "title": "渠道日基础汇总",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :start_date, :end_date, "
+                    "biz_date FROM daily_report"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T01",
+                    "features": ["daily_summary", "channel_summary"],
+                    "resultGrain": "biz_date + channel_id",
+                },
+                "score": 0.97,
+                "status": "active",
+            }
+        ],
+        query=(
+            "不用业务报表模板，直接查询租户平台990001下渠道990011在"
+            "2026-04-01到2026-04-07每天成功充值订单笔数和充值金额"
+        ),
+    )
+
+    assert result["template_id"] == "T01"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == "template_guard_plain_sql_requested"
+    assert result["sql_source"] == "generated"
+
+
+def test_build_template_decision_downgrades_template_when_raw_table_requested():
+    result = build_template_decision(
+        [
+            {
+                "id": "T11",
+                "question": "按游戏类型分布统计投注次数和有效投注",
+                "title": "游戏类型分布",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :start_date, :end_date, "
+                    "game_type_id FROM game_type_report"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T11",
+                    "features": ["game_type"],
+                    "resultGrain": "game_type_id",
+                },
+                "score": 0.97,
+                "status": "active",
+            }
+        ],
+        query=(
+            "直接基于投注订单表，查询租户平台990001渠道990011在"
+            "2026-04-01到2026-04-07按game_type_id汇总的投注订单笔数和"
+            "有效投注金额"
+        ),
+    )
+
+    assert result["template_id"] == "T11"
+    assert result["mode"] == "reference"
+    assert result["fallback_reason"] == "template_guard_plain_sql_requested"
+    assert result["sql_source"] == "generated"
+
+
 def test_build_template_decision_downgrades_cohort_template_for_login_without_deposit():
     result = build_template_decision(
         [
