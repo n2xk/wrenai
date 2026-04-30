@@ -14,6 +14,7 @@ import {
 import type { TableColumnsType } from 'antd';
 import PlusOutlined from '@ant-design/icons/PlusOutlined';
 
+import { WorkbenchSectionPanel } from '@/features/knowledgePage/index.styles';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
@@ -116,14 +117,30 @@ const policyManagerStyles = `
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    min-width: 0;
+  }
+
+  .ask-policy-chip-list--nowrap {
+    flex-wrap: nowrap;
+    overflow: hidden;
   }
 
   .ask-policy-tag.ant-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
     margin-inline-end: 0;
     border-color: rgba(91, 75, 219, 0.12);
     background: rgba(91, 75, 219, 0.06);
     color: #5b4bdb;
     font-weight: 500;
+  }
+
+  .ask-policy-tag .ant-tag-content {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .ask-policy-status.ant-tag {
@@ -157,16 +174,24 @@ const policyManagerStyles = `
 const toArray = (value?: string[] | null) =>
   Array.isArray(value) ? value.filter(Boolean) : [];
 
-const renderTagList = (values?: string[] | null, empty = '未配置') => {
+const renderTagList = (
+  values?: string[] | null,
+  empty = '未配置',
+  options: { nowrap?: boolean } = {},
+) => {
   const items = toArray(values);
   if (!items.length) {
     return <span className="ask-policy-empty-value">{empty}</span>;
   }
 
   return (
-    <div className="ask-policy-chip-list">
+    <div
+      className={`ask-policy-chip-list${
+        options.nowrap ? ' ask-policy-chip-list--nowrap' : ''
+      }`}
+    >
       {items.map((item) => (
-        <Tag className="ask-policy-tag" key={item}>
+        <Tag className="ask-policy-tag" key={item} title={item}>
           {item}
         </Tag>
       ))}
@@ -372,7 +397,8 @@ export default function AskPoliciesManager({
       title: '触发词',
       dataIndex: 'queryContainsAny',
       key: 'queryContainsAny',
-      render: (values) => renderTagList(values),
+      width: 180,
+      render: (values) => renderTagList(values, '未配置', { nowrap: true }),
     },
     {
       title: '禁用模板',
@@ -438,7 +464,7 @@ export default function AskPoliciesManager({
   ];
 
   return (
-    <div
+    <WorkbenchSectionPanel
       className={`ask-policy-manager${
         embedded ? ' ask-policy-manager--embedded' : ''
       }`}
@@ -550,6 +576,6 @@ export default function AskPoliciesManager({
           </Form.Item>
         </Form>
       </Drawer>
-    </div>
+    </WorkbenchSectionPanel>
   );
 }
