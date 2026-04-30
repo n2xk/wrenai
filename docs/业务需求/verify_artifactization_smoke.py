@@ -91,7 +91,7 @@ def build_url(endpoint: str, path: str, params: dict[str, str]) -> str:
 def build_targets(args: argparse.Namespace) -> list[SmokeTarget]:
     targets = [
         SmokeTarget("spreadsheet_list", "GET", "/api/v1/spreadsheets"),
-        SmokeTarget("dashboard_item_list", "GET", "/api/v1/dashboard-items"),
+        SmokeTarget("dashboard_list", "GET", "/api/v1/dashboards"),
     ]
     if args.spreadsheet_id:
         targets.append(

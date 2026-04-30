@@ -445,6 +445,14 @@ def evaluate_result(
     expectation = result.case.route_expectation
 
     if result.status != "finished":
+        if result.case.case_id in {"ROUTE07", "ROUTE08"} or "已有结果" in (
+            result.case.precondition or ""
+        ):
+            return "needs_manual", [
+                "needs_conversation_context",
+                f"status={result.status}",
+                result.error or "",
+            ]
         return "fail", [f"status={result.status}", result.error or ""]
 
     expects_external = (
