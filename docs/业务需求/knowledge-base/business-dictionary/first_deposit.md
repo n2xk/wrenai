@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: first_deposit
 name: 首存
 category: metric
@@ -29,6 +29,16 @@ related_templates:
   - T08
   - T10
   - T13
+applicable_scenarios:
+  - 首存 cohort 用户提取
+  - 首存后续存、留存、日龄趋势分析
+  - 首存金额分桶
+not_applicable_scenarios:
+  - 普通成功充值订单汇总
+  - 玩家所有充值明细
+  - 登录但未充值用户筛选
+required_slots:
+  - tenant_plat_id
 features:
   - cohort
   - first_deposit

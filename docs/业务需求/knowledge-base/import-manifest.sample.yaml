@@ -1,4 +1,4 @@
-version: v1
+version: v2
 root: docs/业务需求/knowledge-base
 parser:
   front_matter: yaml
@@ -19,6 +19,10 @@ sql_pairs:
   defaults:
     dialect: tidb_mysql8
     parameter_style: colon_named
+    safe_template_mode: reference
+    active_template_mode_requires:
+      - template_type
+      - required_slots
 
 instructions:
   include_globs:
@@ -28,9 +32,29 @@ instructions:
   defaults:
     scope_fallback: question_match
 
+business_terms:
+  include_globs:
+    - business-dictionary/*.md
+  only_status:
+    - active
+    - draft
+
+external_dependencies:
+  include_globs:
+    - external-dependencies/*.md
+  only_status:
+    - active
+    - draft
+  defaults:
+    lifecycle: per_question
+    input_modes:
+      - single_value
+
 notes:
   - 单文件 Markdown 是导入权威来源
   - blocked 模板先不导入，等数据源/模型补齐后再放开
   - legacy ES 占位模板已归档，当前只保留 TiDB 表 / 视图可执行 SQL pair
   - 导入时优先读取 front matter，再抽取正文中的 SQL / instruction 主体
-  - `question_match` instruction 必须读取 `questions`，不能只靠 `keywords`
+  - "`question_match` instruction 必须读取 `questions`，不能只靠 `keywords`"
+  - v2 顶层字段会映射到现有 API camelCase 字段；未知字段和 runtime_sync 必须忽略
+  - 缺少 template_type 的旧 SQL 模板必须安全降级为 reference，不能自动提升为 executable_template

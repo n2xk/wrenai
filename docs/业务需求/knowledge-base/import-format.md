@@ -1,87 +1,108 @@
-# Knowledge Base 导入字段格式（v1）
+# Knowledge Base 导入字段格式（v2）
 
-该文档约定 `docs/业务需求/knowledge-base/` 下 Markdown 的统一 front matter 字段，方便后续系统批量导入。
+该文档约定 `docs/业务需求/knowledge-base/` 下 Markdown 的统一 front matter 字段，方便系统批量导入、dry-run 校验和后续知识治理。
 
-## 1. SQL 模板（`import_target = sql_pair`）
+> 兼容原则：`v2` 是当前推荐写法；导入器必须继续兼容 `v1`，并忽略未知字段。`runtime_sync` 只记录运行态事实，不参与导入决策。
 
-建议字段顺序：
+## 1. 通用约定
+
+- 单文件 Markdown 是**导入权威来源**；汇总页只做浏览，不作为导入源。
+- front matter 使用 YAML，正文仍保留人类可读说明和 SQL / 规则内容。
+- `import_format_version` 支持 `v1` / `v2`；缺省按 `v1` 处理。
+- `status` 表示源文档准备状态；导入 API 的 `status` 需按资产类型映射为系统支持值。
+- 导入器应先做 dry-run，输出 API payload 预览，再由人工确认是否写入真实 workspace / knowledge base。
+
+## 2. SQL 模板（`import_target = sql_pair`）
+
+### 2.1 推荐 front matter
 
 ```yaml
 kb_asset_type: sql_template
 import_target: sql_pair
-import_format_version: v1
+import_format_version: v2
 dialect: tidb_mysql8
 parameter_style: colon_named
-result_grain: biz_date + channel_id
 id: T01
 title: 渠道日基础汇总
 report: 综合日报表
 priority: high
 status: draft_sql
+
+# v2 治理字段
+template_type: anchored_template
+required_slots:
+  - tenant_plat_id
+  - channel_id
+  - start_date
+  - end_date
+expected_grain: biz_date + channel_id
+positive_scenarios:
+  - 按天查看某渠道综合日报指标
+negative_scenarios:
+  - 单玩家充值明细
+external_dependencies: []
+
+# 兼容高级结构；导入器会把 v2 顶层字段合并进去
+business_signature:
+  template_id: T01
+  concepts:
+    - new_customer_first_deposit
+  features:
+    - daily_summary
+  metrics:
+    - deposit_amount
+  dimensions:
+    - biz_date
+    - channel_id
+  parameter_slots:
+    - tenant_plat_id
+  expected_grain: biz_date + channel_id
+
 source_tables:
   - dwd_order_deposit
-parameters:
-  - tenant_plat_id
 question_variants:
-  - 统计某渠道每日存款金额
+  - 按天查看某渠道综合日报指标
 source_documents:
   - 第一期数据报表需求V1.xlsx
 ```
 
-### 字段说明
+### 2.2 字段说明
 
-- `kb_asset_type`：资产类型，SQL 模板固定为 `sql_template`
-- `import_target`：未来导入目标，SQL 模板固定为 `sql_pair`
-- `import_format_version`：导入字段版本，当前为 `v1`
-- `dialect`：SQL 方言，当前统一约定为 `tidb_mysql8`
-- `parameter_style`：参数占位风格，当前统一约定为 `colon_named`
-- `result_grain`：结果粒度描述，便于后续导入时做展示/缓存策略
-- `status`：当前推荐值：`spec_only` / `draft_sql` / `blocked_missing_source` / `blocked_missing_sql_model`
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `kb_asset_type` | 是 | 固定为 `sql_template` |
+| `import_target` | 是 | 固定为 `sql_pair` |
+| `import_format_version` | 建议 | 推荐 `v2` |
+| `template_type` | v2 建议 | `reference` / `trusted_reference` / `anchored_template` / `executable_template` |
+| `required_slots` | v2 建议 | 模板硬套必须补齐的业务参数 |
+| `expected_grain` | v2 建议 | 结果粒度；P0/P1 只保存和展示，完整 SemanticPlan 后再作为硬门槛 |
+| `positive_scenarios` | v2 建议 | 适用场景 / 正向触发描述 |
+| `negative_scenarios` | v2 建议 | 不适用场景 / 排除描述 |
+| `external_dependencies` | 可选 | 依赖的外部数据 ID，如 `ad_spend` |
+| `business_signature` | 可选 | 高级结构化签名，导入时与 v2 顶层字段合并 |
+| `runtime_sync` | 可选 | 运行态回写，只读审计字段，导入器必须忽略 |
 
-### 可选运行态回写字段
+### 2.3 v2 到 SQL pair API 映射
 
-如果已经完成一次真实 workspace 导入并验证，可在 SQL 模板 front matter 中追加只读的 `runtime_sync` 字段块，用来记录“当前环境实际落库状态”。
+| v2 文档字段 | SQL pair / API 字段 | 备注 |
+| --- | --- | --- |
+| `id` | `id` / `businessSignature.templateId` | 系统创建时可由后端生成 ID；模板业务 ID 放入签名 |
+| `title` / `question_variants[0]` | `question` | 多问法可展开为多条 SQL pair |
+| 正文 `## SQL 模板` 代码块 | `sql` | 必须是可渲染 SQL 或可信参考 SQL |
+| `template_type` | `templateMode` | 缺省必须安全降级为 `reference` |
+| `required_slots` | `parameterSchema.required` | v1 可从 `parameters` 兼容映射 |
+| `expected_grain` | `businessSignature.expectedGrain` | 同时兼容旧 `business_signature.expected_grain` |
+| `positive_scenarios` | `businessSignature.positiveCues` | runtime scoring 已消费 |
+| `negative_scenarios` | `businessSignature.negativeCues` | runtime guard / scoring 已消费 |
+| `external_dependencies` | `businessSignature.externalDependencies` | 外部数据缺失检测已消费 |
+| `status` | `status` | `draft_sql` 建议映射为 `draft`；验证后再 `active` |
 
-示例：
-
-```yaml
-runtime_sync:
-  last_verified_at: 2026-04-26
-  sync_source: 当前TiDB workspace知识资产快照-2026-04-26
-  workspace_id: e4fd1d67-59a5-42de-adf2-1777698b5f21
-  knowledge_base_id: 27ea94ff-415f-4a28-af88-0b0dc226e598
-  kb_snapshot_id: 27fa6535-b932-4cfc-a231-35bd15d13329
-  deploy_hash: 5f88d9c5a3d8c23d2280c6f3b9fdf759543f46d0
-  import_status: imported
-  question_count: 3
-  record_ids:
-    - 75
-    - 76
-    - 77
-  asset_kind: sql_template
-  source_type: business_import
-  template_level: L2
-  template_mode: anchored_template
-```
-
-说明：
-
-- `runtime_sync` 是**运行态事实回写**，不是新的导入源字段
-- 导入脚本应忽略 `runtime_sync`，只把它当作审计/对账信息
-- `status` 仍表示源文档编写/准备状态；`runtime_sync.import_status` 表示某个实际环境是否已导入
-- 如果模板未导入，可写为：
-  - `import_status: blocked`
-  - `blocked_reason: blocked_missing_source`
-  - `record_ids: []`
-
-## 2. 分析规则（`import_target = instruction`）
-
-建议字段顺序：
+## 3. 分析规则（`import_target = instruction`）
 
 ```yaml
 kb_asset_type: analysis_rule
 import_target: instruction
-import_format_version: v1
+import_format_version: v2
 id: R01
 title: 汇总口径
 scope: global
@@ -91,22 +112,133 @@ applies_to:
   - 综合日报表
 questions: []
 keywords: []
+related_business_terms: []
+related_external_dependencies: []
+runtime_usage:
+  participates_in:
+    - instruction_retrieval
+  priority_hint: high
 source_documents:
   - 第一期数据报表需求V1.xlsx
 ```
 
-### 字段说明
+映射规则：
 
-- `kb_asset_type`：资产类型，规则固定为 `analysis_rule`
-- `import_target`：未来导入目标，规则固定为 `instruction`
-- `scope`：业务文档侧仍使用 `global` 或 `question_match`；导入到系统时应映射为：
-  - `global` -> `isGlobal = true` / `isDefault = true`
-  - `question_match` -> `isGlobal = false` / `isDefault = false`
-- `questions`：仅 `question_match` 规则必填，导入后对应系统的 `instruction.questions`，必须填写完整自然语言问法，不能只写关键词
-- `keywords`：可选，仅作为人工维护时的辅助标签；当前运行时不会直接用它做 instruction 检索
-- `status`：当前统一先用 `draft`
+| 文档字段 | API 字段 |
+| --- | --- |
+| `scope = global` | `isGlobal = true`, `isDefault = true` |
+| `scope = question_match` | `isGlobal = false`, `isDefault = false` |
+| `questions` | `instruction.questions` |
+| `related_business_terms` | `relatedBusinessTerms` |
+| `related_external_dependencies` | `relatedExternalDependencies` |
+| `runtime_usage` | `runtimeUsage` |
 
-## 3. 正文结构约定
+`question_match` 规则必须提供完整自然语言问题，不能只写关键词。
+
+## 4. 业务词典（`import_target = business_dictionary`）
+
+```yaml
+kb_asset_type: business_term
+import_target: business_dictionary
+import_format_version: v2
+id: first_deposit
+name: 首存
+category: metric
+status: active
+aliases:
+  - 首存
+  - 首充
+definition: 成功存款且 times = 1
+canonical_expression: dwd_order_deposit.status = 2 AND dwd_order_deposit.times = 1
+source_tables:
+  - dwd_order_deposit
+source_fields:
+  - dwd_order_deposit.status
+applicable_scenarios:
+  - 首存 cohort
+not_applicable_scenarios:
+  - 普通充值订单汇总
+required_slots:
+  - tenant_plat_id
+related_rules:
+  - R02
+related_templates:
+  - T03
+features:
+  - cohort
+source_documents:
+  - 第一期数据报表需求V1.xlsx
+```
+
+映射规则：
+
+| 文档字段 | API 字段 |
+| --- | --- |
+| `id` | `termId` |
+| `canonical_expression` | `canonicalExpression` |
+| `source_tables` | `sourceTables` |
+| `source_fields` | `sourceFields` |
+| `related_rules` | `relatedRules` |
+| `related_templates` | `relatedTemplates` |
+| `conflict_terms` | `conflictTerms` |
+| `applicable_scenarios` | `applicableScenarios` |
+| `not_applicable_scenarios` | `notApplicableScenarios` |
+| `required_slots` | `requiredSlots` |
+
+## 5. 外部数据依赖（`import_target = external_dependency`）
+
+```yaml
+kb_asset_type: external_dependency
+import_target: external_dependency
+import_format_version: v2
+id: ad_spend
+name: 投放金额
+status: active
+source_status: missing
+missing_behavior: ask_user
+aliases:
+  - 投放金额
+required_grain:
+  - biz_date + channel_id
+trigger_when:
+  - 问题包含 ROI、获客成本、投放金额
+not_trigger_when:
+  - 只查询站内充值、投注、提现
+lifecycle: per_question
+input_modes:
+  - single_value
+  - csv_upload
+required_by_terms:
+  - roi
+required_by_templates:
+  - T05
+ask_user_prompt: 请提供当前问题对应统计粒度的投放金额。
+validation:
+  value_type: number
+  min: 0
+```
+
+映射规则：
+
+| 文档字段 | API 字段 |
+| --- | --- |
+| `id` | `dependencyId` |
+| `source_status` | `sourceStatus` |
+| `missing_behavior` | `missingBehavior` |
+| `required_grain` | `requiredGrain` |
+| `required_by_terms` | `requiredByTerms` |
+| `required_by_templates` | `requiredByTemplates` |
+| `related_rules` | `relatedRules` |
+| `trigger_when` | `triggerWhen` |
+| `not_trigger_when` | `notTriggerWhen` |
+| `lifecycle` | `lifecycle` |
+| `input_modes` | `inputModes` |
+| `ask_user_prompt` | `askUserPrompt` |
+| `validation` | `validation` |
+
+当前推荐 `lifecycle = per_question`，避免外部补充数据污染其他对话或 workspace。
+
+## 6. 正文结构约定
 
 ### SQL 模板正文
 
@@ -128,94 +260,17 @@ source_documents:
 6. `## 关键词（可选）`
 7. `## 备注`
 
-## 4. 当前实现建议
+### 业务词典 / 外部数据依赖正文
 
-- 单文件 Markdown 作为**权威来源**
-- 汇总页（`analysis-rules.md` / `sql-templates.md`）仅做浏览，不作为导入源
-- 系统真正做导入时，规则至少要解析 front matter 中的 `questions` 与 `## 规则内容` 主体
-- SQL 模板导入时，应将 `question_variants` 展开为多条 `sql_pair.question + sql_pair.sql`
+- 保留人类可读定义、触发/不触发说明、追问话术和维护备注。
+- front matter 是导入结构化字段的来源；正文可用于人工审核和 AI 辅助生成建议。
 
-## 业务知识配置中心扩展字段（2026-04-26）
+## 7. v1/v2 兼容规则
 
-为支持业务知识配置中心，导入器需识别以下新增资产与结构化字段。
-
-### 业务词典 `business_dictionary`
-
-- 文件目录：`business-dictionary/`
-- `kb_asset_type`: `business_term`
-- `import_target`: `business_dictionary`
-- 核心字段：`id`, `name`, `category`, `aliases`, `definition`, `canonical_expression`, `source_tables`, `source_fields`, `related_rules`, `related_templates`, `features`, `conflict_terms`, `status`
-
-导入到 UI/API 时字段映射为：
-
-| 文档字段 | API 字段 |
-| --- | --- |
-| `id` | `termId` |
-| `name` | `name` |
-| `category` | `category` |
-| `aliases` | `aliases` |
-| `definition` | `definition` |
-| `canonical_expression` | `canonicalExpression` |
-| `source_tables` | `sourceTables` |
-| `source_fields` | `sourceFields` |
-| `related_rules` | `relatedRules` |
-| `related_templates` | `relatedTemplates` |
-| `features` | `features` |
-| `conflict_terms` | `conflictTerms` |
-| `status` | `status` |
-
-### 外部数据依赖 `external_dependency`
-
-- 文件目录：`external-dependencies/`
-- `kb_asset_type`: `external_dependency`
-- `import_target`: `external_dependency`
-- 核心字段：`id`, `name`, `aliases`, `source_status`, `missing_behavior`, `required_grain`, `required_by_terms`, `required_by_templates`, `related_rules`, `ask_user_prompt`, `validation`, `status`
-
-导入到 UI/API 时字段映射为：
-
-| 文档字段 | API 字段 |
-| --- | --- |
-| `id` | `dependencyId` |
-| `source_status` | `sourceStatus` |
-| `missing_behavior` | `missingBehavior` |
-| `required_grain` | `requiredGrain` |
-| `required_by_terms` | `requiredByTerms` |
-| `required_by_templates` | `requiredByTemplates` |
-| `related_rules` | `relatedRules` |
-| `ask_user_prompt` | `askUserPrompt` |
-| `validation` | `validation` |
-
-### SQL 模板结构化字段 `business_signature`
-
-所有 `sql-templates/T*.md` 可增加：
-
-```yaml
-business_signature:
-  template_id: T08
-  concepts: []
-  features: []
-  metrics: []
-  dimensions: []
-  parameter_slots: []
-  external_dependencies: []
-  positive_cues: []
-  negative_cues: []
-  expected_grain: first_deposit_date + channel_id
-```
-
-导入到 UI/API 时可直接保存到 SQL pair 的 `businessSignature` JSON 字段；runtime 同时兼容 snake_case 与 camelCase key。
-
-### 分析规则结构化字段
-
-所有 `analysis-rules/R*.md` 可增加：
-
-```yaml
-related_business_terms: []
-related_external_dependencies: []
-runtime_usage:
-  participates_in:
-    - instruction_retrieval
-  priority_hint: high
-```
-
-导入到 UI/API 时字段映射为 `relatedBusinessTerms`、`relatedExternalDependencies`、`runtimeUsage`。
+- v1 文档仍可导入。
+- v1 SQL 模板缺少 `template_type` 时，默认 `templateMode = reference`；不得自动提升为 `executable_template`。
+- v1 SQL 模板可从 `parameters` 兼容生成 `parameterSchema.required`，但只有明确设置 `template_type` 后才允许硬套。
+- v1 `business_signature.expected_grain`、`positive_cues`、`negative_cues`、`external_dependencies` 必须兼容映射到 camelCase API 字段。
+- 缺少 `expected_grain` 时，不做 P0/P1 硬阻断；只作为 unknown 写入 diagnostics。
+- `runtime_sync`、未知字段、注释字段必须忽略，避免未来扩展导致导入失败。
+- 已有 `reference` SQL pair 保持 `reference`；如需升级为 `anchored_template` / `executable_template`，必须补齐 `required_slots`、适用/不适用场景，并通过 dry-run / 回归验证。

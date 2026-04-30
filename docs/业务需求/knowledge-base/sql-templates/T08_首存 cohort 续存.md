@@ -1,7 +1,7 @@
 ---
 kb_asset_type: sql_template
 import_target: sql_pair
-import_format_version: v1
+import_format_version: v2
 dialect: tidb_mysql8
 parameter_style: colon_named
 result_grain: first_deposit_date + channel_id
@@ -10,6 +10,21 @@ title: 首存 cohort 续存
 report: 首存及续存率
 priority: high
 status: draft_sql
+template_type: anchored_template
+required_slots:
+  - tenant_plat_id
+  - channel_id
+  - cohort_start_date
+  - cohort_end_date
+expected_grain: first_deposit_date + channel_id
+positive_scenarios:
+  - 首存 cohort 的二存到六存
+  - 首存后续存人数、比率、人均金额
+negative_scenarios:
+  - 登录但未充值玩家
+  - 普通充值订单笔数与金额
+  - 只要求首存名单明细
+external_dependencies: []
 runtime_sync:
   last_verified_at: 2026-04-26
   sync_source: 当前TiDB workspace知识资产快照-2026-04-26

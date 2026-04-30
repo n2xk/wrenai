@@ -1,7 +1,7 @@
 ---
 kb_asset_type: external_dependency
 import_target: external_dependency
-import_format_version: v1
+import_format_version: v2
 id: ad_spend
 name: 投放金额
 status: active
@@ -17,6 +17,16 @@ required_grain:
   - biz_date + channel_id
   - date_range + channel_id
   - cohort_period
+trigger_when:
+  - 问题要求 ROI、获客成本、首存成本、投充比中明确包含投放成本口径
+  - SQL 模板或业务词明确依赖投放金额
+not_trigger_when:
+  - 只查询站内充值、提现、投注、登录、注册指标
+  - 只查询首存名单、续存人数、玩家明细，不要求成本或 ROI
+lifecycle: per_question
+input_modes:
+  - single_value
+  - csv_upload
 required_by_terms:
   - roi
   - first_deposit_cost
