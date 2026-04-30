@@ -7,6 +7,7 @@ from .intent_classification import IntentClassification
 from .misleading_assistance import MisleadingAssistance
 from .question_recommendation import QuestionRecommendation
 from .relationship_recommendation import RelationshipRecommendation
+from .semantic_plan import SemanticPlan
 from .semantics_description import SemanticsDescription
 from .sql_answer import SQLAnswer
 from .sql_correction import SQLCorrection
@@ -26,6 +27,7 @@ __all__ = [
     "IntentClassification",
     "QuestionRecommendation",
     "RelationshipRecommendation",
+    "SemanticPlan",
     "SemanticsDescription",
     "SQLAnswer",
     "SQLCorrection",

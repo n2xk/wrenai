@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
     allow_sql_knowledge_retrieval: bool = Field(default=False)
+    allow_semantic_plan_llm: bool = Field(
+        default=False,
+        alias="WREN_SEMANTIC_PLAN_LLM_ENABLED",
+    )
+    ask_policy_file: str | None = Field(
+        default=None,
+        alias="WREN_ASK_POLICY_FILE",
+    )
     max_histories: int = Field(default=5)
     max_sql_correction_retries: int = Field(default=3)
 

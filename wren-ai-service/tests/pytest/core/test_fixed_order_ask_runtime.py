@@ -1,4 +1,10 @@
+import pytest
+
+from src.core.ask_policy import AskPolicyConfig, AskPolicyRule
 from src.core.fixed_order_ask_runtime import (
+    AskExecutionState,
+    BaseFixedOrderAskRuntime,
+    NL2SQLToolset,
     build_minimal_semantic_plan,
     build_reusable_template_sql,
     build_template_decision,
@@ -513,6 +519,110 @@ def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
             "reason_codes": [],
             "missing_parameters": [],
         }
+    ]
+
+
+class _SemanticPlanStub:
+    async def run(self, **kwargs):
+        return {
+            "post_process": {
+                "subject": "channel",
+                "metrics": ["roi"],
+                "dimensions": ["channel_id", "biz_date"],
+                "filters": {"channel_id": 990011},
+                "grain": "biz_date + channel_id",
+                "missing_slots": [],
+                "resolved_slots": {"channel_id": {"value": 990011}},
+                "decision": {"reason_codes": ["llm_subject_match"]},
+                "confidence": 0.82,
+            }
+        }
+
+
+class _FailingSemanticPlanStub:
+    async def run(self, **kwargs):
+        raise RuntimeError("provider unavailable")
+
+
+@pytest.mark.asyncio
+async def test_maybe_enhance_semantic_plan_state_uses_optional_llm_plan():
+    runtime = BaseFixedOrderAskRuntime(
+        toolset=NL2SQLToolset({"semantic_plan": _SemanticPlanStub()}),
+        allow_semantic_plan_llm=True,
+    )
+    state = AskExecutionState(
+        user_query="租户平台990001渠道990011在2026-04-01到2026-04-07的ROI"
+    )
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    await runtime._maybe_enhance_semantic_plan_state(
+        state,
+        histories=[],
+        configuration=object(),
+    )
+
+    assert state.semantic_plan["source"] == "llm_enhanced"
+    assert state.semantic_plan["subject"] == "channel"
+    assert state.semantic_plan["grain"] == "biz_date + channel_id"
+    assert state.semantic_plan["filters"]["tenant_plat_id"] == 990001
+    assert state.semantic_plan["filters"]["channel_id"] == 990011
+    assert "llm_semantic_plan_applied" in state.semantic_plan["decision"][
+        "reason_codes"
+    ]
+    assert "llm_subject_match" in state.semantic_plan["decision"]["reason_codes"]
+
+
+@pytest.mark.asyncio
+async def test_maybe_enhance_semantic_plan_state_falls_back_on_llm_failure():
+    runtime = BaseFixedOrderAskRuntime(
+        toolset=NL2SQLToolset({"semantic_plan": _FailingSemanticPlanStub()}),
+        allow_semantic_plan_llm=True,
+    )
+    state = AskExecutionState(user_query="统计渠道990011首充用户")
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    await runtime._maybe_enhance_semantic_plan_state(
+        state,
+        histories=[],
+        configuration=object(),
+    )
+
+    assert state.semantic_plan["source"] == "deterministic"
+    assert "llm_semantic_plan_failed" in state.semantic_plan["decision"][
+        "reason_codes"
+    ]
+
+
+def test_apply_policy_state_downgrades_forbidden_template():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    runtime._ask_policy_config = AskPolicyConfig(
+        version="test_policy_v1",
+        rules=(
+            AskPolicyRule(
+                id="forbid_t08",
+                reason_code="policy_forbid_t08",
+                query_contains_any=("普通充值",),
+                forbidden_templates=("T08",),
+            ),
+        ),
+    )
+    state = AskExecutionState(user_query="统计普通充值订单")
+    state.template_decision = {
+        "template_id": "T08",
+        "mode": "anchored_template",
+        "sql_source": "anchored_template",
+    }
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    runtime._apply_policy_state(state)
+
+    assert state.template_decision["mode"] == "reference"
+    assert state.template_decision["sql_source"] == "generated"
+    assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
+    assert state.template_decision["policy_version"] == "test_policy_v1"
+    assert state.semantic_plan["decision"]["route"] == "normal_text_to_sql"
+    assert "policy_forbid_t08" in state.semantic_plan["decision"][
+        "policy_reason_codes"
     ]
 
 

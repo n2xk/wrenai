@@ -82,6 +82,9 @@ def create_service_container(
     _sql_diagnosis_pipeline = generation.SQLDiagnosis(
         **pipe_components["sql_diagnosis"],
     )
+    semantic_plan_components = (
+        pipe_components.get("semantic_plan") or pipe_components["intent_classification"]
+    )
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
             pipelines={
@@ -116,6 +119,9 @@ def create_service_container(
                 "intent_classification": generation.IntentClassification(
                     **pipe_components["intent_classification"],
                     wren_ai_docs=wren_ai_docs,
+                ),
+                "semantic_plan": generation.SemanticPlan(
+                    **semantic_plan_components,
                 ),
                 "misleading_assistance": generation.MisleadingAssistance(
                     **pipe_components["misleading_assistance"],
@@ -161,6 +167,8 @@ def create_service_container(
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             allow_sql_diagnosis=settings.allow_sql_diagnosis,
             allow_sql_knowledge_retrieval=settings.allow_sql_knowledge_retrieval,
+            allow_semantic_plan_llm=settings.allow_semantic_plan_llm,
+            ask_policy_file=settings.ask_policy_file,
             max_histories=settings.max_histories,
             enable_column_pruning=settings.enable_column_pruning,
             max_sql_correction_retries=settings.max_sql_correction_retries,

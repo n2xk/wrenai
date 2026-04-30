@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
 
+from src.core.ask_policy import evaluate_policy_context, load_ask_policy_config
 from src.core.mixed_answer_composer import MixedAnswerComposer
 from src.core.pipeline import BasicPipeline
 from src.pipelines.common import retrieve_data_source
@@ -3160,6 +3161,31 @@ class NL2SQLToolset:
             )
         ).get("post_process", {})
 
+    async def generate_semantic_plan(
+        self,
+        *,
+        query: str,
+        histories: Sequence[AskHistoryLike],
+        sql_samples: Sequence[Any],
+        instructions: Sequence[Any],
+        deterministic_plan: Optional[dict[str, Any]],
+        configuration: Any,
+    ) -> Optional[dict[str, Any]]:
+        semantic_plan_pipeline = self._pipelines.get("semantic_plan")
+        if semantic_plan_pipeline is None:
+            return None
+
+        return (
+            await semantic_plan_pipeline.run(
+                query=query,
+                histories=histories,
+                sql_samples=sql_samples,
+                instructions=instructions,
+                deterministic_plan=deterministic_plan,
+                configuration=configuration,
+            )
+        ).get("post_process", {})
+
     async def retrieve_schema(
         self,
         *,
@@ -3377,6 +3403,8 @@ class BaseFixedOrderAskRuntime:
         mixed_answer_composer: Optional[MixedAnswerComposer] = None,
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        allow_semantic_plan_llm: bool = False,
+        ask_policy_file: Optional[str] = None,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
     ):
@@ -3384,6 +3412,9 @@ class BaseFixedOrderAskRuntime:
         self._mixed_answer_composer = mixed_answer_composer or MixedAnswerComposer()
         self._allow_intent_classification = allow_intent_classification
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_semantic_plan_llm = allow_semantic_plan_llm
+        self._ask_policy_file = ask_policy_file
+        self._ask_policy_config = load_ask_policy_config(ask_policy_file)
         self._enable_column_pruning = enable_column_pruning
         self._max_sql_correction_retries = max_sql_correction_retries
 
@@ -3449,6 +3480,143 @@ class BaseFixedOrderAskRuntime:
             reason_codes=reason_codes,
             external_dependencies=external_dependencies,
         )
+
+    def _append_semantic_plan_reason(self, state: AskExecutionState, reason: str) -> None:
+        if state.semantic_plan is None:
+            return
+        decision = state.semantic_plan.setdefault("decision", {})
+        reason_codes = decision.setdefault("reason_codes", [])
+        if reason not in reason_codes:
+            reason_codes.append(reason)
+
+    def _merge_llm_semantic_plan(
+        self,
+        *,
+        deterministic_plan: dict[str, Any],
+        llm_plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        merged = {
+            **deterministic_plan,
+            **llm_plan,
+            "version": "p1_semantic_plan_enhanced_v1",
+            "source": "llm_enhanced",
+        }
+        merged["filters"] = {
+            **(deterministic_plan.get("filters") or {}),
+            **(llm_plan.get("filters") or {}),
+        }
+        merged["resolved_slots"] = {
+            **(deterministic_plan.get("resolved_slots") or {}),
+            **(llm_plan.get("resolved_slots") or {}),
+        }
+
+        deterministic_missing_slots = deterministic_plan.get("missing_slots") or []
+        llm_missing_slots = llm_plan.get("missing_slots") or []
+        merged["missing_slots"] = list(
+            dict.fromkeys([*deterministic_missing_slots, *llm_missing_slots])
+        )
+        if deterministic_plan.get("missing_slot_details"):
+            merged["missing_slot_details"] = deterministic_plan.get(
+                "missing_slot_details"
+            )
+        if deterministic_plan.get("clarification_request"):
+            merged["clarification_request"] = deterministic_plan.get(
+                "clarification_request"
+            )
+
+        deterministic_decision = deterministic_plan.get("decision") or {}
+        llm_decision = llm_plan.get("decision") or {}
+        reason_codes = list(
+            dict.fromkeys(
+                [
+                    *(deterministic_decision.get("reason_codes") or []),
+                    *(llm_decision.get("reason_codes") or []),
+                    "llm_semantic_plan_applied",
+                ]
+            )
+        )
+        merged["decision"] = {
+            **deterministic_decision,
+            **llm_decision,
+            "reason_codes": reason_codes,
+            "missing_slots": merged["missing_slots"],
+            "resolved_slots": merged["resolved_slots"],
+            "candidate_templates": deterministic_decision.get(
+                "candidate_templates"
+            )
+            or llm_decision.get("candidate_templates")
+            or [],
+        }
+        return merged
+
+    async def _maybe_enhance_semantic_plan_state(
+        self,
+        state: AskExecutionState,
+        *,
+        histories: Sequence[AskHistoryLike],
+        configuration: Any,
+    ) -> None:
+        if not self._allow_semantic_plan_llm:
+            return
+        if state.semantic_plan is None:
+            return
+
+        deterministic_plan = state.semantic_plan
+        try:
+            llm_plan = await self._toolset.generate_semantic_plan(
+                query=state.user_query,
+                histories=histories,
+                sql_samples=state.sql_samples,
+                instructions=state.instructions,
+                deterministic_plan=deterministic_plan,
+                configuration=configuration,
+            )
+        except Exception:
+            logger.exception("SemanticPlan LLM enhancement failed.")
+            self._append_semantic_plan_reason(state, "llm_semantic_plan_failed")
+            return
+
+        if not llm_plan:
+            self._append_semantic_plan_reason(state, "llm_semantic_plan_unavailable")
+            return
+
+        state.semantic_plan = self._merge_llm_semantic_plan(
+            deterministic_plan=deterministic_plan,
+            llm_plan=llm_plan,
+        )
+
+    def _apply_policy_state(self, state: AskExecutionState) -> None:
+        evaluation = evaluate_policy_context(
+            query=state.user_query,
+            semantic_plan=state.semantic_plan,
+            template_decision=state.template_decision,
+            config=self._ask_policy_config,
+        )
+        metadata = evaluation.to_metadata()
+
+        if state.semantic_plan is not None:
+            decision = state.semantic_plan.setdefault("decision", {})
+            decision.update(metadata)
+            reason_codes = decision.setdefault("reason_codes", [])
+            for reason_code in metadata["policy_reason_codes"]:
+                if reason_code not in reason_codes:
+                    reason_codes.append(reason_code)
+
+        if state.template_decision is not None:
+            state.template_decision.update(metadata)
+
+        if evaluation.blocks_template and state.template_decision is not None:
+            state.template_decision["fallback_reason"] = "policy_forbidden_template"
+            state.template_decision["sql_source"] = "generated"
+            if state.template_decision.get("mode") in {
+                "anchored_template",
+                "executable_template",
+            }:
+                state.template_decision["mode"] = "reference"
+            if state.semantic_plan is not None:
+                decision = state.semantic_plan.setdefault("decision", {})
+                decision["route"] = "normal_text_to_sql"
+                decision["fallback_reason"] = "policy_forbidden_template"
 
     def _extract_general_answer_content(
         self, pipeline_result: Any, *, pipeline_name: str
@@ -4673,6 +4841,12 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     )
                     self._sync_template_decision_state_metrics(state)
                     self._sync_semantic_plan_state(state, histories=histories)
+                    await self._maybe_enhance_semantic_plan_state(
+                        state,
+                        histories=histories,
+                        configuration=ask_request.configurations,
+                    )
+                    self._apply_policy_state(state)
                     state.effective_instructions = [
                         *state.instructions,
                         *build_template_instruction(state.template_decision),
@@ -4852,6 +5026,12 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                 )
                 self._sync_template_decision_state_metrics(state)
                 self._sync_semantic_plan_state(state, histories=histories)
+                await self._maybe_enhance_semantic_plan_state(
+                    state,
+                    histories=histories,
+                    configuration=ask_request.configurations,
+                )
+                self._apply_policy_state(state)
                 state.effective_instructions = [
                     *state.instructions,
                     *build_template_instruction(state.template_decision),

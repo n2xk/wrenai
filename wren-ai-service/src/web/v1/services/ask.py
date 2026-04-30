@@ -287,6 +287,8 @@ class AskService:
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
+        allow_semantic_plan_llm: bool = False,
+        ask_policy_file: Optional[str] = None,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         max_histories: int = 5,
@@ -318,6 +320,8 @@ class AskService:
                 allow_sql_functions_retrieval=allow_sql_functions_retrieval,
                 allow_sql_diagnosis=allow_sql_diagnosis,
                 allow_sql_knowledge_retrieval=allow_sql_knowledge_retrieval,
+                allow_semantic_plan_llm=allow_semantic_plan_llm,
+                ask_policy_file=ask_policy_file,
                 enable_column_pruning=enable_column_pruning,
                 max_sql_correction_retries=max_sql_correction_retries,
             )
@@ -330,6 +334,8 @@ class AskService:
             allow_sql_functions_retrieval=allow_sql_functions_retrieval,
             allow_sql_diagnosis=allow_sql_diagnosis,
             allow_sql_knowledge_retrieval=allow_sql_knowledge_retrieval,
+            allow_semantic_plan_llm=allow_semantic_plan_llm,
+            ask_policy_file=ask_policy_file,
             enable_column_pruning=enable_column_pruning,
             max_sql_correction_retries=max_sql_correction_retries,
         )

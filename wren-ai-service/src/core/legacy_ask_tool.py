@@ -32,6 +32,8 @@ class LegacyAskTool:
         allow_sql_functions_retrieval: bool = True,
         allow_sql_diagnosis: bool = True,
         allow_sql_knowledge_retrieval: bool = True,
+        allow_semantic_plan_llm: bool = False,
+        ask_policy_file: Optional[str] = None,
         enable_column_pruning: bool = False,
         max_sql_correction_retries: int = 3,
         toolset: Optional[NL2SQLToolset] = None,
@@ -48,6 +50,8 @@ class LegacyAskTool:
             mixed_answer_composer=mixed_answer_composer,
             allow_intent_classification=allow_intent_classification,
             allow_sql_generation_reasoning=allow_sql_generation_reasoning,
+            allow_semantic_plan_llm=allow_semantic_plan_llm,
+            ask_policy_file=ask_policy_file,
             enable_column_pruning=enable_column_pruning,
             max_sql_correction_retries=max_sql_correction_retries,
         )
