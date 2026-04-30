@@ -81,10 +81,86 @@ const policyManagerStyles = `
     background: #f7f9fc;
     color: #475467;
     font-size: 13px;
+    font-weight: 600;
+    padding: 14px 16px;
   }
 
   .ask-policy-table.console-table .ant-table-tbody > tr > td {
+    padding: 16px;
     vertical-align: top;
+  }
+
+  .ask-policy-name-row,
+  .ask-policy-meta-row,
+  .ask-policy-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .ask-policy-name {
+    max-width: 220px;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 20px;
+  }
+
+  .ask-policy-reason {
+    display: block;
+    max-width: 280px;
+    color: #98a2b3;
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .ask-policy-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ask-policy-tag.ant-tag {
+    margin-inline-end: 0;
+    border-color: rgba(91, 75, 219, 0.12);
+    background: rgba(91, 75, 219, 0.06);
+    color: #5b4bdb;
+    font-weight: 500;
+  }
+
+  .ask-policy-status.ant-tag,
+  .ask-policy-scope.ant-tag {
+    margin-inline-end: 0;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .ask-policy-scope.ant-tag {
+    border-color: rgba(91, 75, 219, 0.14);
+    background: rgba(91, 75, 219, 0.06);
+    color: #5b4bdb;
+  }
+
+  .ask-policy-empty-value {
+    color: #98a2b3;
+    font-size: 13px;
+  }
+
+  .ask-policy-updated-at {
+    color: #667085;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .ask-policy-action-row {
+    gap: 4px;
+  }
+
+  .ask-policy-action-row .ant-btn {
+    height: 28px;
+    padding: 0 6px;
   }
 `;
 
@@ -94,15 +170,17 @@ const toArray = (value?: string[] | null) =>
 const renderTagList = (values?: string[] | null, empty = '未配置') => {
   const items = toArray(values);
   if (!items.length) {
-    return <Typography.Text type="secondary">{empty}</Typography.Text>;
+    return <span className="ask-policy-empty-value">{empty}</span>;
   }
 
   return (
-    <Space size={[4, 4]} wrap>
+    <div className="ask-policy-chip-list">
       {items.map((item) => (
-        <Tag key={item}>{item}</Tag>
+        <Tag className="ask-policy-tag" key={item}>
+          {item}
+        </Tag>
       ))}
-    </Space>
+    </div>
   );
 };
 
@@ -290,18 +368,35 @@ export default function AskPoliciesManager({
       title: '策略',
       dataIndex: 'name',
       key: 'name',
-      width: 260,
+      width: 330,
       render: (_value, record) => (
         <Space orientation="vertical" size={4}>
-          <Space size={6} wrap>
-            <Typography.Text strong>{record.name}</Typography.Text>
-            <Tag color={record.status === 'active' ? 'green' : 'default'}>
+          <div className="ask-policy-name-row">
+            <Typography.Text
+              className="ask-policy-name"
+              ellipsis={{ tooltip: record.name }}
+            >
+              {record.name}
+            </Typography.Text>
+            <Tag
+              className="ask-policy-status"
+              color={record.status === 'active' ? 'green' : 'default'}
+            >
               {record.status === 'active' ? '启用' : '停用'}
             </Tag>
-            <Tag>{record.knowledgeBaseId ? '当前知识库' : '工作空间'}</Tag>
-            {isRuleLockedByScope(record) ? <Tag>继承</Tag> : null}
-          </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          </div>
+          <div className="ask-policy-meta-row">
+            <Tag className="ask-policy-scope">
+              {record.knowledgeBaseId ? '当前知识库' : '工作空间'}
+            </Tag>
+            {isRuleLockedByScope(record) ? (
+              <Tag className="ask-policy-scope">继承</Tag>
+            ) : null}
+          </div>
+          <Typography.Text
+            className="ask-policy-reason"
+            ellipsis={{ tooltip: record.reasonCode }}
+          >
             {record.reasonCode}
           </Typography.Text>
         </Space>
@@ -331,9 +426,9 @@ export default function AskPoliciesManager({
       key: 'updatedAt',
       width: 180,
       render: (value) => (
-        <Typography.Text type="secondary">
+        <span className="ask-policy-updated-at">
           {value ? getAbsoluteTime(value) : '-'}
-        </Typography.Text>
+        </span>
       ),
     },
     {
@@ -344,9 +439,9 @@ export default function AskPoliciesManager({
         const ruleMutationDisabled =
           mutationDisabled || isRuleLockedByScope(record);
         return (
-          <Space size={8}>
+          <div className="ask-policy-action-row">
             <Button
-              type="link"
+              type="text"
               size="small"
               disabled={ruleMutationDisabled}
               onClick={() => openEditDrawer(record)}
@@ -364,7 +459,7 @@ export default function AskPoliciesManager({
               disabled={ruleMutationDisabled}
             >
               <Button
-                type="link"
+                type="text"
                 danger
                 size="small"
                 disabled={ruleMutationDisabled}
@@ -372,7 +467,7 @@ export default function AskPoliciesManager({
                 删除
               </Button>
             </Popconfirm>
-          </Space>
+          </div>
         );
       },
     },
@@ -413,6 +508,7 @@ export default function AskPoliciesManager({
           loading={loading}
           columns={columns}
           dataSource={items}
+          tableLayout="fixed"
           pagination={false}
           locale={{
             emptyText: hasRuntimeScope
