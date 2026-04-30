@@ -47,6 +47,9 @@ interface CreateBusinessTermRequest {
   relatedTemplates?: string[];
   features?: string[];
   conflictTerms?: string[];
+  applicableScenarios?: string[];
+  notApplicableScenarios?: string[];
+  requiredSlots?: string[];
   status?: string;
 }
 

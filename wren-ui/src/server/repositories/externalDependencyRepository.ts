@@ -25,6 +25,10 @@ export interface ExternalDependency {
   requiredByTerms: string[];
   requiredByTemplates: string[];
   relatedRules: string[];
+  triggerWhen: string[];
+  notTriggerWhen: string[];
+  lifecycle: string;
+  inputModes: string[];
   askUserPrompt?: string | null;
   validation?: Record<string, any> | null;
   status: string;
@@ -63,6 +67,9 @@ export class ExternalDependencyRepository
     'requiredByTerms',
     'requiredByTemplates',
     'relatedRules',
+    'triggerWhen',
+    'notTriggerWhen',
+    'inputModes',
     'validation',
   ];
   private readonly arrayJsonbColumns = [
@@ -71,6 +78,9 @@ export class ExternalDependencyRepository
     'requiredByTerms',
     'requiredByTemplates',
     'relatedRules',
+    'triggerWhen',
+    'notTriggerWhen',
+    'inputModes',
   ];
   private readonly canonicalScopeFields: (keyof ExternalDependencyRuntimeScope)[] =
     ['workspaceId', 'knowledgeBaseId', 'kbSnapshotId', 'deployHash'];

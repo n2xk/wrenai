@@ -44,6 +44,10 @@ interface UpdateExternalDependencyRequest {
   requiredByTerms?: string[];
   requiredByTemplates?: string[];
   relatedRules?: string[];
+  triggerWhen?: string[];
+  notTriggerWhen?: string[];
+  lifecycle?: string;
+  inputModes?: string[];
   askUserPrompt?: string | null;
   validation?: Record<string, any> | null;
   status?: string;

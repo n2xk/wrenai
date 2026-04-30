@@ -28,6 +28,9 @@ export interface BusinessTerm {
   relatedTemplates: string[];
   features: string[];
   conflictTerms: string[];
+  applicableScenarios: string[];
+  notApplicableScenarios: string[];
+  requiredSlots: string[];
   status: string;
   createdBy?: string | null;
   updatedBy?: string | null;
@@ -66,6 +69,9 @@ export class BusinessTermRepository
     'relatedTemplates',
     'features',
     'conflictTerms',
+    'applicableScenarios',
+    'notApplicableScenarios',
+    'requiredSlots',
   ];
   private readonly canonicalScopeFields: (keyof BusinessTermRuntimeScope)[] = [
     'workspaceId',

@@ -53,6 +53,9 @@ type BusinessTermFormValues = {
   relatedTemplatesText?: string;
   featuresText?: string;
   conflictTermsText?: string;
+  applicableScenariosText?: string;
+  notApplicableScenariosText?: string;
+  requiredSlotsText?: string;
   status: string;
 };
 
@@ -71,6 +74,9 @@ const toFormValues = (
   relatedTemplatesText: formatTextList(term?.relatedTemplates),
   featuresText: formatTextList(term?.features),
   conflictTermsText: formatTextList(term?.conflictTerms),
+  applicableScenariosText: formatTextList(term?.applicableScenarios),
+  notApplicableScenariosText: formatTextList(term?.notApplicableScenarios),
+  requiredSlotsText: formatTextList(term?.requiredSlots),
   status: term?.status || 'active',
 });
 
@@ -89,6 +95,9 @@ const toPayload = (
   relatedTemplates: parseTextList(values.relatedTemplatesText),
   features: parseTextList(values.featuresText),
   conflictTerms: parseTextList(values.conflictTermsText),
+  applicableScenarios: parseTextList(values.applicableScenariosText),
+  notApplicableScenarios: parseTextList(values.notApplicableScenariosText),
+  requiredSlots: parseTextList(values.requiredSlotsText),
   status: values.status || 'active',
 });
 
@@ -235,6 +244,14 @@ export default function KnowledgeBusinessTermsStage({
           `规则 ${term.relatedRules.length} / 模板 ${term.relatedTemplates.length}`,
       },
       {
+        title: '治理字段',
+        width: 180,
+        render: (_, term) =>
+          `适用 ${term.applicableScenarios?.length || 0} / 排除 ${
+            term.notApplicableScenarios?.length || 0
+          } / 参数 ${term.requiredSlots?.length || 0}`,
+      },
+      {
         title: '状态',
         dataIndex: 'status',
         width: 100,
@@ -372,6 +389,44 @@ export default function KnowledgeBusinessTermsStage({
           </Form.Item>
           <Form.Item label="定义" name="definition">
             <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={3} />
+          </Form.Item>
+          <Form.Item
+            label="适用场景"
+            name="applicableScenariosText"
+            tooltip="每行一个场景或关键词，用于说明这个业务词应该参与哪些问数语义判断。"
+          >
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={3}
+              placeholder={`例如：
+首存 cohort 分析
+首充/首存同义词识别`}
+            />
+          </Form.Item>
+          <Form.Item
+            label="不适用场景"
+            name="notApplicableScenariosText"
+            tooltip="每行一个排除场景或关键词，用于避免业务词被错误召回。"
+          >
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={3}
+              placeholder={`例如：
+登录未充值用户
+充值明细流水`}
+            />
+          </Form.Item>
+          <Form.Item
+            label="必填参数"
+            name="requiredSlotsText"
+            tooltip="每行一个参数名；当问题涉及该业务词但缺少参数时，后续 slot guard 可据此追问。"
+          >
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={2}
+              placeholder={`例如：
+tenant_plat_id`}
+            />
           </Form.Item>
           <Form.Item label="规范表达式" name="canonicalExpression">
             <Input.TextArea disabled={isKnowledgeMutationDisabled} rows={3} />

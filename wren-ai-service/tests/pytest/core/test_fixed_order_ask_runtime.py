@@ -1001,6 +1001,36 @@ def test_detect_missing_external_source_requirement_uses_configured_grain():
     assert result["instruction"]["required_grain"] == ["日期", "渠道ID", "计划ID"]
 
 
+def test_detect_missing_external_source_requirement_respects_trigger_cues():
+    instructions = [
+        {
+            "knowledge_asset_type": "external_dependency",
+            "external_dependency_id": "ad_spend",
+            "name": "投放金额",
+            "source_status": "missing",
+            "missing_behavior": "ask_user",
+            "required_grain": ["日期", "渠道ID"],
+            "metadata": {
+                "trigger_when": ["ROI", "投放成本"],
+                "not_trigger_when": ["充值明细"],
+            },
+        }
+    ]
+
+    unrelated = detect_missing_external_source_requirement(
+        "查询玩家充值明细",
+        instructions=instructions,
+    )
+    matched = detect_missing_external_source_requirement(
+        "按渠道计算 ROI",
+        instructions=instructions,
+    )
+
+    assert unrelated is None
+    assert matched is not None
+    assert matched["required_external_dependencies"] == ["ad_spend"]
+
+
 def test_build_reusable_template_sql_nulls_optional_placeholders():
     sample = {
         "id": "template-02",

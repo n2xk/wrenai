@@ -65,6 +65,10 @@ type ExternalDependencyFormValues = {
   requiredByTermsText?: string;
   requiredByTemplatesText?: string;
   relatedRulesText?: string;
+  triggerWhenText?: string;
+  notTriggerWhenText?: string;
+  lifecycle?: string;
+  inputModesText?: string;
   askUserPrompt?: string;
   validationJson?: string;
   status: string;
@@ -82,6 +86,10 @@ const toFormValues = (
   requiredByTermsText: formatTextList(dependency?.requiredByTerms),
   requiredByTemplatesText: formatTextList(dependency?.requiredByTemplates),
   relatedRulesText: formatTextList(dependency?.relatedRules),
+  triggerWhenText: formatTextList(dependency?.triggerWhen),
+  notTriggerWhenText: formatTextList(dependency?.notTriggerWhen),
+  lifecycle: dependency?.lifecycle || 'per_question',
+  inputModesText: formatTextList(dependency?.inputModes),
   askUserPrompt: dependency?.askUserPrompt || '',
   validationJson: dependency?.validation
     ? JSON.stringify(dependency.validation, null, 2)
@@ -101,6 +109,10 @@ const toPayload = (
   requiredByTerms: parseTextList(values.requiredByTermsText),
   requiredByTemplates: parseTextList(values.requiredByTemplatesText),
   relatedRules: parseTextList(values.relatedRulesText),
+  triggerWhen: parseTextList(values.triggerWhenText),
+  notTriggerWhen: parseTextList(values.notTriggerWhenText),
+  lifecycle: values.lifecycle || 'per_question',
+  inputModes: parseTextList(values.inputModesText),
   askUserPrompt: values.askUserPrompt?.trim() || null,
   validation: parseJsonObject(values.validationJson),
   status: values.status || 'active',
@@ -255,6 +267,14 @@ export default function KnowledgeExternalDependenciesStage({
           (items || []).slice(0, 5).map((item) => <Tag key={item}>{item}</Tag>),
       },
       {
+        title: '触发/排除',
+        width: 140,
+        render: (_, dependency) =>
+          `${dependency.triggerWhen?.length || 0} / ${
+            dependency.notTriggerWhen?.length || 0
+          }`,
+      },
+      {
         title: '关联模板',
         dataIndex: 'requiredByTemplates',
         width: 140,
@@ -356,6 +376,7 @@ export default function KnowledgeExternalDependenciesStage({
           initialValues={{
             sourceStatus: 'missing',
             missingBehavior: 'ask_user',
+            lifecycle: 'per_question',
             status: 'active',
           }}
         >
@@ -408,11 +429,56 @@ export default function KnowledgeExternalDependenciesStage({
               ]}
             />
           </Form.Item>
+          <Form.Item label="补充方式" name="inputModesText">
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={2}
+              placeholder={`例如：
+manual_upload
+user_input`}
+            />
+          </Form.Item>
+          <Form.Item label="生命周期" name="lifecycle">
+            <Select
+              disabled={isKnowledgeMutationDisabled}
+              options={[
+                { label: '每次问数 per_question', value: 'per_question' },
+                { label: '会话内 session', value: 'session' },
+                { label: '知识库内 knowledge_base', value: 'knowledge_base' },
+              ]}
+            />
+          </Form.Item>
           <Form.Item label="所需粒度" name="requiredGrainText">
             <Input.TextArea
               disabled={isKnowledgeMutationDisabled}
               rows={2}
               placeholder="biz_date + channel_id"
+            />
+          </Form.Item>
+          <Form.Item
+            label="触发场景"
+            name="triggerWhenText"
+            tooltip="每行一个场景或关键词，用于说明何时需要该外部数据。"
+          >
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={3}
+              placeholder={`例如：
+ROI 需要投放金额
+渠道成本分析`}
+            />
+          </Form.Item>
+          <Form.Item
+            label="不触发场景"
+            name="notTriggerWhenText"
+            tooltip="每行一个排除场景或关键词，用于避免过度要求外部数据。"
+          >
+            <Input.TextArea
+              disabled={isKnowledgeMutationDisabled}
+              rows={3}
+              placeholder={`例如：
+单玩家充值明细
+不涉及成本的基础汇总`}
             />
           </Form.Item>
           <Form.Item label="依赖业务概念 ID" name="requiredByTermsText">

@@ -62,6 +62,9 @@ export type BusinessTerm = {
   relatedTemplates: string[];
   features: string[];
   conflictTerms: string[];
+  applicableScenarios: string[];
+  notApplicableScenarios: string[];
+  requiredSlots: string[];
   status: string;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -87,6 +90,10 @@ export type ExternalDependency = {
   requiredByTerms: string[];
   requiredByTemplates: string[];
   relatedRules: string[];
+  triggerWhen: string[];
+  notTriggerWhen: string[];
+  lifecycle: string;
+  inputModes: string[];
   askUserPrompt?: string | null;
   validation?: Record<string, any> | null;
   status: string;

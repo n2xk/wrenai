@@ -247,6 +247,9 @@ const normalizeBusinessTermItem = (
     relatedTemplates: normalizeStringList(payload.relatedTemplates),
     features: normalizeStringList(payload.features),
     conflictTerms: normalizeStringList(payload.conflictTerms),
+    applicableScenarios: normalizeStringList(payload.applicableScenarios),
+    notApplicableScenarios: normalizeStringList(payload.notApplicableScenarios),
+    requiredSlots: normalizeStringList(payload.requiredSlots),
     status: typeof payload.status === 'string' ? payload.status : 'active',
     createdAt: typeof payload.createdAt === 'string' ? payload.createdAt : null,
     updatedAt: typeof payload.updatedAt === 'string' ? payload.updatedAt : null,
@@ -293,6 +296,13 @@ const normalizeExternalDependencyItem = (
     requiredByTerms: normalizeStringList(payload.requiredByTerms),
     requiredByTemplates: normalizeStringList(payload.requiredByTemplates),
     relatedRules: normalizeStringList(payload.relatedRules),
+    triggerWhen: normalizeStringList(payload.triggerWhen),
+    notTriggerWhen: normalizeStringList(payload.notTriggerWhen),
+    lifecycle:
+      typeof payload.lifecycle === 'string'
+        ? payload.lifecycle
+        : 'per_question',
+    inputModes: normalizeStringList(payload.inputModes),
     askUserPrompt:
       typeof payload.askUserPrompt === 'string' ? payload.askUserPrompt : null,
     validation: normalizeObject(payload.validation),

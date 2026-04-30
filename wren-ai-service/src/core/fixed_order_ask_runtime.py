@@ -292,6 +292,10 @@ def _extract_configured_external_dependencies(
                 "required_grain": [],
                 "required_by_terms": [],
                 "required_by_templates": [],
+                "trigger_when": [],
+                "not_trigger_when": [],
+                "input_modes": [],
+                "lifecycle": "per_question",
                 "matched_by_signature": False,
                 "matched_by_instruction": False,
             },
@@ -302,6 +306,9 @@ def _extract_configured_external_dependencies(
                 "required_grain",
                 "required_by_terms",
                 "required_by_templates",
+                "trigger_when",
+                "not_trigger_when",
+                "input_modes",
             }:
                 for item in _normalize_string_list(value):
                     if item not in existing[key]:
@@ -365,6 +372,16 @@ def _extract_configured_external_dependencies(
             required_by_templates=metadata.get("required_by_templates")
             or metadata.get("requiredByTemplates")
             or [],
+            trigger_when=metadata.get("trigger_when")
+            or metadata.get("triggerWhen")
+            or [],
+            not_trigger_when=metadata.get("not_trigger_when")
+            or metadata.get("notTriggerWhen")
+            or [],
+            input_modes=metadata.get("input_modes")
+            or metadata.get("inputModes")
+            or [],
+            lifecycle=metadata.get("lifecycle") or "per_question",
             matched_by_instruction=True,
         )
 
@@ -1880,15 +1897,32 @@ def detect_missing_external_source_requirement(
         required_by_templates = _normalize_string_list(
             dependency.get("required_by_templates")
         )
+        trigger_when = _normalize_string_list(dependency.get("trigger_when"))
+        not_trigger_when = _normalize_string_list(dependency.get("not_trigger_when"))
         signature_matched = bool(dependency.get("matched_by_signature"))
         instruction_matched = bool(dependency.get("matched_by_instruction"))
-        if (
+        if not_trigger_when and _query_matches_any_text(query, not_trigger_when):
+            continue
+
+        base_matched = (
             _query_matches_any_text(query, match_texts)
             or (required_by_terms and _query_matches_any_text(query, required_by_terms))
-            or (required_by_templates and _query_matches_any_text(query, required_by_templates))
+            or (
+                required_by_templates
+                and _query_matches_any_text(query, required_by_templates)
+            )
             or signature_matched
-            or instruction_matched
-        ):
+        )
+        trigger_matched = bool(
+            trigger_when and _query_matches_any_text(query, trigger_when)
+        )
+        should_match = (
+            base_matched or trigger_matched
+            if trigger_when
+            else base_matched or instruction_matched
+        )
+
+        if should_match:
             configured_matches.append(dependency)
 
     configured_requirement = build_requirement(

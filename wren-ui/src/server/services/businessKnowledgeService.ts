@@ -86,6 +86,9 @@ export interface CreateBusinessTerm {
   relatedTemplates?: string[];
   features?: string[];
   conflictTerms?: string[];
+  applicableScenarios?: string[];
+  notApplicableScenarios?: string[];
+  requiredSlots?: string[];
   status?: string;
 }
 
@@ -101,6 +104,10 @@ export interface CreateExternalDependency {
   requiredByTerms?: string[];
   requiredByTemplates?: string[];
   relatedRules?: string[];
+  triggerWhen?: string[];
+  notTriggerWhen?: string[];
+  lifecycle?: string;
+  inputModes?: string[];
   askUserPrompt?: string | null;
   validation?: Record<string, any> | null;
   status?: string;
@@ -427,6 +434,9 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       relatedTemplates: normalizeStringList(input.relatedTemplates),
       features: normalizeStringList(input.features),
       conflictTerms: normalizeStringList(input.conflictTerms),
+      applicableScenarios: normalizeStringList(input.applicableScenarios),
+      notApplicableScenarios: normalizeStringList(input.notApplicableScenarios),
+      requiredSlots: normalizeStringList(input.requiredSlots),
       status: input.status?.trim() || 'active',
     };
   }
@@ -444,6 +454,10 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       requiredByTerms: normalizeStringList(input.requiredByTerms),
       requiredByTemplates: normalizeStringList(input.requiredByTemplates),
       relatedRules: normalizeStringList(input.relatedRules),
+      triggerWhen: normalizeStringList(input.triggerWhen),
+      notTriggerWhen: normalizeStringList(input.notTriggerWhen),
+      lifecycle: input.lifecycle?.trim() || 'per_question',
+      inputModes: normalizeStringList(input.inputModes),
       askUserPrompt: input.askUserPrompt?.trim() || null,
       validation: normalizeObject(input.validation),
       status: input.status?.trim() || 'active',
@@ -467,6 +481,15 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       term.aliases?.length ? `同义词：${term.aliases.join('、')}` : '',
       term.canonicalExpression ? `规范表达式：${term.canonicalExpression}` : '',
       term.features?.length ? `业务特征：${term.features.join('、')}` : '',
+      term.applicableScenarios?.length
+        ? `适用场景：${term.applicableScenarios.join('、')}`
+        : '',
+      term.notApplicableScenarios?.length
+        ? `不适用场景：${term.notApplicableScenarios.join('、')}`
+        : '',
+      term.requiredSlots?.length
+        ? `必填参数：${term.requiredSlots.join('、')}`
+        : '',
       term.relatedRules?.length
         ? `关联分析规则：${term.relatedRules.join('、')}`
         : '',
@@ -493,6 +516,8 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
         term.name,
         term.aliases,
         term.features,
+        term.applicableScenarios,
+        term.notApplicableScenarios,
       ),
       isDefault: false,
       knowledgeAssetType: 'business_term',
@@ -513,6 +538,9 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
         source_fields: term.sourceFields,
         features: term.features,
         conflict_terms: term.conflictTerms,
+        applicable_scenarios: term.applicableScenarios,
+        not_applicable_scenarios: term.notApplicableScenarios,
+        required_slots: term.requiredSlots,
         status: term.status,
       },
     };
@@ -533,6 +561,16 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       dependency.requiredGrain?.length
         ? `所需粒度：${dependency.requiredGrain.join('、')}`
         : '',
+      dependency.triggerWhen?.length
+        ? `触发场景：${dependency.triggerWhen.join('、')}`
+        : '',
+      dependency.notTriggerWhen?.length
+        ? `不触发场景：${dependency.notTriggerWhen.join('、')}`
+        : '',
+      dependency.inputModes?.length
+        ? `补充方式：${dependency.inputModes.join('、')}`
+        : '',
+      dependency.lifecycle ? `生命周期：${dependency.lifecycle}` : '',
       dependency.requiredByTerms?.length
         ? `依赖业务概念：${dependency.requiredByTerms.join('、')}`
         : '',
@@ -553,6 +591,8 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       questions: buildInstructionQuestions(
         dependency.name,
         dependency.aliases,
+        dependency.triggerWhen,
+        dependency.notTriggerWhen,
         dependency.requiredByTerms,
         dependency.requiredByTemplates,
       ),
@@ -574,6 +614,10 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
         required_by_terms: dependency.requiredByTerms,
         required_by_templates: dependency.requiredByTemplates,
         related_rules: dependency.relatedRules,
+        trigger_when: dependency.triggerWhen,
+        not_trigger_when: dependency.notTriggerWhen,
+        lifecycle: dependency.lifecycle,
+        input_modes: dependency.inputModes,
         validation: dependency.validation,
         status: dependency.status,
       },
