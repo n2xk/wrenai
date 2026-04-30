@@ -1,43 +1,37 @@
-import { useMemo } from 'react';
-import { useRouter } from 'next/router';
+import { useEffect } from 'react';
+import { Spin } from 'antd';
 
-import ConsoleShellLayout from '@/components/reference/ConsoleShellLayout';
-import AskPoliciesManager from '@/features/askPolicies/AskPoliciesManager';
-import useAuthSession from '@/hooks/useAuthSession';
+import DirectShellPageFrame from '@/components/reference/DirectShellPageFrame';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { readRuntimeScopeSelectorFromObject } from '@/runtime/client/runtimeScope';
-import { buildSettingsConsoleShellProps } from '@/features/settings/settingsShell';
-import { resolvePlatformManagementFromAuthSession } from '@/features/settings/settingsPageCapabilities';
+import { Path } from '@/utils/enum';
 
-export default function ManageAskPoliciesPage() {
-  const router = useRouter();
+export default function RedirectAskPoliciesPage() {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
   const runtimeScopePage = useProtectedRuntimeScopePage();
-  const authSession = useAuthSession();
-  const showPlatformManagement = resolvePlatformManagementFromAuthSession(
-    authSession.data,
-  );
-  const runtimeScopeSelector = useMemo(
-    () => readRuntimeScopeSelectorFromObject(router.query),
-    [router.query],
-  );
-  const shellProps = {
-    title: '问数策略',
-    ...buildSettingsConsoleShellProps({
-      activeKey: 'settingsAskPolicies',
-      onNavigate: runtimeScopeNavigation.pushWorkspace,
-      showPlatformAdmin: showPlatformManagement,
-    }),
-  } as const;
+
+  useEffect(() => {
+    if (runtimeScopePage.guarding) {
+      return;
+    }
+
+    runtimeScopeNavigation
+      .replace(Path.Knowledge, { section: 'askPolicies' })
+      .catch(() => null);
+  }, [runtimeScopeNavigation, runtimeScopePage.guarding]);
 
   return (
-    <ConsoleShellLayout {...shellProps}>
-      <AskPoliciesManager
-        runtimeScopeSelector={runtimeScopeSelector}
-        hasRuntimeScope={runtimeScopePage.hasRuntimeScope}
-        routerReady={router.isReady}
-      />
-    </ConsoleShellLayout>
+    <DirectShellPageFrame activeNav="knowledge" stretchContent>
+      <div
+        style={{
+          minHeight: 280,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Spin tip="正在打开知识库问数策略" />
+      </div>
+    </DirectShellPageFrame>
   );
 }

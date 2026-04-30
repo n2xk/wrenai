@@ -10,7 +10,6 @@ import SafetyCertificateOutlined from '@ant-design/icons/SafetyCertificateOutlin
 import AuditOutlined from '@ant-design/icons/AuditOutlined';
 import CodeOutlined from '@ant-design/icons/CodeOutlined';
 import MessageOutlined from '@ant-design/icons/MessageOutlined';
-import PartitionOutlined from '@ant-design/icons/PartitionOutlined';
 import { Path } from '@/utils/enum';
 import { peekPrefetchedFirstDashboardId } from '@/utils/runtimePagePrefetch';
 import { DolaShellNavItem } from './DolaAppShell';
@@ -24,7 +23,6 @@ export type NovaShellNavKey =
   | 'settingsWorkspace'
   | 'settingsConnectors'
   | 'settingsSkills'
-  | 'settingsAskPolicies'
   | 'settingsUsers'
   | 'settingsPermissions'
   | 'settingsIdentity'
@@ -169,18 +167,6 @@ export const buildNovaSettingsNavItems = ({
       sectionLabel: '业务与配置',
       active: activeKey === 'settingsSkills',
       path: activeKey === 'settingsSkills' ? undefined : Path.SettingsSkills,
-    },
-    {
-      key: 'settingsAskPolicies',
-      label: '问数策略',
-      icon: <PartitionOutlined />,
-      iconKey: 'settingsAskPolicies',
-      sectionLabel: '业务与配置',
-      active: activeKey === 'settingsAskPolicies',
-      path:
-        activeKey === 'settingsAskPolicies'
-          ? undefined
-          : Path.SettingsAskPolicies,
     },
     {
       key: 'settingsSystemTasks',
