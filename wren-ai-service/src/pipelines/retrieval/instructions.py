@@ -146,7 +146,7 @@ async def default_instructions(
     default_instructions_max_size: int = 20,
 ) -> dict:
     if not count_documents:
-        return []
+        return {"documents": []}
 
     filters = build_runtime_scope_filters(
         runtime_scope_id,

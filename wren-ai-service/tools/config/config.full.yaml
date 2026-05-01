@@ -214,3 +214,4 @@ settings:
   sql_pairs_retrieval_max_size: 10
   instructions_similarity_threshold: 0.7
   instructions_top_k: 10
+  instructions_default_instructions_max_size: 20

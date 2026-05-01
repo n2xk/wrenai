@@ -25,8 +25,10 @@ from src.pipelines.retrieval.historical_question_retrieval import (
     count_documents as historical_count_documents,
 )
 from src.pipelines.retrieval.instructions import (
+    OutputFormatter,
     ScopeFilter,
     default_instructions,
+    formatted_output,
 )
 from src.pipelines.retrieval.instructions import (
     retrieval as instructions_retrieval,
@@ -132,7 +134,9 @@ def test_build_runtime_scope_filters_uses_or_for_multiple_scope_ids():
 
 @pytest.mark.asyncio
 async def test_retrieve_metadata_uses_runtime_scope_filters():
-    retriever = MockRetriever(documents=[Document(content="metadata", meta={"foo": "bar"})])
+    retriever = MockRetriever(
+        documents=[Document(content="metadata", meta={"foo": "bar"})]
+    )
 
     result = await retrieve_metadata(" deploy-1 ", retriever)
 
@@ -366,9 +370,7 @@ async def test_instructions_retrieval_preserves_non_default_condition():
             "query_embedding": [0.1, 0.2],
             "filters": build_runtime_scope_filters(
                 "deploy-1",
-                conditions=[
-                    {"field": "is_default", "operator": "==", "value": False}
-                ],
+                conditions=[{"field": "is_default", "operator": "==", "value": False}],
             ),
         }
     ]
@@ -410,12 +412,79 @@ async def test_default_instructions_preserve_default_condition_and_scope_filter(
             "query_embedding": None,
             "filters": build_runtime_scope_filters(
                 "deploy-1",
-                conditions=[
-                    {"field": "is_default", "operator": "==", "value": True}
-                ],
+                conditions=[{"field": "is_default", "operator": "==", "value": True}],
             ),
         }
     ]
     assert [document.meta["instruction_id"] for document in result["documents"]] == [
         "sql-1"
     ]
+
+
+@pytest.mark.asyncio
+async def test_default_instructions_limits_default_documents_before_formatting():
+    default_docs = [
+        Document(
+            content=f"default question {index}",
+            meta={
+                "instruction": f"default instruction {index}",
+                "instruction_id": f"default-{index}",
+                "is_default": True,
+                "scope": "sql",
+            },
+        )
+        for index in range(25)
+    ]
+    retriever = MockRetriever(documents=default_docs)
+
+    result = await default_instructions(
+        count_documents=25,
+        retriever=retriever,
+        runtime_scope_id="deploy-1",
+        scope_filter=ScopeFilter(),
+        scope="sql",
+    )
+
+    assert [document.meta["instruction_id"] for document in result["documents"]] == [
+        f"default-{index}" for index in range(20)
+    ]
+
+
+def test_formatted_output_limits_default_documents_and_preserves_filtered_documents():
+    default_docs = [
+        Document(
+            content=f"default question {index}",
+            meta={
+                "instruction": f"default instruction {index}",
+                "instruction_id": f"default-{index}",
+                "is_default": True,
+            },
+        )
+        for index in range(25)
+    ]
+    filtered_docs = [
+        Document(
+            content=f"filtered question {index}",
+            meta={
+                "instruction": f"filtered instruction {index}",
+                "instruction_id": f"filtered-{index}",
+                "is_default": False,
+            },
+        )
+        for index in range(2)
+    ]
+
+    result = formatted_output(
+        default_instructions={"documents": default_docs},
+        filtered_documents={"documents": filtered_docs},
+        output_formatter=OutputFormatter(),
+    )
+
+    instruction_ids = [document["instruction_id"] for document in result["documents"]]
+    assert instruction_ids[:20] == [f"default-{index}" for index in range(20)]
+    assert not any(
+        instruction_id in instruction_ids
+        for instruction_id in [f"default-{index}" for index in range(20, 25)]
+    )
+    assert instruction_ids[-2:] == ["filtered-0", "filtered-1"]
+    assert len(instruction_ids) == 22

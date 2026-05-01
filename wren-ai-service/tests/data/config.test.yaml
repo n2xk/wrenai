@@ -81,6 +81,7 @@ settings:
   is_oss: true
   table_retrieval_size: 10
   table_column_retrieval_size: 1000
+  instructions_default_instructions_max_size: 20
   semantic_plan_mode: deterministic
   query_cache_maxsize: 1000
   query_cache_ttl: 3600
