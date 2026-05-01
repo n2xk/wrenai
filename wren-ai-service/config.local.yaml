@@ -178,4 +178,3 @@ settings:
   instructions_similarity_threshold: 0.7
   instructions_top_k: 10
   is_oss: true
-  doc_endpoint: https://docs.getwren.ai

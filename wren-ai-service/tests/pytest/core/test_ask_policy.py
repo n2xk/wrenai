@@ -123,3 +123,116 @@ def test_coerce_ask_policy_config_from_request_payload():
     assert config.version == "workspace-policy-v3"
     assert config.rules[0].id == "require_tenant"
     assert config.rules[0].required_slots == ("tenant_plat_id",)
+
+
+def test_evaluate_policy_context_matches_semantic_metric_without_query_cue():
+    evaluation = evaluate_policy_context(
+        query="帮我看一下这个指标",
+        semantic_plan={
+            "metrics": ["first_deposit_users"],
+            "resolved_slots": {},
+        },
+        config=AskPolicyConfig(
+            rules=(
+                AskPolicyRule(
+                    id="require_tenant_for_first_deposit_metric",
+                    reason_code="policy_missing_tenant_for_first_deposit_metric",
+                    semantic_metrics=("first_deposit_users",),
+                    required_slots=("tenant_plat_id",),
+                ),
+            ),
+        ),
+    )
+
+    assert evaluation.required_slots == ("tenant_plat_id",)
+    assert evaluation.missing_required_slots == ("tenant_plat_id",)
+    assert evaluation.reason_codes == (
+        "policy_missing_tenant_for_first_deposit_metric",
+    )
+
+
+def test_evaluate_policy_context_matches_semantic_route_forbidden_template():
+    evaluation = evaluate_policy_context(
+        query="统计活跃玩家",
+        semantic_plan={
+            "subject": "player",
+            "decision": {"route": "template_reference_sql"},
+        },
+        template_decision={"template_id": "T08"},
+        config=AskPolicyConfig(
+            rules=(
+                AskPolicyRule(
+                    id="forbid_player_route_template",
+                    reason_code="policy_forbid_player_template",
+                    semantic_subjects=("player",),
+                    semantic_routes=("template_reference_sql",),
+                    forbidden_templates=("T08",),
+                ),
+            ),
+        ),
+    )
+
+    assert evaluation.blocks_template is True
+    assert evaluation.forbidden_template_ids == ("T08",)
+
+
+def test_evaluate_policy_context_requires_semantic_filter_condition():
+    config = AskPolicyConfig(
+        rules=(
+            AskPolicyRule(
+                id="require_tenant_when_channel_filter_present",
+                reason_code="policy_channel_filter_present",
+                semantic_metrics=("deposit_amount",),
+                required_filters=("channel_id",),
+                required_slots=("tenant_plat_id",),
+            ),
+        ),
+    )
+
+    unmatched = evaluate_policy_context(
+        query="统计充值金额",
+        semantic_plan={"metrics": ["deposit_amount"], "filters": {}},
+        config=config,
+    )
+    matched = evaluate_policy_context(
+        query="统计充值金额",
+        semantic_plan={
+            "metrics": ["deposit_amount"],
+            "filters": {"channel_id": 990011},
+        },
+        config=config,
+    )
+
+    assert unmatched.required_slots == ()
+    assert matched.required_slots == ("tenant_plat_id",)
+
+
+def test_coerce_ask_policy_config_parses_semantic_conditions():
+    config = coerce_ask_policy_config(
+        {
+            "rules": [
+                {
+                    "id": "structured_rule",
+                    "reason_code": "policy_structured_rule",
+                    "semantic_conditions": {
+                        "features": ["cohort"],
+                        "metrics": ["deposit_amount"],
+                        "dimensions": ["biz_date"],
+                        "grains": ["biz_date + channel_id"],
+                        "routes": ["template_reference_sql"],
+                        "external_dependencies": ["ad_spend"],
+                        "required_filters": ["channel_id"],
+                    },
+                }
+            ],
+        }
+    )
+
+    rule = config.rules[0]
+    assert rule.semantic_features == ("cohort",)
+    assert rule.semantic_metrics == ("deposit_amount",)
+    assert rule.semantic_dimensions == ("biz_date",)
+    assert rule.semantic_grains == ("biz_date + channel_id",)
+    assert rule.semantic_routes == ("template_reference_sql",)
+    assert rule.semantic_external_dependencies == ("ad_spend",)
+    assert rule.required_filters == ("channel_id",)

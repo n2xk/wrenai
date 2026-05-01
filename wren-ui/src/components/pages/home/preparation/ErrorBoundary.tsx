@@ -40,14 +40,12 @@ export default function ErrorBoundary({ children, error }: Props) {
           content: (
             <>
               <Typography.Text className="gray-8">
-                {hasInvalidSql
-                  ? 'Failed to generate SQL statement'
-                  : shortMessage}
+                {hasInvalidSql ? 'SQL 生成失败' : shortMessage}
               </Typography.Text>
               <div className="gray-7 text-sm mt-1">
                 <div>
                   {hasInvalidSql
-                    ? 'We tried to generate SQL based on your question but encountered a small issue. Help us fix it!'
+                    ? '系统尝试根据你的问题生成 SQL，但校验时遇到问题。你可以手动修正 SQL 后继续。'
                     : errorMessage}
                 </div>
                 {hasInvalidSql && (
@@ -63,7 +61,7 @@ export default function ErrorBoundary({ children, error }: Props) {
                         fixItModal.openModal({ sql: error.invalidSql || '' })
                       }
                     >
-                      Fix it
+                      手动修正 SQL
                     </Button>
                     <FixSQLModal
                       {...fixItModal.state}

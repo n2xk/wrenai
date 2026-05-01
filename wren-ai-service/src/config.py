@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     allow_sql_functions_retrieval: bool = Field(default=True)
     allow_sql_diagnosis: bool = Field(default=True)
     allow_sql_knowledge_retrieval: bool = Field(default=False)
+    semantic_plan_mode: Literal["deterministic", "shadow", "enhanced"] = Field(
+        default="deterministic",
+        alias="WREN_SEMANTIC_PLAN_MODE",
+    )
     allow_semantic_plan_llm: bool = Field(
         default=False,
         alias="WREN_SEMANTIC_PLAN_LLM_ENABLED",
@@ -84,7 +88,7 @@ class Settings(BaseSettings):
 
     # user guide config
     is_oss: bool = Field(default=True)
-    doc_endpoint: str = Field(default="https://docs.getwren.ai")
+    doc_endpoint: str | None = Field(default=None)
 
     # langfuse config
     # in order to use langfuse, we also need to set the LANGFUSE_SECRET_KEY and LANGFUSE_PUBLIC_KEY in the .env or .env.dev file
@@ -106,6 +110,7 @@ class Settings(BaseSettings):
         super().__init__()
         raw = self.config_loader()
         self.override(raw)
+        self.normalize_semantic_plan_settings()
         self._components = [
             component for component in raw if "settings" not in component
         ]
@@ -173,6 +178,20 @@ class Settings(BaseSettings):
             else:
                 message = f"Warning: Unknown configuration key '{key}' in YAML file."
                 logger.warning(message)
+
+    def normalize_semantic_plan_settings(self) -> None:
+        if self.semantic_plan_mode not in {"deterministic", "shadow", "enhanced"}:
+            logger.warning(
+                "Warning: Unknown semantic_plan_mode '%s'. Falling back to deterministic.",
+                self.semantic_plan_mode,
+            )
+            self.semantic_plan_mode = "deterministic"
+
+        # Backward compatibility: the old boolean enabled the LLM plan as an
+        # applied enhancement. The new mode can still be set explicitly to
+        # shadow for safe observation without changing runtime decisions.
+        if self.allow_semantic_plan_llm and self.semantic_plan_mode == "deterministic":
+            self.semantic_plan_mode = "enhanced"
 
     @property
     def components(self) -> list[dict]:

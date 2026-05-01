@@ -33,6 +33,7 @@ interface AskingTaskActionServiceLike {
         templateIds?: string[] | null;
         forbiddenTemplates?: string[] | null;
         requiredSlots?: string[] | null;
+        semanticConditions?: Record<string, string[]> | null;
         reasonCode?: string | null;
       }>
     >;
@@ -127,6 +128,7 @@ const buildRequestAskPolicy = async ({
       template_ids: rule.templateIds || [],
       forbidden_templates: rule.forbiddenTemplates || [],
       required_slots: rule.requiredSlots || [],
+      semantic_conditions: rule.semanticConditions || {},
       metadata: {
         id: rule.id,
         name: rule.name,

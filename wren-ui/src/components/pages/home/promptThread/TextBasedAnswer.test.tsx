@@ -2,6 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import TextBasedAnswer, {
   resolveTextAnswerErrorPresentation,
+  shouldHideSqlGenerationErrorDuringRerun,
 } from './TextBasedAnswer';
 import {
   AskingTaskStatus,
@@ -206,6 +207,20 @@ describe('TextBasedAnswer', () => {
 
     expect(markup).not.toContain('SQL 生成失败');
     expect(markup).not.toContain('重新生成 SQL');
+  });
+
+  it('hides SQL failure immediately after clicking rerun before task polling updates cache', () => {
+    expect(
+      shouldHideSqlGenerationErrorDuringRerun({
+        askingTask: {
+          status: AskingTaskStatus.FAILED,
+          type: AskingTaskType.TEXT_TO_SQL,
+          candidates: [],
+        },
+        regenerateFailureLoading: true,
+        retryTarget: 'asking_task',
+      }),
+    ).toBe(true);
   });
 
   it('keeps non-transient text answer errors specific', () => {

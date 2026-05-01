@@ -20,6 +20,7 @@ def test_settings_default_values():
         assert settings.query_cache_maxsize == 1_000_000
         assert settings.ask_runtime_mode == "deepagents"
         assert settings.ask_shadow_compare_enabled is False
+        assert settings.semantic_plan_mode == "deterministic"
 
         assert settings.langfuse_host == "https://cloud.langfuse.com"
         assert settings.langfuse_enable is True
@@ -28,6 +29,7 @@ def test_settings_default_values():
         assert settings.development is False
 
         assert settings.config_path == "config.yaml"
+        assert settings.doc_endpoint is None
 
 
 def test_settings_env_var_override():
@@ -38,6 +40,7 @@ def test_settings_env_var_override():
         "CONFIG_PATH": "/tmp/custom-config.yaml",
         "ASK_RUNTIME_MODE": "deepagents",
         "ASK_SHADOW_COMPARE_ENABLED": "true",
+        "WREN_SEMANTIC_PLAN_MODE": "shadow",
     }
 
     with patch("src.config.Settings.config_loader", return_value=[]), patch.dict(
@@ -50,6 +53,16 @@ def test_settings_env_var_override():
         assert settings.config_path == env_vars["CONFIG_PATH"]
         assert settings.ask_runtime_mode == env_vars["ASK_RUNTIME_MODE"]
         assert settings.ask_shadow_compare_enabled is True
+        assert settings.semantic_plan_mode == "shadow"
+
+
+def test_settings_legacy_semantic_plan_bool_enables_enhanced_mode():
+    with patch("src.config.Settings.config_loader", return_value=[]), patch.dict(
+        "os.environ",
+        {"WREN_SEMANTIC_PLAN_LLM_ENABLED": "true"},
+    ):
+        settings = Settings()
+        assert settings.semantic_plan_mode == "enhanced"
 
 
 def test_settings_env_dev_override():

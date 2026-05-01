@@ -1,4 +1,5 @@
 import { DataSourceName, IContext } from '../types';
+import { GenerateInstructionInput } from '../models/adaptor';
 import { DeployResponse } from '../services/deployService';
 import { syncLatestExecutableKnowledgeBaseSnapshot } from '../utils/knowledgeBaseRuntime';
 import {
@@ -97,6 +98,33 @@ const waitForSqlPairDeployment = async ({
   throw new Error('SQL pair indexing timed out');
 };
 
+const omitUndefined = <T extends Record<string, any>>(value: T): T =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+  ) as T;
+
+const toGenerateInstructionInput = (
+  instruction: any,
+): GenerateInstructionInput =>
+  omitUndefined({
+    id: instruction.id,
+    instruction: instruction.instruction,
+    questions: instruction.questions,
+    isDefault: instruction.isDefault,
+    knowledgeAssetType: instruction.knowledgeAssetType,
+    businessTermId: instruction.businessTermId,
+    externalDependencyId: instruction.externalDependencyId,
+    aliases: instruction.aliases,
+    relatedBusinessTerms: instruction.relatedBusinessTerms,
+    relatedExternalDependencies: instruction.relatedExternalDependencies,
+    runtimeUsage: instruction.runtimeUsage,
+    sourceStatus: instruction.sourceStatus,
+    missingBehavior: instruction.missingBehavior,
+    askUserPrompt: instruction.askUserPrompt,
+    requiredGrain: instruction.requiredGrain,
+    metadata: instruction.metadata,
+  });
+
 const syncKnowledgeAssetsToDeployment = async ({
   ctx,
   runtimeIdentity,
@@ -110,33 +138,42 @@ const syncKnowledgeAssetsToDeployment = async ({
     actorUserId?: string | null;
   };
 }) => {
-  const [instructions, sqlPairs] = await Promise.all([
-    ctx.instructionService.listInstructions({
-      projectId: null,
-      workspaceId: runtimeIdentity.workspaceId,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId,
-      deployHash: runtimeIdentity.deployHash,
-      actorUserId: runtimeIdentity.actorUserId ?? null,
-    }),
-    ctx.sqlPairService.listSqlPairs({
-      projectId: null,
-      workspaceId: runtimeIdentity.workspaceId,
-      knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
-      kbSnapshotId: runtimeIdentity.kbSnapshotId,
-      deployHash: runtimeIdentity.deployHash,
-      actorUserId: runtimeIdentity.actorUserId ?? null,
-    }),
-  ]);
+  const [instructions, businessKnowledgeInstructions, sqlPairs] =
+    await Promise.all([
+      ctx.instructionService.listInstructions({
+        projectId: null,
+        workspaceId: runtimeIdentity.workspaceId,
+        knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+        kbSnapshotId: runtimeIdentity.kbSnapshotId,
+        deployHash: runtimeIdentity.deployHash,
+        actorUserId: runtimeIdentity.actorUserId ?? null,
+      }),
+      ctx.businessKnowledgeService.listBusinessKnowledgeInstructions({
+        projectId: null,
+        workspaceId: runtimeIdentity.workspaceId,
+        knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+        kbSnapshotId: runtimeIdentity.kbSnapshotId,
+        deployHash: runtimeIdentity.deployHash,
+        actorUserId: runtimeIdentity.actorUserId ?? null,
+      }),
+      ctx.sqlPairService.listSqlPairs({
+        projectId: null,
+        workspaceId: runtimeIdentity.workspaceId,
+        knowledgeBaseId: runtimeIdentity.knowledgeBaseId,
+        kbSnapshotId: runtimeIdentity.kbSnapshotId,
+        deployHash: runtimeIdentity.deployHash,
+        actorUserId: runtimeIdentity.actorUserId ?? null,
+      }),
+    ]);
 
-  if (instructions.length > 0) {
+  const instructionPayload = [
+    ...instructions.map(toGenerateInstructionInput),
+    ...businessKnowledgeInstructions,
+  ];
+
+  if (instructionPayload.length > 0) {
     const instructionQuery = await ctx.wrenAIAdaptor.generateInstruction({
-      instructions: instructions.map((instruction) => ({
-        id: instruction.id,
-        instruction: instruction.instruction,
-        questions: instruction.questions,
-        isDefault: instruction.isDefault,
-      })),
+      instructions: instructionPayload,
       runtimeIdentity,
     });
     await waitForInstructionDeployment({

@@ -157,6 +157,9 @@ export interface IBusinessKnowledgeService {
     runtimeIdentity: PersistedRuntimeIdentity,
     id: number,
   ): Promise<void>;
+  listBusinessKnowledgeInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<GenerateInstructionInput[]>;
 }
 
 export class BusinessKnowledgeService implements IBusinessKnowledgeService {
@@ -398,6 +401,22 @@ export class BusinessKnowledgeService implements IBusinessKnowledgeService {
       await tx.rollback();
       throw error;
     }
+  }
+
+  public async listBusinessKnowledgeInstructions(
+    runtimeIdentity: PersistedRuntimeIdentity,
+  ): Promise<GenerateInstructionInput[]> {
+    const [terms, dependencies] = await Promise.all([
+      this.listBusinessTerms(runtimeIdentity),
+      this.listExternalDependencies(runtimeIdentity),
+    ]);
+
+    return [
+      ...terms.map((term) => this.toBusinessTermInstruction(term)),
+      ...dependencies.map((dependency) =>
+        this.toExternalDependencyInstruction(dependency),
+      ),
+    ];
   }
 
   private validateBusinessTermInput(input: Partial<CreateBusinessTerm>) {

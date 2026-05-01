@@ -15,7 +15,7 @@ import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import {
   AskingTaskStatus,
-  AskingTaskType,
+  ThreadResponse,
   ThreadResponseAnswerStatus,
 } from '@/types/home';
 
@@ -81,6 +81,21 @@ const ACTIVE_ASKING_TASK_STATUSES = new Set<AskingTaskStatus>([
   AskingTaskStatus.SEARCHING,
   AskingTaskStatus.UNDERSTANDING,
 ]);
+
+export const shouldHideSqlGenerationErrorDuringRerun = ({
+  askingTask,
+  regenerateFailureLoading,
+  retryTarget,
+}: {
+  askingTask?: ThreadResponse['askingTask'] | null;
+  regenerateFailureLoading?: boolean;
+  retryTarget?: 'asking_task' | 'text_answer';
+}) =>
+  retryTarget === 'asking_task' &&
+  (Boolean(regenerateFailureLoading) ||
+    Boolean(
+      askingTask?.status && ACTIVE_ASKING_TASK_STATUSES.has(askingTask.status),
+    ));
 
 const resolveSqlGenerationErrorDescription = (message: string) => {
   const normalized = message
@@ -259,7 +274,15 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     shouldAutoPreview,
   ]);
 
-  const loading = !getIsLoadingFinished(status);
+  const answerErrorPresentation = resolveTextAnswerErrorPresentation(error);
+  const shouldSuppressSqlGenerationError =
+    shouldHideSqlGenerationErrorDuringRerun({
+      askingTask: threadResponse.askingTask,
+      regenerateFailureLoading,
+      retryTarget: answerErrorPresentation?.retryTarget,
+    });
+  const loading =
+    shouldSuppressSqlGenerationError || !getIsLoadingFinished(status);
 
   const onRegenerateAnswer = async () => {
     setTextAnswer('');
@@ -284,13 +307,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
     }
   };
 
-  const answerErrorPresentation = resolveTextAnswerErrorPresentation(error);
-  const isActiveTextToSqlRerun =
-    answerErrorPresentation?.retryTarget === 'asking_task' &&
-    threadResponse.askingTask?.type === AskingTaskType.TEXT_TO_SQL &&
-    ACTIVE_ASKING_TASK_STATUSES.has(threadResponse.askingTask.status);
-
-  if (error && answerErrorPresentation && !isActiveTextToSqlRerun) {
+  if (error && answerErrorPresentation && !shouldSuppressSqlGenerationError) {
     return (
       <>
         <div className="pt-0 pb-2">

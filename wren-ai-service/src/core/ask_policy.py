@@ -18,6 +18,14 @@ class AskPolicyRule:
     template_ids: tuple[str, ...] = ()
     forbidden_templates: tuple[str, ...] = ()
     required_slots: tuple[str, ...] = ()
+    semantic_subjects: tuple[str, ...] = ()
+    semantic_features: tuple[str, ...] = ()
+    semantic_metrics: tuple[str, ...] = ()
+    semantic_dimensions: tuple[str, ...] = ()
+    semantic_grains: tuple[str, ...] = ()
+    semantic_routes: tuple[str, ...] = ()
+    semantic_external_dependencies: tuple[str, ...] = ()
+    required_filters: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -98,6 +106,16 @@ def is_metadata_explanation_query(query: Optional[str]) -> bool:
 
 def _parse_rule(raw_rule: dict[str, Any], index: int) -> AskPolicyRule:
     when = raw_rule.get("when") if isinstance(raw_rule.get("when"), dict) else {}
+    semantic = (
+        raw_rule.get("semantic_conditions")
+        or raw_rule.get("semanticConditions")
+        or when.get("semantic_conditions")
+        or when.get("semanticConditions")
+        or when.get("semantic")
+        or {}
+    )
+    if not isinstance(semantic, dict):
+        semantic = {}
     rule_id = str(raw_rule.get("id") or f"rule_{index}")
     return AskPolicyRule(
         id=rule_id,
@@ -110,6 +128,34 @@ def _parse_rule(raw_rule: dict[str, Any], index: int) -> AskPolicyRule:
         ),
         forbidden_templates=_as_tuple_of_str(raw_rule.get("forbidden_templates")),
         required_slots=_as_tuple_of_str(raw_rule.get("required_slots")),
+        semantic_subjects=_as_tuple_of_str(
+            semantic.get("subjects") or semantic.get("subject")
+        ),
+        semantic_features=_as_tuple_of_str(
+            semantic.get("features") or semantic.get("feature")
+        ),
+        semantic_metrics=_as_tuple_of_str(
+            semantic.get("metrics") or semantic.get("metric")
+        ),
+        semantic_dimensions=_as_tuple_of_str(
+            semantic.get("dimensions") or semantic.get("dimension")
+        ),
+        semantic_grains=_as_tuple_of_str(
+            semantic.get("grains")
+            or semantic.get("grain")
+            or semantic.get("expected_grains")
+            or semantic.get("expectedGrains")
+        ),
+        semantic_routes=_as_tuple_of_str(
+            semantic.get("routes") or semantic.get("route")
+        ),
+        semantic_external_dependencies=_as_tuple_of_str(
+            semantic.get("external_dependencies")
+            or semantic.get("externalDependencies")
+        ),
+        required_filters=_as_tuple_of_str(
+            semantic.get("required_filters") or semantic.get("requiredFilters")
+        ),
     )
 
 
@@ -192,6 +238,87 @@ def _rule_matches_template(
     return template_id in rule.template_ids
 
 
+def _normalized_set(values: Any) -> set[str]:
+    return {
+        _normalize_text(value)
+        for value in _as_list(values)
+        if _normalize_text(value)
+    }
+
+
+def _semantic_plan_values(
+    semantic_plan: Optional[dict[str, Any]],
+    key: str,
+) -> set[str]:
+    plan = semantic_plan or {}
+    if key == "subject":
+        return _normalized_set(plan.get("subject"))
+    if key == "grain":
+        return _normalized_set(plan.get("grain"))
+    if key == "route":
+        decision = (
+            plan.get("decision") if isinstance(plan.get("decision"), dict) else {}
+        )
+        return _normalized_set(decision.get("route"))
+    if key == "external_dependencies":
+        decision = (
+            plan.get("decision") if isinstance(plan.get("decision"), dict) else {}
+        )
+        return _normalized_set(
+            [
+                *(plan.get("external_dependencies") or []),
+                *(decision.get("external_dependencies") or []),
+            ]
+        )
+    return _normalized_set(plan.get(key) or [])
+
+
+def _rule_values_match(rule_values: tuple[str, ...], plan_values: set[str]) -> bool:
+    if not rule_values:
+        return True
+    normalized_rule_values = _normalized_set(rule_values)
+    return bool(normalized_rule_values & plan_values)
+
+
+def _rule_matches_semantic_plan(
+    rule: AskPolicyRule,
+    semantic_plan: Optional[dict[str, Any]],
+) -> bool:
+    return (
+        _rule_values_match(
+            rule.semantic_subjects,
+            _semantic_plan_values(semantic_plan, "subject"),
+        )
+        and _rule_values_match(
+            rule.semantic_features,
+            _semantic_plan_values(semantic_plan, "features"),
+        )
+        and _rule_values_match(
+            rule.semantic_metrics,
+            _semantic_plan_values(semantic_plan, "metrics"),
+        )
+        and _rule_values_match(
+            rule.semantic_dimensions,
+            _semantic_plan_values(semantic_plan, "dimensions"),
+        )
+        and _rule_values_match(
+            rule.semantic_grains,
+            _semantic_plan_values(semantic_plan, "grain"),
+        )
+        and _rule_values_match(
+            rule.semantic_routes,
+            _semantic_plan_values(semantic_plan, "route"),
+        )
+        and _rule_values_match(
+            rule.semantic_external_dependencies,
+            _semantic_plan_values(semantic_plan, "external_dependencies"),
+        )
+        and all(
+            _is_slot_resolved(semantic_plan, slot) for slot in rule.required_filters
+        )
+    )
+
+
 def _is_slot_resolved(semantic_plan: Optional[dict[str, Any]], slot: str) -> bool:
     plan = semantic_plan or {}
     resolved_slots = plan.get("resolved_slots") or {}
@@ -217,6 +344,8 @@ def evaluate_policy_context(
         if not _rule_matches_query(rule, query):
             continue
         if not _rule_matches_template(rule, template_decision):
+            continue
+        if not _rule_matches_semantic_plan(rule, semantic_plan):
             continue
 
         skip_required_slots = is_metadata_explanation_query(query) and bool(

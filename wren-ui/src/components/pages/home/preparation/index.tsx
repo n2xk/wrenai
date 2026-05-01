@@ -20,6 +20,7 @@ import {
   AskingTask,
   AdjustmentTask,
 } from '@/types/home';
+import { resolveTemplateAwarePreparationError } from './templateErrorPresentation';
 
 const PreparationShell = styled.div`
   width: 100%;
@@ -130,7 +131,7 @@ export default function Preparation(props: Props) {
       ...(askingTask || {}),
       ...(adjustmentTask || {}),
     } as PreparedTask;
-  }, [askingTask?.status, adjustmentTask?.status, adjustment?.payload]);
+  }, [askingTask, adjustmentTask, adjustment]);
 
   const preparationModel = useMemo(
     () =>
@@ -147,13 +148,26 @@ export default function Preparation(props: Props) {
     setIsActive(!minimized);
   }, [minimized]);
   const error = useMemo<ComponentProps<typeof ErrorBoundary>['error']>(() => {
+    const templateAwareError =
+      resolveTemplateAwarePreparationError(preparedTask);
     return preparedTask?.error && !sql && onFixSQLStatement
       ? {
           ...preparedTask.error,
-          message: preparedTask.error.message || '回答生成失败',
-          shortMessage: preparedTask.error.shortMessage || '回答生成失败',
-          invalidSql: preparedTask?.invalidSql || undefined,
-          fixStatement: (sql: string) => onFixSQLStatement(responseId, sql),
+          ...templateAwareError,
+          message:
+            templateAwareError?.message ||
+            preparedTask.error.message ||
+            '回答生成失败',
+          shortMessage:
+            templateAwareError?.shortMessage ||
+            preparedTask.error.shortMessage ||
+            '回答生成失败',
+          invalidSql: templateAwareError
+            ? undefined
+            : preparedTask?.invalidSql || undefined,
+          fixStatement: templateAwareError
+            ? undefined
+            : (sql: string) => onFixSQLStatement(responseId, sql),
           fixStatementLoading,
         }
       : undefined;

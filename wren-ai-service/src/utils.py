@@ -245,7 +245,11 @@ def trace_cost(func):
     return wrapper
 
 
-def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
+def fetch_wren_ai_docs(doc_endpoint: str | None, is_oss: bool) -> list[dict]:
+    if not doc_endpoint:
+        logger.info("Wren AI docs endpoint is not configured; skipping docs fetch.")
+        return []
+
     doc_endpoint = remove_trailing_slash(doc_endpoint)
     api_endpoint = (
         f"{doc_endpoint}/oss/llms.md" if is_oss else f"{doc_endpoint}/cloud/llms.md"
@@ -263,7 +267,11 @@ def fetch_wren_ai_docs(doc_endpoint: str, is_oss: bool) -> list[dict]:
     results = []
     for doc in docs:
         if doc:
-            path, content = doc.split("\n")
+            try:
+                path, content = doc.split("\n", 1)
+            except ValueError:
+                logger.warning("Skipping malformed Wren AI docs entry.")
+                continue
             results.append(
                 {
                     "path": f"{doc_endpoint_base}/{path.replace('.md', '')}",

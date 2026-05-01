@@ -24,6 +24,24 @@ const toStringArray = (value: unknown): string[] =>
 const normalizeStatus = (value: unknown) =>
   value === 'disabled' ? 'disabled' : 'active';
 
+const normalizeSemanticConditions = (
+  value: unknown,
+): Record<string, string[]> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return Object.entries(value).reduce<Record<string, string[]>>(
+    (conditions, [key, rawValue]) => {
+      const values = toStringArray(rawValue);
+      if (values.length > 0) {
+        conditions[key] = values;
+      }
+      return conditions;
+    },
+    {},
+  );
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -66,6 +84,9 @@ export default async function handler(
         templateIds: toStringArray(req.body?.templateIds),
         forbiddenTemplates: toStringArray(req.body?.forbiddenTemplates),
         requiredSlots: toStringArray(req.body?.requiredSlots),
+        semanticConditions: normalizeSemanticConditions(
+          req.body?.semanticConditions || req.body?.semantic_conditions,
+        ),
         reasonCode,
         description: String(req.body?.description || '').trim() || null,
       });

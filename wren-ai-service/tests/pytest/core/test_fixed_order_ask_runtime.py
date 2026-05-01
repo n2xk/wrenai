@@ -6,14 +6,17 @@ from src.core.fixed_order_ask_runtime import (
     BaseFixedOrderAskRuntime,
     NL2SQLToolset,
     build_minimal_semantic_plan,
+    build_sql_core_signature,
     build_reusable_template_sql,
     build_template_decision,
     detect_missing_external_source_requirement,
     detect_missing_required_slot_requirement,
+    detect_supplied_external_dependency_coverage,
     detect_missing_template_parameter_requirement,
     detect_missing_tenant_plat_id_requirement,
     filter_active_sql_samples,
     ground_template_sql_to_retrieved_tables,
+    is_template_core_preserved,
     rerank_sql_samples,
 )
 
@@ -617,6 +620,7 @@ def test_detect_missing_template_parameter_requirement_clarifies_broad_context()
                 "channel_id",
                 "start_date",
                 "end_date",
+                "period_days",
             ],
         },
     )
@@ -630,6 +634,21 @@ def test_detect_missing_template_parameter_requirement_clarifies_broad_context()
         "end_date",
     ]
     assert "关键查询范围" in result["content"]
+
+
+def test_detect_missing_template_parameter_requirement_clarifies_period_days():
+    result = detect_missing_template_parameter_requirement(
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort累计收入",
+        {
+            "missing_parameters": ["period_days"],
+        },
+    )
+
+    assert result is not None
+    assert result["slot"] == "period_days"
+    assert result["missing_parameters"] == ["period_days"]
+    assert "回收周期" in result["content"]
+    assert "D7" in result["content"]
 
 
 def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
@@ -674,6 +693,22 @@ def test_build_minimal_semantic_plan_uses_history_slot_and_template_grain():
             "missing_parameters": [],
         }
     ]
+
+
+def test_build_minimal_semantic_plan_exposes_template_external_dependencies():
+    plan = build_minimal_semantic_plan(
+        "按渠道计算 ROI",
+        template_decision={
+            "template_id": "T09",
+            "mode": "anchored_template",
+            "sql_source": "anchored_generated",
+            "required_external_dependencies": ["ad_spend"],
+        },
+    )
+
+    assert plan["template"]["required_external_dependencies"] == ["ad_spend"]
+    assert plan["decision"]["route"] == "template_reference_sql"
+    assert plan["decision"]["external_dependencies"] == []
 
 
 class _SemanticPlanStub:
@@ -724,6 +759,31 @@ async def test_maybe_enhance_semantic_plan_state_uses_optional_llm_plan():
         "reason_codes"
     ]
     assert "llm_subject_match" in state.semantic_plan["decision"]["reason_codes"]
+
+
+@pytest.mark.asyncio
+async def test_maybe_enhance_semantic_plan_state_can_shadow_llm_plan():
+    runtime = BaseFixedOrderAskRuntime(
+        toolset=NL2SQLToolset({"semantic_plan": _SemanticPlanStub()}),
+        semantic_plan_mode="shadow",
+    )
+    state = AskExecutionState(
+        user_query="租户平台990001渠道990011在2026-04-01到2026-04-07的ROI"
+    )
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    await runtime._maybe_enhance_semantic_plan_state(
+        state,
+        histories=[],
+        configuration=object(),
+    )
+
+    assert state.semantic_plan["source"] == "deterministic"
+    assert state.semantic_plan["semantic_plan_mode"] == "shadow"
+    assert state.semantic_plan["llm_shadow_plan"]["subject"] == "channel"
+    assert "llm_semantic_plan_shadowed" in state.semantic_plan["decision"][
+        "reason_codes"
+    ]
 
 
 @pytest.mark.asyncio
@@ -1652,6 +1712,205 @@ def test_detect_missing_external_source_requirement_respects_trigger_cues():
     assert unrelated is None
     assert matched is not None
     assert matched["required_external_dependencies"] == ["ad_spend"]
+
+
+def test_detect_missing_external_source_requirement_accepts_valid_user_supplied_data():
+    instructions = [
+        {
+            "knowledge_asset_type": "external_dependency",
+            "external_dependency_id": "ad_spend",
+            "name": "投放金额",
+            "source_status": "missing",
+            "missing_behavior": "ask_user",
+            "required_grain": ["日期", "渠道ID"],
+            "metadata": {
+                "trigger_when": ["ROI"],
+                "validation": {
+                    "required_columns": ["日期", "渠道ID", "投放金额"],
+                },
+            },
+        }
+    ]
+
+    result = detect_missing_external_source_requirement(
+        "按渠道计算 ROI",
+        instructions=instructions,
+        supplied_external_dependencies={
+            "external_dependency_values": {
+                "ad_spend": {
+                    "columns": ["日期", "渠道ID", "投放金额"],
+                    "grain": ["日期", "渠道ID"],
+                }
+            }
+        },
+    )
+    coverage = detect_supplied_external_dependency_coverage(
+        "按渠道计算 ROI",
+        instructions=instructions,
+        supplied_external_dependencies={
+            "external_dependency_values": {
+                "ad_spend": {
+                    "columns": ["日期", "渠道ID", "投放金额"],
+                    "grain": ["日期", "渠道ID"],
+                }
+            }
+        },
+    )
+
+    assert result is None
+    assert coverage["required_external_dependencies"] == ["ad_spend"]
+
+
+def test_detect_missing_external_source_requirement_rejects_invalid_user_supply():
+    instructions = [
+        {
+            "knowledge_asset_type": "external_dependency",
+            "external_dependency_id": "ad_spend",
+            "name": "投放金额",
+            "source_status": "missing",
+            "missing_behavior": "ask_user",
+            "required_grain": ["日期", "渠道ID"],
+            "metadata": {
+                "trigger_when": ["ROI"],
+                "validation": {
+                    "required_columns": ["日期", "渠道ID", "投放金额"],
+                },
+            },
+        }
+    ]
+
+    result = detect_missing_external_source_requirement(
+        "按渠道计算 ROI",
+        instructions=instructions,
+        supplied_external_dependencies={
+            "external_dependency_values": {
+                "ad_spend": {
+                    "columns": ["日期", "投放金额"],
+                    "grain": ["日期"],
+                }
+            }
+        },
+    )
+
+    assert result is not None
+    assert "渠道ID" in result["content"]
+    assert "已补充数据校验未通过" in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_missing_source_rule_marks_valid_user_supplied_external_dependency():
+    instructions = [
+        {
+            "knowledge_asset_type": "external_dependency",
+            "external_dependency_id": "ad_spend",
+            "name": "投放金额",
+            "source_status": "missing",
+            "missing_behavior": "ask_user",
+            "required_grain": ["日期", "渠道ID"],
+            "metadata": {
+                "trigger_when": ["ROI"],
+                "validation": {
+                    "required_columns": ["日期", "渠道ID", "投放金额"],
+                },
+            },
+        }
+    ]
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(
+        user_query="按渠道计算 ROI",
+        instructions=instructions,
+        effective_instructions=instructions,
+        slot_values={
+            "external_dependency_values": {
+                "ad_spend": {
+                    "columns": ["日期", "渠道ID", "投放金额"],
+                    "grain": ["日期", "渠道ID"],
+                }
+            }
+        },
+    )
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    result = await runtime._maybe_handle_missing_source_rule(
+        state=state,
+        ask_request=object(),
+        histories=[],
+        trace_id=None,
+        is_followup=False,
+        is_stopped=lambda: True,
+        set_result=lambda **_kwargs: None,
+        build_ask_error=lambda **kwargs: kwargs,
+        results={},
+        orchestrator="test",
+    )
+
+    assert result is None
+    decision = state.semantic_plan["decision"]
+    assert "external_dependency_user_supplied" in decision["reason_codes"]
+    assert decision["external_dependencies"] == ["ad_spend"]
+
+
+def test_build_sql_core_signature_allows_alias_and_whitespace_changes():
+    template_sql = """
+    WITH base AS (
+      SELECT d.biz_date, d.channel_id, d.amount FROM deposit_summary d
+    )
+    SELECT b.biz_date, b.channel_id, SUM(b.amount) AS amount
+    FROM base b
+    GROUP BY b.biz_date, b.channel_id
+    """
+    candidate_sql = """
+    with base as (
+      select ds.biz_date, ds.channel_id, ds.amount
+      from deposit_summary ds
+    )
+    select biz_date, channel_id, sum(amount) as amount
+    from base
+    group by biz_date, channel_id
+    """
+
+    assert is_template_core_preserved(template_sql, candidate_sql) is True
+    assert build_sql_core_signature(template_sql)["aggregates"] == {"sum": 1}
+
+
+def test_is_template_core_preserved_rejects_structural_changes():
+    template_sql = """
+    WITH base AS (
+      SELECT biz_date, channel_id, amount FROM deposit_summary
+    )
+    SELECT biz_date, channel_id, SUM(amount) AS amount
+    FROM base
+    GROUP BY biz_date, channel_id
+    """
+
+    assert (
+        is_template_core_preserved(
+            template_sql,
+            template_sql.replace("base AS", "changed AS"),
+        )
+        is False
+    )
+    assert (
+        is_template_core_preserved(
+            template_sql,
+            template_sql.replace("deposit_summary", "withdraw_summary"),
+        )
+        is False
+    )
+    assert (
+        is_template_core_preserved(
+            template_sql,
+            template_sql.replace("GROUP BY biz_date, channel_id", "GROUP BY biz_date"),
+        )
+        is False
+    )
+    assert (
+        is_template_core_preserved(
+            template_sql,
+            template_sql.replace("SUM(amount)", "COUNT(amount)"),
+        )
+        is False
+    )
 
 
 def test_build_reusable_template_sql_nulls_optional_placeholders():

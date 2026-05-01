@@ -27,6 +27,7 @@ export interface AskPolicyRule {
   templateIds: string[];
   forbiddenTemplates: string[];
   requiredSlots: string[];
+  semanticConditions: Record<string, string[]>;
   reasonCode: string;
   description?: string | null;
   createdAt?: string;
@@ -59,6 +60,7 @@ const JSON_ARRAY_COLUMNS = new Set([
   'forbiddenTemplates',
   'requiredSlots',
 ]);
+const JSON_OBJECT_COLUMNS = new Set(['semanticConditions']);
 
 const snakeToCamel = (value: string) =>
   value.replace(/_([a-z])/g, (_match, char) => char.toUpperCase());
@@ -77,6 +79,31 @@ const parseJsonArray = (value: unknown): string[] => {
     }
   }
   return [];
+};
+
+const parseSemanticConditions = (value: unknown): Record<string, string[]> => {
+  if (typeof value === 'string' && value) {
+    try {
+      return parseSemanticConditions(JSON.parse(value));
+    } catch (_error) {
+      return {};
+    }
+  }
+  if (!isPlainObject(value)) {
+    return {};
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  return entries.reduce<Record<string, string[]>>(
+    (conditions, [key, rawValue]) => {
+      const values = parseJsonArray(rawValue);
+      if (values.length > 0) {
+        conditions[key] = values;
+      }
+      return conditions;
+    },
+    {},
+  );
 };
 
 export class AskPolicyRuleRepository
@@ -132,11 +159,16 @@ export class AskPolicyRuleRepository
       throw new Error('Unexpected dbdata');
     }
     const nextData = mapKeys(data, (_value, key) => snakeCase(key));
-    return mapValues(nextData, (value, key) =>
-      JSON_ARRAY_COLUMNS.has(snakeToCamel(String(key)))
-        ? JSON.stringify(parseJsonArray(value))
-        : value,
-    );
+    return mapValues(nextData, (value, key) => {
+      const camelKey = snakeToCamel(String(key));
+      if (JSON_ARRAY_COLUMNS.has(camelKey)) {
+        return JSON.stringify(parseJsonArray(value));
+      }
+      if (JSON_OBJECT_COLUMNS.has(camelKey)) {
+        return JSON.stringify(parseSemanticConditions(value));
+      }
+      return value;
+    });
   };
 
   protected transformFromDBData = (data: any): AskPolicyRule => {
@@ -151,6 +183,7 @@ export class AskPolicyRuleRepository
       templateIds: parseJsonArray(row.templateIds),
       forbiddenTemplates: parseJsonArray(row.forbiddenTemplates),
       requiredSlots: parseJsonArray(row.requiredSlots),
+      semanticConditions: parseSemanticConditions(row.semanticConditions),
     } as AskPolicyRule;
   };
 }

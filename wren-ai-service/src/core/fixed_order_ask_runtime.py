@@ -5,7 +5,9 @@ import os
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
+from typing import Any, Callable, Iterable, Literal, Optional, Protocol, Sequence
+
+import sqlparse
 
 from src.core.ask_policy import (
     coerce_ask_policy_config,
@@ -18,6 +20,8 @@ from src.core.pipeline import BasicPipeline
 from src.pipelines.common import retrieve_data_source
 
 logger = logging.getLogger("wren-ai-service")
+
+SemanticPlanMode = Literal["deterministic", "shadow", "enhanced"]
 
 
 class AskHistoryLike(Protocol):
@@ -132,6 +136,21 @@ TEMPLATE_MIN_ADJUSTED_SCORE = float(
 )
 SQL_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
 DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
+
+
+def normalize_semantic_plan_mode(
+    semantic_plan_mode: Optional[str],
+    *,
+    allow_semantic_plan_llm: bool = False,
+) -> SemanticPlanMode:
+    mode = str(semantic_plan_mode or "deterministic").strip().lower()
+    if mode not in {"deterministic", "shadow", "enhanced"}:
+        mode = "deterministic"
+    if allow_semantic_plan_llm and mode == "deterministic":
+        return "enhanced"
+    return mode  # type: ignore[return-value]
+
+
 TEMPLATE_FEATURE_PATTERNS: dict[str, tuple[str, ...]] = {
     "bucket": (r"分桶", r"档位"),
     "cohort": (
@@ -307,6 +326,7 @@ def _extract_configured_external_dependencies(
                 "not_trigger_when": [],
                 "input_modes": [],
                 "lifecycle": "per_question",
+                "validation": {},
                 "matched_by_signature": False,
                 "matched_by_instruction": False,
             },
@@ -393,10 +413,254 @@ def _extract_configured_external_dependencies(
             or metadata.get("inputModes")
             or [],
             lifecycle=metadata.get("lifecycle") or "per_question",
+            validation=metadata.get("validation") or {},
             matched_by_instruction=True,
         )
 
     return list(dependencies.values())
+
+
+def _normalize_external_dependency_supply_map(value: Any) -> dict[str, dict[str, Any]]:
+    if not value:
+        return {}
+
+    raw_dependencies = value
+    if isinstance(value, dict):
+        raw_dependencies = (
+            value.get("external_dependency_values")
+            or value.get("externalDependencyValues")
+            or value.get("external_dependencies")
+            or value.get("externalDependencies")
+            or value
+        )
+
+    supplies: dict[str, dict[str, Any]] = {}
+
+    def collect_columns(raw_supply: Any) -> list[str]:
+        if not isinstance(raw_supply, dict):
+            return []
+        columns = (
+            raw_supply.get("columns")
+            or raw_supply.get("headers")
+            or raw_supply.get("fields")
+            or raw_supply.get("schema")
+            or []
+        )
+        normalized_columns = _normalize_string_list(columns)
+        rows = raw_supply.get("rows")
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            normalized_columns = [
+                *normalized_columns,
+                *[str(key) for key in rows[0].keys()],
+            ]
+        return list(dict.fromkeys(normalized_columns))
+
+    def collect_grain(raw_supply: Any) -> list[str]:
+        if not isinstance(raw_supply, dict):
+            return []
+        return _normalize_string_list(
+            raw_supply.get("grain")
+            or raw_supply.get("granularity")
+            or raw_supply.get("required_grain")
+            or raw_supply.get("requiredGrain")
+            or []
+        )
+
+    def add_supply(dependency_id: Any, raw_supply: Any) -> None:
+        normalized_dependency_id = _normalize_dependency_id(str(dependency_id or ""))
+        if not normalized_dependency_id:
+            return
+        supply = supplies.setdefault(
+            normalized_dependency_id,
+            {"columns": [], "grain": []},
+        )
+        for column in collect_columns(raw_supply):
+            if column not in supply["columns"]:
+                supply["columns"].append(column)
+        for grain in collect_grain(raw_supply):
+            if grain not in supply["grain"]:
+                supply["grain"].append(grain)
+
+    if isinstance(raw_dependencies, dict):
+        for key, raw_supply in raw_dependencies.items():
+            if isinstance(raw_supply, dict):
+                dependency_id = (
+                    raw_supply.get("id")
+                    or raw_supply.get("external_dependency_id")
+                    or raw_supply.get("externalDependencyId")
+                    or raw_supply.get("dependency_id")
+                    or raw_supply.get("dependencyId")
+                    or key
+                )
+                add_supply(dependency_id, raw_supply)
+        return supplies
+
+    if isinstance(raw_dependencies, list):
+        for raw_supply in raw_dependencies:
+            if not isinstance(raw_supply, dict):
+                continue
+            dependency_id = (
+                raw_supply.get("id")
+                or raw_supply.get("external_dependency_id")
+                or raw_supply.get("externalDependencyId")
+                or raw_supply.get("dependency_id")
+                or raw_supply.get("dependencyId")
+            )
+            add_supply(dependency_id, raw_supply)
+
+    return supplies
+
+
+def _normalize_comparable_values(values: Sequence[Any]) -> set[str]:
+    return {
+        re.sub(r"\s+", "", str(value or "").strip()).lower()
+        for value in values
+        if str(value or "").strip()
+    }
+
+
+def _evaluate_supplied_external_dependency(
+    dependency: dict[str, Any],
+    supplies: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    dependency_id = str(dependency.get("id") or "").strip()
+    supply = supplies.get(_normalize_dependency_id(dependency_id))
+    if not supply:
+        return {
+            "satisfied": False,
+            "missing_dependency": dependency_id,
+            "missing_columns": [],
+            "missing_grain": [],
+        }
+
+    validation = dependency.get("validation") or {}
+    if not isinstance(validation, dict):
+        validation = {}
+    required_columns = _normalize_string_list(
+        validation.get("required_columns") or validation.get("requiredColumns") or []
+    )
+    required_grain = _normalize_string_list(dependency.get("required_grain"))
+
+    supplied_columns = _normalize_comparable_values(supply.get("columns") or [])
+    supplied_grain = _normalize_comparable_values(supply.get("grain") or [])
+    supplied_schema_values = supplied_columns | supplied_grain
+
+    missing_columns = [
+        column
+        for column in required_columns
+        if _normalize_comparable_values([column]).isdisjoint(supplied_columns)
+    ]
+    missing_grain = [
+        grain
+        for grain in required_grain
+        if _normalize_comparable_values([grain]).isdisjoint(supplied_schema_values)
+    ]
+    return {
+        "satisfied": not missing_columns and not missing_grain,
+        "missing_dependency": None,
+        "missing_columns": missing_columns,
+        "missing_grain": missing_grain,
+    }
+
+
+def _match_configured_external_dependencies(
+    query: str,
+    configured_dependencies: Sequence[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    configured_matches: list[dict[str, Any]] = []
+    for dependency in configured_dependencies:
+        match_texts = [
+            dependency.get("name"),
+            dependency.get("id"),
+            *(_normalize_string_list(dependency.get("aliases"))),
+        ]
+        required_by_terms = _normalize_string_list(dependency.get("required_by_terms"))
+        required_by_templates = _normalize_string_list(
+            dependency.get("required_by_templates")
+        )
+        trigger_when = _normalize_string_list(dependency.get("trigger_when"))
+        not_trigger_when = _normalize_string_list(dependency.get("not_trigger_when"))
+        signature_matched = bool(dependency.get("matched_by_signature"))
+        instruction_matched = bool(dependency.get("matched_by_instruction"))
+        if not_trigger_when and _query_matches_any_text(query, not_trigger_when):
+            continue
+
+        base_matched = (
+            _query_matches_any_text(query, match_texts)
+            or (required_by_terms and _query_matches_any_text(query, required_by_terms))
+            or (
+                required_by_templates
+                and _query_matches_any_text(query, required_by_templates)
+            )
+            or signature_matched
+        )
+        trigger_matched = bool(
+            trigger_when and _query_matches_any_text(query, trigger_when)
+        )
+        should_match = (
+            base_matched or trigger_matched
+            if trigger_when
+            else base_matched or instruction_matched
+        )
+
+        if should_match:
+            configured_matches.append(dependency)
+    return configured_matches
+
+
+def detect_supplied_external_dependency_coverage(
+    query: Optional[str],
+    *,
+    sql_samples: Sequence[Any] | None = None,
+    instructions: Sequence[Any] | None = None,
+    supplied_external_dependencies: Any = None,
+) -> Optional[dict[str, Any]]:
+    if not query or not supplied_external_dependencies:
+        return None
+
+    supplies = _normalize_external_dependency_supply_map(supplied_external_dependencies)
+    if not supplies:
+        return None
+
+    configured_dependencies = _extract_configured_external_dependencies(
+        sql_samples=sql_samples,
+        instructions=instructions,
+    )
+    configured_matches = _match_configured_external_dependencies(
+        query,
+        configured_dependencies,
+    )
+    missing_dependencies = [
+        dependency
+        for dependency in configured_matches
+        if str(dependency.get("source_status") or "missing").lower()
+        in {"missing", "partial", "manual_input"}
+        and str(dependency.get("missing_behavior") or "ask_user").lower()
+        in {"ask_user", "block_answer"}
+    ]
+    if not missing_dependencies:
+        return None
+
+    evaluations = [
+        {
+            "dependency_id": dependency.get("id"),
+            **_evaluate_supplied_external_dependency(dependency, supplies),
+        }
+        for dependency in missing_dependencies
+    ]
+    if not evaluations or not all(evaluation["satisfied"] for evaluation in evaluations):
+        return None
+
+    return {
+        "source": "external_dependency_user_supplied",
+        "required_external_dependencies": [
+            str(dependency.get("id"))
+            for dependency in missing_dependencies
+            if dependency.get("id")
+        ],
+        "provided_external_dependencies": list(supplies.keys()),
+        "evaluations": evaluations,
+    }
 
 
 def _first_match(patterns: Sequence[str], query: str) -> Optional[str]:
@@ -982,6 +1246,17 @@ def detect_missing_template_parameter_requirement(
             "reasoning": "模板缺少多个关键上下文参数，需先澄清后再生成 SQL。",
         }
 
+    if "period_days" in missing_parameters:
+        return {
+            "slot": "period_days",
+            "missing_parameters": ["period_days"],
+            "content": (
+                "这个问题命中了首存 cohort 模板，还需要补充回收周期。"
+                "请说明要累计到 D7、D30 还是其他天数，例如：首存后 D7。"
+            ),
+            "reasoning": "模板缺少回收周期 period_days，需先澄清后再生成 SQL。",
+        }
+
     return None
 
 
@@ -1226,6 +1501,10 @@ def _build_template_plan_fragment(
         "sql_source": template_decision.get("sql_source"),
         "fallback_reason": template_decision.get("fallback_reason"),
         "missing_parameters": template_decision.get("missing_parameters") or [],
+        "required_external_dependencies": template_decision.get(
+            "required_external_dependencies"
+        )
+        or [],
     }
 
 
@@ -1297,6 +1576,7 @@ SLOT_LABELS = {
     "end_date": "结束日期",
     "cohort_start_date": "首存 cohort 开始日期",
     "cohort_end_date": "首存 cohort 结束日期",
+    "period_days": "回收周期",
     "metric_focus": "关注指标",
 }
 
@@ -2682,6 +2962,7 @@ def detect_missing_external_source_requirement(
     *,
     sql_samples: Sequence[Any] | None = None,
     instructions: Sequence[Any] | None = None,
+    supplied_external_dependencies: Any = None,
 ) -> Optional[dict[str, Any]]:
     if not query:
         return None
@@ -2690,6 +2971,9 @@ def detect_missing_external_source_requirement(
         sql_samples=sql_samples,
         instructions=instructions,
     )
+    supplied_dependencies = _normalize_external_dependency_supply_map(
+        supplied_external_dependencies
+    )
 
     def build_requirement(
         dependencies: Sequence[dict[str, Any]],
@@ -2697,14 +2981,35 @@ def detect_missing_external_source_requirement(
         source: str,
         granularity_hint: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
-        missing_dependencies = [
-            dependency
-            for dependency in dependencies
-            if str(dependency.get("source_status") or "missing").lower()
-            in {"missing", "partial", "manual_input"}
-            and str(dependency.get("missing_behavior") or "ask_user").lower()
-            in {"ask_user", "block_answer"}
-        ]
+        missing_dependencies = []
+        invalid_supply_evaluations = []
+        for dependency in dependencies:
+            is_missing = str(dependency.get("source_status") or "missing").lower() in {
+                "missing",
+                "partial",
+                "manual_input",
+            }
+            should_block = (
+                str(dependency.get("missing_behavior") or "ask_user").lower()
+                in {"ask_user", "block_answer"}
+            )
+            if not is_missing or not should_block:
+                continue
+
+            supplied_evaluation = _evaluate_supplied_external_dependency(
+                dependency,
+                supplied_dependencies,
+            )
+            if supplied_evaluation["satisfied"]:
+                continue
+            if supplied_dependencies and supplied_evaluation.get("missing_dependency") is None:
+                invalid_supply_evaluations.append(
+                    {
+                        "dependency_id": dependency.get("id"),
+                        **supplied_evaluation,
+                    }
+                )
+            missing_dependencies.append(dependency)
         if not missing_dependencies:
             return None
 
@@ -2763,12 +3068,42 @@ def detect_missing_external_source_requirement(
             example_columns = ["统计粒度", *required_metrics]
 
         missing_metrics = "、".join(required_metrics)
+        missing_supply_columns = list(
+            dict.fromkeys(
+                column
+                for evaluation in invalid_supply_evaluations
+                for column in evaluation.get("missing_columns", [])
+            )
+        )
+        missing_supply_grain = list(
+            dict.fromkeys(
+                grain
+                for evaluation in invalid_supply_evaluations
+                for grain in evaluation.get("missing_grain", [])
+            )
+        )
+        invalid_supply_hint = ""
+        if missing_supply_columns or missing_supply_grain:
+            invalid_supply_hint = (
+                "\n- 已补充数据校验未通过："
+                + (
+                    f"缺少必需列 {', '.join(missing_supply_columns)}；"
+                    if missing_supply_columns
+                    else ""
+                )
+                + (
+                    f"缺少粒度 {', '.join(missing_supply_grain)}；"
+                    if missing_supply_grain
+                    else ""
+                )
+            )
         prompt_suffix = "" if not prompts else " " + " ".join(prompts)
         content = (
             "当前知识库还缺少外部数据，不能直接输出或并表这些结果，也不能编造。\n"
             f"- 缺失指标：{missing_metrics}\n"
             f"- 需要粒度：{required_grain_label}\n"
             f"- 示例表头：{', '.join(example_columns)}\n"
+            f"{invalid_supply_hint}\n"
             "- 下一步：请在外部数据依赖/业务知识中补充以上指标，或在对话中按示例表头提供数据；"
             f"补充后我再和现有 SQL 可查询的内部指标一起输出。{granularity_hint}"
             f"{prompt_suffix}"
@@ -2792,48 +3127,16 @@ def detect_missing_external_source_requirement(
                 "required_grain": required_grain_values,
                 "required_grain_hint": required_grain_label,
                 "example_columns": example_columns,
+                "missing_supplied_columns": missing_supply_columns,
+                "missing_supplied_grain": missing_supply_grain,
             },
             "required_external_dependencies": required_dependency_ids,
         }
 
-    configured_matches: list[dict[str, Any]] = []
-    for dependency in configured_dependencies:
-        match_texts = [
-            dependency.get("name"),
-            dependency.get("id"),
-            *(_normalize_string_list(dependency.get("aliases"))),
-        ]
-        required_by_terms = _normalize_string_list(dependency.get("required_by_terms"))
-        required_by_templates = _normalize_string_list(
-            dependency.get("required_by_templates")
-        )
-        trigger_when = _normalize_string_list(dependency.get("trigger_when"))
-        not_trigger_when = _normalize_string_list(dependency.get("not_trigger_when"))
-        signature_matched = bool(dependency.get("matched_by_signature"))
-        instruction_matched = bool(dependency.get("matched_by_instruction"))
-        if not_trigger_when and _query_matches_any_text(query, not_trigger_when):
-            continue
-
-        base_matched = (
-            _query_matches_any_text(query, match_texts)
-            or (required_by_terms and _query_matches_any_text(query, required_by_terms))
-            or (
-                required_by_templates
-                and _query_matches_any_text(query, required_by_templates)
-            )
-            or signature_matched
-        )
-        trigger_matched = bool(
-            trigger_when and _query_matches_any_text(query, trigger_when)
-        )
-        should_match = (
-            base_matched or trigger_matched
-            if trigger_when
-            else base_matched or instruction_matched
-        )
-
-        if should_match:
-            configured_matches.append(dependency)
+    configured_matches = _match_configured_external_dependencies(
+        query,
+        configured_dependencies,
+    )
 
     configured_requirement = build_requirement(
         configured_matches,
@@ -2841,6 +3144,8 @@ def detect_missing_external_source_requirement(
     )
     if configured_requirement:
         return configured_requirement
+    if configured_matches:
+        return None
 
     required_metrics: list[str] = []
     normalized_query = query.upper()
@@ -3395,7 +3700,23 @@ def ground_template_sql_to_retrieved_tables(
 
 
 def _normalize_sql_for_signature(sql: Optional[str]) -> str:
-    return re.sub(r"\s+", " ", sql or "").strip().lower()
+    if not sql:
+        return ""
+    try:
+        formatted = sqlparse.format(sql, strip_comments=True)
+    except Exception:
+        formatted = sql
+    return re.sub(r"\s+", " ", formatted).strip().lower()
+
+
+def _normalize_sql_expression(value: str) -> str:
+    normalized = _normalize_sql_for_signature(value)
+    normalized = normalized.replace("`", "").replace('"', "")
+    normalized = re.sub(r"\b[a-zA-Z_]\w*\.", "", normalized)
+    normalized = re.sub(r"\s*,\s*", ",", normalized)
+    normalized = re.sub(r"\s*\(\s*", "(", normalized)
+    normalized = re.sub(r"\s*\)\s*", ")", normalized)
+    return normalized.strip()
 
 
 def _extract_cte_names(sql: Optional[str]) -> list[str]:
@@ -3412,26 +3733,117 @@ def _count_keyword(sql: Optional[str], keyword_pattern: str) -> int:
     return len(re.findall(keyword_pattern, _normalize_sql_for_signature(sql)))
 
 
+def _split_sql_expressions(value: str) -> list[str]:
+    expressions: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quote: str | None = None
+
+    for char in value:
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+            current.append(char)
+            continue
+        if char == "(":
+            depth += 1
+            current.append(char)
+            continue
+        if char == ")":
+            depth = max(0, depth - 1)
+            current.append(char)
+            continue
+        if char == "," and depth == 0:
+            expression = "".join(current).strip()
+            if expression:
+                expressions.append(expression)
+            current = []
+            continue
+        current.append(char)
+
+    expression = "".join(current).strip()
+    if expression:
+        expressions.append(expression)
+    return expressions
+
+
+def _extract_clause_expressions(sql: Optional[str], clause: str) -> list[str]:
+    normalized = _normalize_sql_for_signature(sql)
+    if not normalized:
+        return []
+    pattern = (
+        rf"\b{clause}\b\s+(.+?)"
+        r"(?=\s+\bhaving\b|\s+\border\s+by\b|\s+\bqualify\b|\s+\blimit\b|"
+        r"\s+\bunion\b|\s+\bexcept\b|\s+\bintersect\b|$)"
+    )
+    expressions: list[str] = []
+    for match in re.finditer(pattern, normalized, flags=re.IGNORECASE):
+        expressions.extend(
+            _normalize_sql_expression(expression)
+            for expression in _split_sql_expressions(match.group(1))
+            if _normalize_sql_expression(expression)
+        )
+    return expressions
+
+
+def _extract_source_tables(sql: Optional[str]) -> list[str]:
+    normalized = _normalize_sql_for_signature(sql)
+    if not normalized:
+        return []
+
+    source_tables: list[str] = []
+    for match in re.finditer(
+        r"\b(?:from|join)\s+(?!\()([`\"\[]?[a-zA-Z_]\w*(?:[`\"\]]?\.[`\"\[]?[a-zA-Z_]\w*){0,2})",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        table_name = match.group(1).strip("`\"[]")
+        table_name = table_name.replace("`", "").replace('"', "").replace("[", "")
+        table_name = table_name.replace("]", "")
+        if table_name and table_name not in source_tables:
+            source_tables.append(table_name)
+    return source_tables
+
+
+def _extract_aggregate_signature(sql: Optional[str]) -> dict[str, int]:
+    normalized = _normalize_sql_for_signature(sql)
+    aggregate_counts: dict[str, int] = {}
+    for function_name in re.findall(
+        r"\b(count|sum|avg|min|max|median|count_if|approx_count_distinct)\s*\(",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        key = function_name.lower()
+        aggregate_counts[key] = aggregate_counts.get(key, 0) + 1
+    return dict(sorted(aggregate_counts.items()))
+
+
+def build_sql_core_signature(sql: Optional[str]) -> dict[str, Any]:
+    return {
+        "ctes": _extract_cte_names(sql),
+        "source_tables": _extract_source_tables(sql),
+        "group_by": _extract_clause_expressions(sql, "group\\s+by"),
+        "aggregates": _extract_aggregate_signature(sql),
+        "join_count": _count_keyword(sql, r"\bjoin\b"),
+        "case_count": _count_keyword(sql, r"\bcase\b"),
+        "window_count": _count_keyword(sql, r"\bover\s*\("),
+        "partition_count": _count_keyword(sql, r"\bpartition\s+by\b"),
+        "order_count": _count_keyword(sql, r"\border\s+by\b"),
+    }
+
+
 def is_template_core_preserved(
     template_sql: Optional[str], candidate_sql: Optional[str]
 ) -> bool:
     if not template_sql or not candidate_sql:
         return True
 
-    template_ctes = _extract_cte_names(template_sql)
-    candidate_ctes = _extract_cte_names(candidate_sql)
-    if (template_ctes or candidate_ctes) and template_ctes != candidate_ctes:
-        return False
-
-    signature_patterns = [
-        r"\bcase\b",
-        r"\bgroup\s+by\b",
-        r"\bpartition\s+by\b",
-        r"\border\s+by\b",
-    ]
-    return all(
-        _count_keyword(template_sql, pattern) == _count_keyword(candidate_sql, pattern)
-        for pattern in signature_patterns
+    return build_sql_core_signature(template_sql) == build_sql_core_signature(
+        candidate_sql
     )
 
 
@@ -3776,6 +4188,7 @@ class BaseFixedOrderAskRuntime:
         mixed_answer_composer: Optional[MixedAnswerComposer] = None,
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        semantic_plan_mode: Optional[str] = None,
         allow_semantic_plan_llm: bool = False,
         ask_policy_file: Optional[str] = None,
         enable_column_pruning: bool = False,
@@ -3785,7 +4198,14 @@ class BaseFixedOrderAskRuntime:
         self._mixed_answer_composer = mixed_answer_composer or MixedAnswerComposer()
         self._allow_intent_classification = allow_intent_classification
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
-        self._allow_semantic_plan_llm = allow_semantic_plan_llm
+        self._semantic_plan_mode = normalize_semantic_plan_mode(
+            semantic_plan_mode,
+            allow_semantic_plan_llm=allow_semantic_plan_llm,
+        )
+        self._allow_semantic_plan_llm = self._semantic_plan_mode in {
+            "shadow",
+            "enhanced",
+        }
         self._ask_policy_file = ask_policy_file
         self._ask_policy_config = load_ask_policy_config(ask_policy_file)
         self._enable_column_pruning = enable_column_pruning
@@ -3957,10 +4377,17 @@ class BaseFixedOrderAskRuntime:
             self._append_semantic_plan_reason(state, "llm_semantic_plan_unavailable")
             return
 
+        if self._semantic_plan_mode == "shadow":
+            state.semantic_plan["llm_shadow_plan"] = llm_plan
+            state.semantic_plan["semantic_plan_mode"] = "shadow"
+            self._append_semantic_plan_reason(state, "llm_semantic_plan_shadowed")
+            return
+
         state.semantic_plan = self._merge_llm_semantic_plan(
             deterministic_plan=deterministic_plan,
             llm_plan=llm_plan,
         )
+        state.semantic_plan["semantic_plan_mode"] = "enhanced"
 
     def _apply_policy_state(
         self,
@@ -4573,8 +5000,25 @@ class BaseFixedOrderAskRuntime:
             state.user_query,
             sql_samples=state.sql_samples,
             instructions=state.effective_instructions or state.instructions,
+            supplied_external_dependencies=state.slot_values,
         )
         if not missing_source_requirement:
+            supplied_coverage = detect_supplied_external_dependency_coverage(
+                state.user_query,
+                sql_samples=state.sql_samples,
+                instructions=state.effective_instructions or state.instructions,
+                supplied_external_dependencies=state.slot_values,
+            )
+            if supplied_coverage and state.semantic_plan is not None:
+                decision = state.semantic_plan.setdefault("decision", {})
+                reason_codes = decision.setdefault("reason_codes", [])
+                if "external_dependency_user_supplied" not in reason_codes:
+                    reason_codes.append("external_dependency_user_supplied")
+                decision["external_dependency_coverage"] = supplied_coverage
+                decision["external_dependencies"] = supplied_coverage.get(
+                    "required_external_dependencies",
+                    [],
+                )
             return None
 
         state.effective_instructions = [

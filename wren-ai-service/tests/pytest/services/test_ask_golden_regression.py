@@ -408,6 +408,65 @@ async def test_ask_reports_template_decision_for_sql_pairs():
 
 
 @pytest.mark.asyncio
+async def test_ask_clarifies_missing_template_period_days_before_sql_generation():
+    template_sql = (
+        "SELECT :tenant_plat_id AS tenant_plat_id, "
+        ":channel_id AS channel_id, :cohort_start_date AS cohort_start_date, "
+        ":cohort_end_date AS cohort_end_date, :period_days AS period_days"
+    )
+    case = {
+        "query": (
+            "统计租户平台990001下渠道990011在2026-04-01到2026-04-03"
+            "首存cohort累计收入"
+        ),
+        "scenario": {
+            "sql_pairs_documents": [
+                {
+                    "id": "template-04",
+                    "question": "统计某渠道首存 cohort 在指定回收周期内的累计渠道收入",
+                    "sql": template_sql,
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "anchored_template",
+                    "source_type": "business_import",
+                    "score": 0.98,
+                }
+            ],
+            "schema_documents": [
+                {
+                    "table_name": "dwd_order_deposit",
+                    "table_ddl": "CREATE TABLE dwd_order_deposit(player_id bigint);",
+                }
+            ],
+            "sql_generation": {"valid_sql": "SELECT should_not_run"},
+            "sql_correction": {"valid_sql": "SELECT should_not_run"},
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert ask_result.status == "finished"
+    assert ask_result.type == "GENERAL"
+    assert ask_result.ask_path == "general"
+    assert ask_result.content is not None
+    assert "回收周期" in ask_result.content
+    assert ask_result.clarification_state is not None
+    assert ask_result.clarification_state.pending_slots == ["period_days"]
+    assert ask_result.template_decision is not None
+    assert ask_result.template_decision.fallback_reason == "missing_required_slot"
+    assert ask_result.template_decision.missing_parameters == ["period_days"]
+    assert result["metadata"]["clarification_state"]["pending_slots"] == [
+        "period_days"
+    ]
+    assert pipelines["sql_generation"].run.await_count == 0
+    assert pipelines["sql_correction"].run.await_count == 0
+
+
+@pytest.mark.asyncio
 async def test_ask_renders_generic_segment_breakdown_from_template_context_top_n():
     template_sql = (
         "SELECT :tenant_plat_id AS tenant_plat_id, "

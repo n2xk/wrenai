@@ -352,6 +352,61 @@ describe('ModelController scope guards', () => {
           instruction: '首存定义为成功存款且 times = 1',
           questions: ['首充用户怎么定义？'],
           isDefault: false,
+          relatedBusinessTerms: ['first_deposit'],
+          runtimeUsage: {
+            participates_in: ['instruction_retrieval'],
+          },
+        },
+      ]),
+    };
+    ctx.businessKnowledgeService = {
+      listBusinessKnowledgeInstructions: jest.fn().mockResolvedValue([
+        {
+          id: 'business_term:11',
+          instruction: '[业务词典] 首存 (first_deposit)',
+          questions: ['首存', '首充'],
+          isDefault: false,
+          knowledgeAssetType: 'business_term',
+          businessTermId: 'first_deposit',
+          aliases: ['首充'],
+          relatedBusinessTerms: ['first_deposit'],
+          relatedExternalDependencies: [],
+          runtimeUsage: {
+            participates_in: ['instruction_retrieval', 'template_matching'],
+            priority_hint: 'medium',
+          },
+          metadata: {
+            canonical_expression:
+              'dwd_order_deposit.status = 2 AND dwd_order_deposit.times = 1',
+            required_slots: ['tenant_plat_id'],
+          },
+        },
+        {
+          id: 'external_dependency:12',
+          instruction: '[外部数据依赖] 投放金额 (ad_spend)',
+          questions: ['ROI', '投放成本'],
+          isDefault: false,
+          knowledgeAssetType: 'external_dependency',
+          externalDependencyId: 'ad_spend',
+          aliases: ['买量成本'],
+          sourceStatus: 'missing',
+          missingBehavior: 'ask_user',
+          askUserPrompt: '请补充投放金额',
+          requiredGrain: ['日期', '渠道ID'],
+          relatedBusinessTerms: ['roi'],
+          relatedExternalDependencies: ['ad_spend'],
+          runtimeUsage: {
+            participates_in: [
+              'external_dependency_detection',
+              'ask_user_followup',
+            ],
+            priority_hint: 'high',
+          },
+          metadata: {
+            required_by_terms: ['ROI'],
+            trigger_when: ['ROI'],
+            validation: { required_columns: ['日期', '渠道ID', '投放金额'] },
+          },
         },
       ]),
     };
@@ -382,6 +437,15 @@ describe('ModelController scope guards', () => {
         deployHash: 'deploy-2',
       }),
     );
+    expect(
+      ctx.businessKnowledgeService.listBusinessKnowledgeInstructions,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        deployHash: 'deploy-2',
+      }),
+    );
     expect(ctx.sqlPairService.listSqlPairs).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: 'workspace-1',
@@ -396,6 +460,57 @@ describe('ModelController scope guards', () => {
           instruction: '首存定义为成功存款且 times = 1',
           questions: ['首充用户怎么定义？'],
           isDefault: false,
+          relatedBusinessTerms: ['first_deposit'],
+          runtimeUsage: {
+            participates_in: ['instruction_retrieval'],
+          },
+        },
+        {
+          id: 'business_term:11',
+          instruction: '[业务词典] 首存 (first_deposit)',
+          questions: ['首存', '首充'],
+          isDefault: false,
+          knowledgeAssetType: 'business_term',
+          businessTermId: 'first_deposit',
+          aliases: ['首充'],
+          relatedBusinessTerms: ['first_deposit'],
+          relatedExternalDependencies: [],
+          runtimeUsage: {
+            participates_in: ['instruction_retrieval', 'template_matching'],
+            priority_hint: 'medium',
+          },
+          metadata: {
+            canonical_expression:
+              'dwd_order_deposit.status = 2 AND dwd_order_deposit.times = 1',
+            required_slots: ['tenant_plat_id'],
+          },
+        },
+        {
+          id: 'external_dependency:12',
+          instruction: '[外部数据依赖] 投放金额 (ad_spend)',
+          questions: ['ROI', '投放成本'],
+          isDefault: false,
+          knowledgeAssetType: 'external_dependency',
+          externalDependencyId: 'ad_spend',
+          aliases: ['买量成本'],
+          sourceStatus: 'missing',
+          missingBehavior: 'ask_user',
+          askUserPrompt: '请补充投放金额',
+          requiredGrain: ['日期', '渠道ID'],
+          relatedBusinessTerms: ['roi'],
+          relatedExternalDependencies: ['ad_spend'],
+          runtimeUsage: {
+            participates_in: [
+              'external_dependency_detection',
+              'ask_user_followup',
+            ],
+            priority_hint: 'high',
+          },
+          metadata: {
+            required_by_terms: ['ROI'],
+            trigger_when: ['ROI'],
+            validation: { required_columns: ['日期', '渠道ID', '投放金额'] },
+          },
         },
       ],
       runtimeIdentity: {

@@ -195,7 +195,6 @@ settings:
   # postgres_user: postgres
   # postgres_password: postgres
   # postgres_database: wrenai
-  doc_endpoint: https://docs.getwren.ai
   is_oss: true
   engine_timeout: 30
   column_indexing_batch_size: 50
@@ -204,6 +203,7 @@ settings:
   allow_intent_classification: true
   allow_sql_generation_reasoning: true
   allow_sql_functions_retrieval: true
+  semantic_plan_mode: deterministic # deterministic | shadow | enhanced
   enable_column_pruning: false
   max_sql_correction_retries: 3
   query_cache_maxsize: 1000

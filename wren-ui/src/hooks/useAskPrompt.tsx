@@ -336,6 +336,19 @@ export default function useAskPrompt(
       const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       askingStreamTaskResult.reset();
       setOriginalQuestion(threadResponse.question);
+      handleUpdateRerunAskingTaskCache({
+        threadResponseId: threadResponse.id,
+        askingTask: {
+          ...(threadResponse.askingTask || {}),
+          candidates: threadResponse.askingTask?.candidates || [],
+          queryId:
+            threadResponse.askingTask?.queryId ||
+            `rerun-pending-${threadResponse.id}`,
+          status: AskingTaskStatus.UNDERSTANDING,
+          type: AskingTaskType.TEXT_TO_SQL,
+        },
+        updateThreadQuery,
+      });
       try {
         const rerunTask = await rerunAskingTaskRest(
           selector,
@@ -357,6 +370,20 @@ export default function useAskPrompt(
           updateThreadQuery,
         });
       } catch (_error) {
+        updateThreadQuery?.((existingData) => {
+          if (!existingData?.thread) {
+            return existingData;
+          }
+
+          return {
+            thread: {
+              ...existingData.thread,
+              responses: existingData.thread.responses.map((response) =>
+                response.id === threadResponse.id ? threadResponse : response,
+              ),
+            },
+          };
+        });
         message.error('重新执行失败，请稍后重试');
       }
     },

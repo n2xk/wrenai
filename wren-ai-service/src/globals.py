@@ -172,6 +172,7 @@ def create_service_container(
             allow_sql_functions_retrieval=settings.allow_sql_functions_retrieval,
             allow_sql_diagnosis=settings.allow_sql_diagnosis,
             allow_sql_knowledge_retrieval=settings.allow_sql_knowledge_retrieval,
+            semantic_plan_mode=settings.semantic_plan_mode,
             allow_semantic_plan_llm=settings.allow_semantic_plan_llm,
             ask_policy_file=settings.ask_policy_file,
             max_histories=settings.max_histories,

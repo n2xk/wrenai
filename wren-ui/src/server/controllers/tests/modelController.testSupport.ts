@@ -101,4 +101,7 @@ export const createContext = () =>
     kbSnapshotRepository: {
       findOneBy: jest.fn(),
     },
+    businessKnowledgeService: {
+      listBusinessKnowledgeInstructions: jest.fn().mockResolvedValue([]),
+    },
   }) as any;

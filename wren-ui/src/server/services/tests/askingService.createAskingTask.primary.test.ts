@@ -329,6 +329,10 @@ describe('AskingService', () => {
             templateIds: [],
             forbiddenTemplates: ['T08'],
             requiredSlots: ['tenant_plat_id'],
+            semanticConditions: {
+              metrics: ['first_deposit_users'],
+              routes: ['template_reference_sql'],
+            },
             reasonCode: 'policy_missing_tenant_for_channel_metric',
           },
         ]),
@@ -373,6 +377,10 @@ describe('AskingService', () => {
                 query_contains_any: ['渠道', '首充'],
                 forbidden_templates: ['T08'],
                 required_slots: ['tenant_plat_id'],
+                semantic_conditions: {
+                  metrics: ['first_deposit_users'],
+                  routes: ['template_reference_sql'],
+                },
               }),
             ],
           }),

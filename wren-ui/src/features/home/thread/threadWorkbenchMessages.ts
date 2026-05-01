@@ -396,12 +396,10 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         explicitBusinessTemplateSelected:
           'Matched an explicit business template',
         inactiveTemplate: 'Template is inactive and was not applied directly',
-        missingTemplateParameters:
-          'Required template parameters were incomplete, so the flow downgraded',
+        missingTemplateParameters: '业务模板缺少必填参数，已降级为安全处理',
         missingExternalData:
           'The question depends on external data, so the answer asks for more data',
-        missingRequiredSlot:
-          'Required business parameters were missing, so the flow asked a clarification question first',
+        missingRequiredSlot: '缺少必要业务参数，已先发起澄清',
         noSqlPairCandidates: 'No SQL template/reference candidates matched',
         referenceSqlPairSelected: 'Matched a related SQL reference sample',
         templateConfidenceBelowThreshold:
@@ -409,7 +407,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         templateConflictLowMargin:
           'Competing templates were too close to auto-apply safely',
         templateCoreProtectionRejectedCorrection:
-          'Rejected a correction that would alter the protected template core',
+          '已拦截可能改变业务口径的 SQL 修正',
         templateDryRunFailed:
           'Direct template execution failed dry-run validation and fell back safely',
         templateGuardChannelPeriodSummaryMismatch:

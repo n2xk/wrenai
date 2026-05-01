@@ -284,6 +284,39 @@ def test_trace_metadata_prefers_resolved_bridge_scope_id(
     )
 
 
+def test_fetch_wren_ai_docs_skips_when_endpoint_is_not_configured(
+    mocker: MockFixture,
+):
+    request_get = mocker.patch("src.utils.requests.get")
+
+    assert utils.fetch_wren_ai_docs(None, is_oss=True) == []
+    request_get.assert_not_called()
+
+
+def test_fetch_wren_ai_docs_fetches_configured_endpoint(mocker: MockFixture):
+    response = mocker.Mock()
+    response.text = "intro.md\nhello\nworld\n---\nsetup.md\nconfig guide"
+    response.raise_for_status.return_value = None
+    request_get = mocker.patch("src.utils.requests.get", return_value=response)
+
+    docs = utils.fetch_wren_ai_docs("https://docs.example.com/", is_oss=True)
+
+    request_get.assert_called_once_with(
+        "https://docs.example.com/oss/llms.md",
+        timeout=10,
+    )
+    assert docs == [
+        {
+            "path": "https://docs.example.com/oss/intro",
+            "content": "hello\nworld",
+        },
+        {
+            "path": "https://docs.example.com/oss/setup",
+            "content": "config guide",
+        },
+    ]
+
+
 def test_clean_display_name():
     # Test empty and None cases
     assert clean_display_name("") == ""
