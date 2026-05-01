@@ -1,7 +1,7 @@
 ---
 kb_asset_type: external_dependency
 import_target: external_dependency
-import_format_version: v1
+import_format_version: v2
 id: access_uv
 name: 访问UV
 status: active
@@ -26,6 +26,37 @@ validation:
   min: 0
 source_documents:
   - 第一期数据报表需求V1.xlsx
+trigger_when:
+  - 问题要求 UV、访问UV、访问人数、独立访客数
+  - 问题要求 UV 下载率、UV 注册率等转化率
+  - SQL 模板或业务词明确依赖 access_uv
+not_trigger_when:
+  - 只查询站内充值、投注、首存、续存、提现指标
+  - 只查询 PV 或下载点击 UV，不需要访问 UV
+lifecycle: per_question
+input_modes:
+  - single_value
+  - csv_upload
+required_grain_schema:
+  required_columns:
+    - date
+    - channel_id
+    - access_uv
+  accepted_grains:
+    - biz_date + channel_id
+    - date_range + channel_id
+value_schema:
+  access_uv:
+    type: number
+    min: 0
+    description: 访问 UV
+join_contract:
+  status: target_design
+  join_keys:
+    - biz_date
+    - channel_id
+  join_type: left_join_after_user_confirmation
+  note: 当前运行时只做缺失阻断和追问，不自动生成联邦 join。
 ---
 
 # 访问UV

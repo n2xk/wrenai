@@ -7,6 +7,8 @@
 - `scope: global` 规则导入时映射为全局 instruction，不需要 `questions`
 - `scope: question_match` 规则导入前必须补齐 front matter 中的 `questions`
 - `keywords` 只作为维护标签，不作为当前运行时 instruction 检索的直接输入
+- 分析规则只承载业务口径、公式和适用报表，不承载模板禁用或必填槽位硬门槛；模板禁用与必填槽位请配置到“问数策略”，外部补数请配置到“外部数据依赖”
+- 涉及 ROI / 首存成本 / PV / UV / 下载点击 UV 的规则必须通过 `related_external_dependencies` 指向外部数据依赖，避免 LLM 编造缺失外部指标
 
 ## 单文件列表
 

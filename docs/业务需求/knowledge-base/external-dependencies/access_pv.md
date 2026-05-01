@@ -1,7 +1,7 @@
 ---
 kb_asset_type: external_dependency
 import_target: external_dependency
-import_format_version: v1
+import_format_version: v2
 id: access_pv
 name: 访问PV
 status: active
@@ -26,6 +26,37 @@ validation:
   min: 0
 source_documents:
   - 第一期数据报表需求V1.xlsx
+trigger_when:
+  - 问题要求 PV、访问PV、页面访问量、页面浏览量
+  - 问题要求 UV 注册率、UV 下载率且公式需要访问 PV 作为补充指标
+  - SQL 模板或业务词明确依赖 access_pv
+not_trigger_when:
+  - 只查询站内充值、投注、首存、续存、提现指标
+  - 只查询 ROI、投放金额、首存成本且不涉及访问 PV
+lifecycle: per_question
+input_modes:
+  - single_value
+  - csv_upload
+required_grain_schema:
+  required_columns:
+    - date
+    - channel_id
+    - access_pv
+  accepted_grains:
+    - biz_date + channel_id
+    - date_range + channel_id
+value_schema:
+  access_pv:
+    type: number
+    min: 0
+    description: 访问 PV
+join_contract:
+  status: target_design
+  join_keys:
+    - biz_date
+    - channel_id
+  join_type: left_join_after_user_confirmation
+  note: 当前运行时只做缺失阻断和追问，不自动生成联邦 join。
 ---
 
 # 访问PV

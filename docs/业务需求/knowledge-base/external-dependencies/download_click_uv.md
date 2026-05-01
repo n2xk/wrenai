@@ -1,7 +1,7 @@
 ---
 kb_asset_type: external_dependency
 import_target: external_dependency
-import_format_version: v1
+import_format_version: v2
 id: download_click_uv
 name: 下载点击UV
 status: active
@@ -26,6 +26,37 @@ validation:
   min: 0
 source_documents:
   - 第一期数据报表需求V1.xlsx
+trigger_when:
+  - 问题要求下载点击 UV、下载UV、下载点击人数、点击下载人数
+  - 问题要求 UV 下载率或下载转化率
+  - SQL 模板或业务词明确依赖 download_click_uv
+not_trigger_when:
+  - 只查询站内充值、投注、首存、续存、提现指标
+  - 只查询 PV / UV 但不要求下载转化
+lifecycle: per_question
+input_modes:
+  - single_value
+  - csv_upload
+required_grain_schema:
+  required_columns:
+    - date
+    - channel_id
+    - download_click_uv
+  accepted_grains:
+    - biz_date + channel_id
+    - date_range + channel_id
+value_schema:
+  download_click_uv:
+    type: number
+    min: 0
+    description: 下载点击 UV
+join_contract:
+  status: target_design
+  join_keys:
+    - biz_date
+    - channel_id
+  join_type: left_join_after_user_confirmation
+  note: 当前运行时只做缺失阻断和追问，不自动生成联邦 join。
 ---
 
 # 下载点击UV

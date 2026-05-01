@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: traffic_metrics
 name: 流量指标
 category: metric
@@ -27,9 +27,23 @@ related_templates:
 features:
   - traffic
   - external_metrics
-conflict_terms: []
+conflict_terms:
+  - roi
+  - first_deposit_cost
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计 PV、UV、访问人数、下载点击 UV
+  - 统计 UV 下载率、UV 注册率等流量转化指标
+not_applicable_scenarios:
+  - 只查询站内充值、投注、首存、续存、提现指标
+  - 只查询 ROI 或投放成本，不涉及访问或下载流量
+required_slots:
+  - date_range
+  - channel_id
+supported_grains:
+  - biz_date + channel_id
+  - date_range + channel_id
 ---
 
 # 流量指标

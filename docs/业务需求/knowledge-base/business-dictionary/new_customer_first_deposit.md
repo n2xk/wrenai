@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: new_customer_first_deposit
 name: 新客首存
 category: metric
@@ -33,6 +33,19 @@ conflict_terms:
   - develop_user
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计新客首存、注册当日首存、当日注册首充
+  - 综合日报中新客首存人数或新客首存金额
+not_applicable_scenarios:
+  - 统计非注册当日首存的开发人数
+  - 统计全部首存用户且不区分注册日期
+  - 统计普通充值或续存
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - biz_date
+  - date_range
+  - channel_id
 ---
 
 # 新客首存

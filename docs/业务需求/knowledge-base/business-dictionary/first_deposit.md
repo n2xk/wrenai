@@ -45,6 +45,12 @@ features:
 conflict_terms: []
 source_documents:
   - 第一期数据报表需求V1.xlsx
+supported_grains:
+  - first_deposit_date
+  - biz_date
+  - date_range
+  - channel_id
+  - player_id
 ---
 
 # 首存

@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: retention_deposit
 name: 续存
 category: metric
@@ -36,6 +36,20 @@ conflict_terms:
   - first_deposit
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计首存 cohort 后的二存到六存人数、金额或续存率
+  - 按首存日期、相对日龄或渠道分析续存表现
+not_applicable_scenarios:
+  - 统计普通成功充值订单汇总
+  - 只提取首存用户名单或首存金额
+  - 统计所有用户区间充值，不以首存 cohort 为分母
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - first_deposit_date
+  - relative_day_no
+  - channel_id
+  - deposit_times
 ---
 
 # 续存

@@ -95,7 +95,7 @@ source_documents:
 | `positive_scenarios` | `businessSignature.positiveCues` | runtime scoring 已消费 |
 | `negative_scenarios` | `businessSignature.negativeCues` | runtime guard / scoring 已消费 |
 | `external_dependencies` | `businessSignature.externalDependencies` | 外部数据缺失检测已消费 |
-| `status` | `status` | `draft_sql` 建议映射为 `draft`；验证后再 `active` |
+| `status` | `status` | `draft_sql` 是文档侧待导入/待复核状态；经治理导入 API 通过 owner/admin 审批后映射为 `active`，只有明确下线才写 `deprecated` |
 
 ## 3. 分析规则（`import_target = instruction`）
 
@@ -160,6 +160,9 @@ not_applicable_scenarios:
   - 普通充值订单汇总
 required_slots:
   - tenant_plat_id
+supported_grains:
+  - first_deposit_date
+  - date_range
 related_rules:
   - R02
 related_templates:
@@ -184,6 +187,8 @@ source_documents:
 | `applicable_scenarios` | `applicableScenarios` |
 | `not_applicable_scenarios` | `notApplicableScenarios` |
 | `required_slots` | `requiredSlots` |
+
+`supported_grains` 是 v2 治理字段，用于描述业务词支持的日期 / 渠道 / cohort / 分层粒度。当前导入脚本可保留该字段作为知识资产元数据；完整结构化 SemanticPlan 上线后再作为 grain guard 的输入。
 
 ## 5. 外部数据依赖（`import_target = external_dependency`）
 
@@ -216,6 +221,21 @@ ask_user_prompt: 请提供当前问题对应统计粒度的投放金额。
 validation:
   value_type: number
   min: 0
+required_grain_schema:
+  required_columns:
+    - date
+    - channel_id
+    - ad_spend
+value_schema:
+  ad_spend:
+    type: number
+    min: 0
+join_contract:
+  status: target_design
+  join_keys:
+    - biz_date
+    - channel_id
+  join_type: left_join_after_user_confirmation
 ```
 
 映射规则：
@@ -237,6 +257,8 @@ validation:
 | `validation` | `validation` |
 
 当前推荐 `lifecycle = per_question`，避免外部补充数据污染其他对话或 workspace。
+
+`required_grain_schema`、`value_schema`、`join_contract` 是 v2 治理字段。当前运行时仍以“缺失阻断 + 追问”为主，不会因为配置了 `join_contract` 就自动生成联邦 join；这些字段用于后续结构化补数、CSV 校验和多知识库 / Trino 联邦能力演进。
 
 ## 6. 正文结构约定
 
@@ -273,4 +295,5 @@ validation:
 - v1 `business_signature.expected_grain`、`positive_cues`、`negative_cues`、`external_dependencies` 必须兼容映射到 camelCase API 字段。
 - 缺少 `expected_grain` 时，不做 P0/P1 硬阻断；只作为 unknown 写入 diagnostics。
 - `runtime_sync`、未知字段、注释字段必须忽略，避免未来扩展导致导入失败。
+- 文档状态 `draft_sql` 不等于运行态 `draft`。导入为治理模板后，API 会补齐审批信息并进入 `active`，否则 AI runtime 会过滤该模板，导致问数路由退回到普通生成或错误参考模板。
 - 已有 `reference` SQL pair 保持 `reference`；如需升级为 `anchored_template` / `executable_template`，必须补齐 `required_slots`、适用/不适用场景，并通过 dry-run / 回归验证。

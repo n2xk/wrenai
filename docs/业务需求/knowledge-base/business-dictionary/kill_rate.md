@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: kill_rate
 name: 杀率
 category: formula
@@ -30,9 +30,26 @@ features:
   - ratio
   - kill_rate
   - game_type
-conflict_terms: []
+conflict_terms:
+  - bet_deposit_ratio
+  - roi
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计杀率、平台杀率、用户输赢率
+  - 按游戏类型、渠道或用户分层分析输赢 / 有效投注
+not_applicable_scenarios:
+  - 查询投充比，分子分母是投注与充值
+  - 查询 ROI 或投放回收，依赖投放金额
+  - 只查询有效投注金额或输赢金额明细，不要求比率
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - biz_date
+  - date_range
+  - channel_id
+  - game_type_id
+  - player_segment
 ---
 
 # 杀率

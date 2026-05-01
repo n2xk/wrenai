@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: first_deposit_cost
 name: 首存成本
 category: formula
@@ -26,9 +26,24 @@ features:
   - first_deposit
   - cost
   - external_dependency
-conflict_terms: []
+conflict_terms:
+  - first_deposit
+  - roi
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计首存成本、CPA、获客成本
+  - 需要用投放金额除以首存人数的成本分析
+not_applicable_scenarios:
+  - 只查询首存人数、首存金额或首存名单
+  - 没有提供投放金额且问题不要求成本
+  - 只查询站内充值、投注、提现指标
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - date_range + channel_id
+  - biz_date + channel_id
+  - cohort_period
 ---
 
 # 首存成本

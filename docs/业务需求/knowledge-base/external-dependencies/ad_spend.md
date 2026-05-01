@@ -41,6 +41,27 @@ validation:
   min: 0
 source_documents:
   - 第一期数据报表需求V1.xlsx
+required_grain_schema:
+  required_columns:
+    - date
+    - channel_id
+    - ad_spend
+  accepted_grains:
+    - biz_date + channel_id
+    - date_range + channel_id
+    - cohort_period
+value_schema:
+  ad_spend:
+    type: number
+    min: 0
+    description: 投放金额
+join_contract:
+  status: target_design
+  join_keys:
+    - biz_date
+    - channel_id
+  join_type: left_join_after_user_confirmation
+  note: 当前运行时只做缺失阻断和追问，不自动生成联邦 join。
 ---
 
 # 投放金额

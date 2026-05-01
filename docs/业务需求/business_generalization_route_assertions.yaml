@@ -88,8 +88,21 @@ cases:
     expected_route: clarification_required
     expected_clarification: true
 
+  - case_id: ROUTE04A
+    expected_route: clarification_required
+    expected_clarification: true
+    required_missing_parameters:
+      - tenant_plat_id
+    required_content:
+      - 租户平台
+    diagnostics_must_include:
+      - tenant_plat_id
+
   - case_id: ROUTE04
+    expected_route: blocked_missing_external_data
     expected_external_blocking: true
+    diagnostics_must_include:
+      - blocked_missing_external_data
 
   - case_id: ROUTE06
     expected_route: normal_text_to_sql

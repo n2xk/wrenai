@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: topn_segment
 name: TOPN 分层
 category: segment
@@ -36,6 +36,20 @@ features:
 conflict_terms: []
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 按用户区间内累计有效投注划分 TOP3、TOP5、非 TOP3、非 TOP5
+  - 首存及续存率、投充比与杀率、游戏类型分布中的 TOPN 用户分层
+not_applicable_scenarios:
+  - 按渠道收入、充值金额或注册人数给渠道排名
+  - 只查询单个游戏类型或单个玩家，不需要 TOPN 分层
+  - 按单日投注额排序而不是区间累计投注额
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - date_range
+  - player_id
+  - game_type_id
+  - top_n
 ---
 
 # TOPN 分层

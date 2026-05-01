@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run route-level smoke checks for the 46 business generalization cases.
+"""Run route-level smoke checks for the 47 business generalization cases.
 
 The CSV contains product, numeric, and UI assertions that cannot all be proven by
 the AI-service ask API alone. This runner therefore focuses on the route contract

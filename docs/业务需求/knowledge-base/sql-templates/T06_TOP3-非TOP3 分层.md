@@ -1,7 +1,7 @@
 ---
 kb_asset_type: sql_template
 import_target: sql_pair
-import_format_version: v1
+import_format_version: v2
 dialect: tidb_mysql8
 parameter_style: colon_named
 result_grain: player_id
@@ -10,6 +10,13 @@ title: TOP3/非TOP3 分层
 report: ROI/投充比与杀率
 priority: high
 status: draft_sql
+template_type: anchored_template
+required_slots:
+  - tenant_plat_id
+  - channel_id
+  - start_date
+  - end_date
+  - top_n
 runtime_sync:
   last_verified_at: 2026-04-26
   sync_source: 当前TiDB workspace知识资产快照-2026-04-26

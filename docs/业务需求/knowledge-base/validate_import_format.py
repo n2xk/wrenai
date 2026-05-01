@@ -38,7 +38,11 @@ SUPPORTED_TEMPLATE_MODES = {
     "reference_example",
 }
 SQL_STATUS_MAP = {
-    "draft_sql": "draft",
+    # `draft_sql` is the document-side authoring/review state. SQL templates
+    # that pass the governed import path are owner/admin approved by the API and
+    # must be active in the runtime index; otherwise they are filtered out
+    # during ask-template routing and unrelated reference examples may win.
+    "draft_sql": "active",
     "spec_only": "draft",
     "blocked_missing_source": "draft",
     "blocked_missing_sql_model": "draft",

@@ -1,7 +1,7 @@
 ---
 kb_asset_type: business_term
 import_target: business_dictionary
-import_format_version: v1
+import_format_version: v2
 id: develop_user
 name: 开发人数
 category: metric
@@ -32,6 +32,19 @@ conflict_terms:
   - new_customer_first_deposit
 source_documents:
   - 第一期数据报表需求V1.xlsx
+applicable_scenarios:
+  - 统计开发人数、老客首存、非当日注册首存
+  - 综合日报中区分新客首存与开发首存
+not_applicable_scenarios:
+  - 统计注册当天首存的新客首存
+  - 统计全部首存用户且不区分注册日期
+  - 统计普通充值或续存用户
+required_slots:
+  - tenant_plat_id
+supported_grains:
+  - biz_date
+  - date_range
+  - channel_id
 ---
 
 # 开发人数

@@ -118,6 +118,19 @@ def execute_generated_sql(sql: str) -> list[dict[str, Any]]:
         conn.close()
 
 
+def try_execute_generated_sql(
+    result: ManualCaseResult,
+    sql: str,
+    *,
+    label: str = "generated SQL",
+) -> list[dict[str, Any]] | None:
+    try:
+        return execute_generated_sql(sql)
+    except Exception as exc:  # noqa: BLE001 - regression report should capture SQL errors
+        result.fail(f"{label} 执行失败：{type(exc).__name__}: {exc}")
+        return None
+
+
 def to_chart_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not rows:
         return {"columns": [], "data": []}
@@ -177,7 +190,9 @@ def verify_px01(args: argparse.Namespace) -> ManualCaseResult:
     if not sql:
         result.fail("未生成 SQL")
         return result
-    rows = execute_generated_sql(sql)
+    rows = try_execute_generated_sql(result, sql)
+    if rows is None:
+        return result
     if len(rows) != 1:
         result.fail(f"row_count={len(rows)}, expected=1")
         return result
@@ -229,7 +244,9 @@ def verify_px05(args: argparse.Namespace) -> tuple[ManualCaseResult, str | None,
     if not sql:
         result.fail("未生成 SQL")
         return result, None, []
-    rows = execute_generated_sql(sql)
+    rows = try_execute_generated_sql(result, sql)
+    if rows is None:
+        return result, sql, []
     by_segment = {str(row.get("user_segment")): row for row in rows}
     if set(by_segment) != {"TOPN", "NON_TOPN"}:
         result.fail(f"segments={sorted(by_segment)}, expected=TOPN/NON_TOPN")
@@ -334,18 +351,29 @@ def verify_ling01(args: argparse.Namespace) -> ManualCaseResult:
     if not sql:
         result.fail("补租户后未生成 SQL")
         return result
-    generated_rows = execute_generated_sql(sql)
-    expected_rows = execute_generated_sql(render_template_sql("T08", {
-        "tenant_plat_id": 990001,
-        "channel_id": 990011,
-        "start_date": "2026-04-01",
-        "end_date": "2026-04-07",
-        "cohort_start_date": "2026-04-01",
-        "cohort_end_date": "2026-04-03",
-        "top_n": 3,
-        "n_days": 7,
-        "period_days": 7,
-    }))
+    generated_rows = try_execute_generated_sql(result, sql)
+    if generated_rows is None:
+        return result
+    expected_rows = try_execute_generated_sql(
+        result,
+        render_template_sql(
+            "T08",
+            {
+                "tenant_plat_id": 990001,
+                "channel_id": 990011,
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-07",
+                "cohort_start_date": "2026-04-01",
+                "cohort_end_date": "2026-04-03",
+                "top_n": 3,
+                "n_days": 7,
+                "period_days": 7,
+            },
+        ),
+        label="expected T08 SQL",
+    )
+    if expected_rows is None:
+        return result
     generated_by_day = {str(row.get("first_deposit_date")): row for row in generated_rows}
     expected_by_day = {str(row.get("first_deposit_date")): row for row in expected_rows}
     for day in ["2026-04-01", "2026-04-02", "2026-04-03"]:

@@ -38,6 +38,8 @@ class SmokeTarget:
     name: str
     method: str
     path: str
+    body: dict[str, Any] | None = None
+    scope: str = "runtime"
     expected_statuses: tuple[int, ...] = (200,)
     required: bool = True
 
@@ -97,16 +99,19 @@ def build_targets(args: argparse.Namespace) -> list[SmokeTarget]:
         targets.append(
             SmokeTarget(
                 "spreadsheet_preview",
-                "GET",
+                "POST",
                 f"/api/v1/spreadsheets/{args.spreadsheet_id}/preview",
+                body={"page": 1, "pageSize": 20, "includeCount": True},
             )
         )
     if args.dashboard_item_id:
         targets.append(
             SmokeTarget(
                 "dashboard_item_preview",
-                "GET",
+                "POST",
                 f"/api/v1/dashboard-items/{args.dashboard_item_id}/preview",
+                body={"limit": 20, "refresh": False},
+                scope="workspace",
             )
         )
     if args.thread_response_id:
@@ -129,14 +134,19 @@ def request_json(
     authorization: str | None,
     cookie: str | None,
     timeout: float,
+    body: dict[str, Any] | None = None,
 ) -> tuple[int, Any]:
     headers = {"Accept": "application/json"}
+    data = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
     if authorization:
         headers["Authorization"] = authorization
     if cookie:
         headers["Cookie"] = cookie
 
-    request = Request(url, method=method, headers=headers)
+    request = Request(url, data=data, method=method, headers=headers)
     with urlopen(request, timeout=timeout) as response:
         body = response.read()
         if not body:
@@ -168,9 +178,16 @@ def check_repo_assets() -> list[SmokeResult]:
 
 def run_http_checks(args: argparse.Namespace) -> list[SmokeResult]:
     params = runtime_scope_params(args)
+    workspace_only_params = {
+        "workspaceId": args.workspace_id,
+    } if args.workspace_id else {}
     results: list[SmokeResult] = []
     for target in build_targets(args):
-        url = build_url(args.ui_endpoint, target.path, params)
+        url = build_url(
+            args.ui_endpoint,
+            target.path,
+            workspace_only_params if target.scope == "workspace" else params,
+        )
         if args.dry_run:
             results.append(
                 SmokeResult(
@@ -189,6 +206,7 @@ def run_http_checks(args: argparse.Namespace) -> list[SmokeResult]:
                 authorization=args.authorization,
                 cookie=args.cookie,
                 timeout=args.timeout,
+                body=target.body,
             )
         except HTTPError as error:
             status = error.code
