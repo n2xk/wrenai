@@ -125,6 +125,14 @@ def test_coerce_ask_policy_config_from_request_payload():
     assert config.rules[0].required_slots == ("tenant_plat_id",)
 
 
+def test_coerce_ask_policy_config_returns_none_for_empty_request_rules():
+    assert (
+        coerce_ask_policy_config({"policyId": "workspace_policy", "rules": []})
+        is None
+    )
+    assert coerce_ask_policy_config({"policyId": "workspace_policy"}) is None
+
+
 def test_evaluate_policy_context_matches_semantic_metric_without_query_cue():
     evaluation = evaluate_policy_context(
         query="帮我看一下这个指标",

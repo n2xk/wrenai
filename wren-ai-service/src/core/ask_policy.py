@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +9,7 @@ import yaml
 
 DEFAULT_POLICY_ID = "semantic_governance"
 DEFAULT_POLICY_VERSION = "semantic_governance_v1"
+logger = logging.getLogger("wren-ai-service")
 
 
 @dataclass(frozen=True)
@@ -195,7 +197,7 @@ def load_ask_policy_config(policy_file: Optional[str] = None) -> AskPolicyConfig
     )
 
 
-def coerce_ask_policy_config(raw: Any) -> AskPolicyConfig:
+def coerce_ask_policy_config(raw: Any) -> Optional[AskPolicyConfig]:
     """Build an ask policy config from request-level JSON.
 
     The file loader remains the default deployment-level contract. Productized
@@ -208,16 +210,23 @@ def coerce_ask_policy_config(raw: Any) -> AskPolicyConfig:
         return raw
 
     if not isinstance(raw, dict):
-        return AskPolicyConfig()
+        return None
+
+    rules = tuple(
+        _parse_rule(raw_rule, index)
+        for index, raw_rule in enumerate(_as_list(raw.get("rules")), start=1)
+        if isinstance(raw_rule, dict)
+    )
+    if not rules:
+        logger.warning(
+            "Request-level ask_policy has no valid rules; falling back to file-level policy."
+        )
+        return None
 
     return AskPolicyConfig(
         policy_id=str(raw.get("policy_id") or raw.get("policyId") or DEFAULT_POLICY_ID),
         version=str(raw.get("version") or DEFAULT_POLICY_VERSION),
-        rules=tuple(
-            _parse_rule(raw_rule, index)
-            for index, raw_rule in enumerate(_as_list(raw.get("rules")), start=1)
-            if isinstance(raw_rule, dict)
-        ),
+        rules=rules,
     )
 
 

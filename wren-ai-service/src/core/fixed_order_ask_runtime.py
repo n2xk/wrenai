@@ -4395,11 +4395,10 @@ class BaseFixedOrderAskRuntime:
         *,
         request_policy: Optional[dict[str, Any]] = None,
     ) -> None:
-        policy_config = (
-            coerce_ask_policy_config(request_policy)
-            if request_policy
-            else self._ask_policy_config
+        request_policy_config = (
+            coerce_ask_policy_config(request_policy) if request_policy else None
         )
+        policy_config = request_policy_config or self._ask_policy_config
         evaluation = evaluate_policy_context(
             query=state.user_query,
             semantic_plan=state.semantic_plan,

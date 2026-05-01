@@ -684,16 +684,56 @@ SQL_GENERATION_MODEL_KWARGS = {
 }
 
 
+def _normalize_instruction_text(instruction: Any) -> str:
+    if isinstance(instruction, str):
+        return instruction.strip()
+    if isinstance(instruction, dict):
+        value = instruction.get("instruction") or instruction.get("content") or ""
+        return str(value).strip()
+    return str(instruction).strip()
+
+
+def _normalize_knowledge_asset_type(instruction: Any) -> str:
+    if not isinstance(instruction, dict):
+        return ""
+    return str(instruction.get("knowledge_asset_type") or "").strip().lower()
+
+
 def construct_instructions(
-    instructions: list[dict] | None = None,
+    instructions: list[dict] | list[str] | None = None,
+    group_by_asset_type: bool = False,
 ):
-    _instructions = []
-    if instructions:
-        _instructions += [
-            instruction.get("instruction") for instruction in instructions
+    if not group_by_asset_type:
+        return [
+            text
+            for text in (
+                _normalize_instruction_text(instruction)
+                for instruction in (instructions or [])
+            )
+            if text
         ]
 
-    return _instructions
+    grouped_instructions = {
+        "business_glossary": [],
+        "query_rules": [],
+        "context_notes": [],
+    }
+    for instruction in instructions or []:
+        text = _normalize_instruction_text(instruction)
+        if not text:
+            continue
+
+        knowledge_asset_type = _normalize_knowledge_asset_type(instruction)
+        if knowledge_asset_type == "business_term":
+            grouped_instructions["business_glossary"].append(text)
+        elif knowledge_asset_type == "external_dependency":
+            grouped_instructions["context_notes"].append(text)
+        else:
+            # Treat sql_rule, instruction, missing, unknown, and legacy string
+            # instructions as generic query rules so old inputs keep working.
+            grouped_instructions["query_rules"].append(text)
+
+    return grouped_instructions
 
 
 def construct_ask_history_messages(

@@ -66,11 +66,26 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if instructions %}
+{% if instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
 ### USER INSTRUCTIONS ###
-{% for instruction in instructions %}
+{% if instructions.business_glossary %}
+#### BUSINESS GLOSSARY ####
+{% for instruction in instructions.business_glossary %}
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
+{% endif %}
+{% if instructions.query_rules %}
+#### QUERY RULES ####
+{% for instruction in instructions.query_rules %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+{% if instructions.context_notes %}
+#### CONTEXT NOTES ####
+{% for instruction in instructions.context_notes %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
 {% endif %}
 
 ### QUESTION ###
@@ -106,6 +121,7 @@ def prompt(
         sql_generation_reasoning=sql_generation_reasoning,
         instructions=construct_instructions(
             instructions=instructions,
+            group_by_asset_type=True,
         ),
         calculated_field_instructions=(
             get_calculated_field_instructions(sql_knowledge)
