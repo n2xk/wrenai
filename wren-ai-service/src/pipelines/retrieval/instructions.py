@@ -18,6 +18,10 @@ from src.pipelines.common import (
 logger = logging.getLogger("wren-ai-service")
 
 
+def _limit_documents(documents: List[Document], max_size: int) -> List[Document]:
+    return documents[: max(max_size, 0)]
+
+
 @component
 class OutputFormatter:
     @component.output_types(
@@ -36,7 +40,10 @@ class OutputFormatter:
                 "external_dependency_id": doc.meta.get("external_dependency_id"),
                 "aliases": doc.meta.get("aliases") or [],
                 "related_business_terms": doc.meta.get("related_business_terms") or [],
-                "related_external_dependencies": doc.meta.get("related_external_dependencies") or [],
+                "related_external_dependencies": doc.meta.get(
+                    "related_external_dependencies"
+                )
+                or [],
                 "runtime_usage": doc.meta.get("runtime_usage"),
                 "source_status": doc.meta.get("source_status"),
                 "missing_behavior": doc.meta.get("missing_behavior"),
@@ -71,9 +78,7 @@ class ScopeFilter:
 
 ## Start of Pipeline
 @observe(capture_input=False)
-async def count_documents(
-    store: Any, runtime_scope_id: Optional[str] = None
-) -> int:
+async def count_documents(store: Any, runtime_scope_id: Optional[str] = None) -> int:
     runtime_scope_id = resolve_pipeline_runtime_scope_id(runtime_scope_id)
     filters = build_runtime_scope_filters(runtime_scope_id)
     document_count = await store.count_documents(filters=filters)
@@ -138,7 +143,8 @@ async def default_instructions(
     runtime_scope_id: str,
     scope_filter: ScopeFilter,
     scope: str,
-) -> list[Document]:
+    default_instructions_max_size: int = 20,
+) -> dict:
     if not count_documents:
         return []
 
@@ -159,19 +165,29 @@ async def default_instructions(
         scope=scope,
     )
 
-    return dict(documents=res.get("documents"))
+    return dict(
+        documents=_limit_documents(
+            res.get("documents") or [],
+            default_instructions_max_size,
+        )
+    )
 
 
 @observe(capture_input=False)
 def formatted_output(
-    default_instructions: list[Document],
+    default_instructions: dict,
     filtered_documents: dict,
     output_formatter: OutputFormatter,
+    default_instructions_max_size: int = 20,
 ) -> dict:
     if not filtered_documents and not default_instructions:
         return {"documents": []}
 
-    merged = default_instructions.get("documents") + filtered_documents.get("documents")
+    limited_default_documents = _limit_documents(
+        default_instructions.get("documents") or [],
+        default_instructions_max_size,
+    )
+    merged = limited_default_documents + (filtered_documents.get("documents") or [])
     documents = output_formatter.run(documents=merged)
     return documents
 
@@ -186,6 +202,7 @@ class Instructions(BasicPipeline):
         document_store_provider: DocumentStoreProvider,
         similarity_threshold: float = 0.7,
         top_k: int = 10,
+        default_instructions_max_size: int = 20,
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="instructions")
@@ -202,6 +219,7 @@ class Instructions(BasicPipeline):
         self._configs = {
             "similarity_threshold": similarity_threshold,
             "top_k": top_k,
+            "default_instructions_max_size": default_instructions_max_size,
         }
 
         super().__init__(

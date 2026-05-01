@@ -885,6 +885,39 @@ def test_apply_policy_state_prefers_request_level_policy():
     ]
 
 
+def test_apply_policy_state_falls_back_to_file_policy_for_empty_request_rules():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    runtime._ask_policy_config = AskPolicyConfig(
+        version="file_policy_v1",
+        rules=(
+            AskPolicyRule(
+                id="file_policy",
+                reason_code="file_policy_forbid_t08",
+                query_contains_any=("普通充值",),
+                forbidden_templates=("T08",),
+            ),
+        ),
+    )
+    state = AskExecutionState(user_query="统计普通充值订单")
+    state.template_decision = {
+        "template_id": "T08",
+        "mode": "anchored_template",
+        "sql_source": "anchored_template",
+    }
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    runtime._apply_policy_state(
+        state,
+        request_policy={"policy_id": "workspace_policy", "rules": []},
+    )
+
+    assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
+    assert state.template_decision["policy_version"] == "file_policy_v1"
+    assert "file_policy_forbid_t08" in state.semantic_plan["decision"][
+        "policy_reason_codes"
+    ]
+
+
 def test_apply_policy_state_marks_required_slots_as_clarification():
     runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
     state = AskExecutionState(user_query="统计首充用户")

@@ -1,5 +1,12 @@
+from haystack.components.builders.prompt_builder import PromptBuilder
+
 from src.pipelines.generation.sql_correction import get_sql_correction_system_prompt
+from src.pipelines.generation.sql_generation import (
+    prompt,
+    sql_generation_user_prompt_template,
+)
 from src.pipelines.generation.utils.sql import (
+    construct_instructions,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
     normalize_mysql_date_interval_functions,
@@ -62,3 +69,78 @@ def test_normalize_mysql_date_interval_functions_for_engine_preview_retry():
 
     assert "DATE_ADD('day', 1, DATE '2026-04-07')" in normalized
     assert "DATE_ADD('day', -7, DATE '2026-04-07')" in normalized
+
+
+def test_construct_instructions_groups_by_knowledge_asset_type():
+    grouped = construct_instructions(
+        [
+            {
+                "instruction": "首充用户指首次成功存款用户",
+                "knowledge_asset_type": "business_term",
+            },
+            {
+                "instruction": "存款统计必须过滤 status = 'success'",
+                "knowledge_asset_type": "sql_rule",
+            },
+            {
+                "instruction": "充值渠道释义来自外部支付台账",
+                "knowledge_asset_type": "external_dependency",
+            },
+            {"instruction": "缺失类型的旧规则仍应注入"},
+            "纯字符串旧规则仍应注入",
+        ],
+        group_by_asset_type=True,
+    )
+
+    assert grouped == {
+        "business_glossary": ["首充用户指首次成功存款用户"],
+        "query_rules": [
+            "存款统计必须过滤 status = 'success'",
+            "缺失类型的旧规则仍应注入",
+            "纯字符串旧规则仍应注入",
+        ],
+        "context_notes": ["充值渠道释义来自外部支付台账"],
+    }
+
+
+def test_construct_instructions_keeps_legacy_list_output_by_default():
+    assert construct_instructions(
+        [
+            {
+                "instruction": "首充用户指首次成功存款用户",
+                "knowledge_asset_type": "business_term",
+            },
+            "纯字符串旧规则仍应注入",
+        ]
+    ) == ["首充用户指首次成功存款用户", "纯字符串旧规则仍应注入"]
+
+
+def test_sql_generation_prompt_renders_instruction_asset_sections():
+    result = prompt(
+        query="统计首充用户",
+        documents=["CREATE TABLE dwd_order_deposit (status varchar, times int);"],
+        prompt_builder=PromptBuilder(template=sql_generation_user_prompt_template),
+        instructions=[
+            {
+                "instruction": "首充用户指首次成功存款用户",
+                "knowledge_asset_type": "business_term",
+            },
+            {
+                "instruction": "存款统计必须过滤 status = 'success'",
+                "knowledge_asset_type": "sql_rule",
+            },
+            {
+                "instruction": "充值渠道释义来自外部支付台账",
+                "knowledge_asset_type": "external_dependency",
+            },
+        ],
+    )
+
+    rendered_prompt = result["prompt"]
+
+    assert "#### BUSINESS GLOSSARY ####" in rendered_prompt
+    assert "1. 首充用户指首次成功存款用户" in rendered_prompt
+    assert "#### QUERY RULES ####" in rendered_prompt
+    assert "1. 存款统计必须过滤 status = 'success'" in rendered_prompt
+    assert "#### CONTEXT NOTES ####" in rendered_prompt
+    assert "1. 充值渠道释义来自外部支付台账" in rendered_prompt
