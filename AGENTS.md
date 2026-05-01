@@ -20,7 +20,7 @@ WrenAI 是一个 GenBI（Generative BI）系统：用户用自然语言提问，
 | --- | --- |
 | `wren-ui/` | Next.js 14 前端，以及 `src/pages/api` + `src/server` 下的本地后端 API / service / repository / adaptor 层 |
 | `wren-ai-service/` | Python 3.12 + FastAPI AI 服务，负责 RAG、LLM 调用、SQL 生成、图表生成、问数策略和诊断数据 |
-| `wren-engine/` | SQL engine git submodule，包含 engine / ibis-server 相关代码；本仓库只做必要联调，不把它当普通目录随意重置 |
+| `wren-engine/` | 本地 SQL engine 源码目录，包含 engine / ibis-server 相关代码；修改后需要随顶层仓库提交并重建本地 Docker 镜像 |
 | `wren-mdl/` | MDL JSON Schema 和相关 schema 测试 |
 | `docker/` | 本地 Docker Compose 依赖服务配置 |
 | `docs/` | 当前需求、设计方案、测试计划、测试结果和本地验收文档 |
@@ -241,7 +241,7 @@ docker compose --env-file .env.example config --quiet
 ## Git / 提交约定
 
 - 常用 scope：`wren-ui`、`wren-ai-service`、`wren-mdl`、`docker`、`deployment`、`docs`。
-- `wren-engine` 是 submodule，查看或提交其改动时要使用 submodule 自己的 git 状态，不要在顶层误 reset。
+- `wren-engine` 是普通本地源码目录，查看或提交其改动时直接使用顶层 git 状态；修改后重建 `wren-engine:local` / `wren-engine-ibis:local` 镜像。
 - 当前仓库经常存在多个并行未提交改动；修改前先看 `git status --short`，不要覆盖无关工作。
 - 文档 / 清理类改动要先说明清理计划，再做最小可回滚修改。
 - 提交信息遵循当前 Lore Commit Protocol / conventional scope 约定。

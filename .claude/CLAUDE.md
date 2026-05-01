@@ -9,7 +9,7 @@ This is a monorepo with three main services:
 - **wren-ui/** — Next.js 14 frontend + Apollo GraphQL backend (TypeScript, Yarn 4.5.3)
 - **wren-ai-service/** — AI/LLM service (Python 3.12, FastAPI, Poetry, Just command runner)
 - **docker/** — Docker Compose configs for running all services together
-- **wren-engine/** — SQL engine (git submodule, not developed here)
+- **wren-engine/** — local SQL engine and ibis-server source used by Docker builds
 - **wren-mdl/** — MDL JSON schema definitions
 
 ## Build, Test, and Lint Commands
