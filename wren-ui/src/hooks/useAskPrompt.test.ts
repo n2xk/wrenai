@@ -5,6 +5,7 @@ import {
   isReadyToThreadResponse,
 } from './useAskPrompt';
 import {
+  handleUpdateRerunAskingTaskCache,
   handleUpdateThreadCache,
   resolvePendingClarificationSubmitDefaults,
 } from './askPromptUtils';
@@ -134,6 +135,95 @@ describe('useAskPrompt helpers', () => {
 
     expect(nextState.thread.responses[0].sql).toBe('SELECT 1 AS value');
     expect(nextState.thread.responses[0].answerDetail).toBeNull();
+  });
+
+  it('clears stale SQL failure while rerunning a text-to-sql response', () => {
+    let nextState: any = null;
+
+    handleUpdateRerunAskingTaskCache({
+      threadResponseId: 103,
+      askingTask: {
+        queryId: 'task-sql-rerun-1',
+        status: AskingTaskStatus.UNDERSTANDING,
+        type: AskingTaskType.TEXT_TO_SQL,
+        candidates: [],
+      } as AskingTask,
+      updateThreadQuery: (updater) => {
+        nextState = updater({
+          thread: {
+            responses: [
+              {
+                id: 103,
+                question: '查询指标',
+                askingTask: {
+                  queryId: 'task-sql-old',
+                  status: AskingTaskStatus.FAILED,
+                  type: AskingTaskType.TEXT_TO_SQL,
+                },
+                answerDetail: {
+                  status: ThreadResponseAnswerStatus.FAILED,
+                  error: {
+                    code: 'TEXT_TO_SQL_SQL_MISSING',
+                    message: 'SQL 生成失败，未能生成可执行查询。',
+                  },
+                },
+                sql: null,
+              },
+            ],
+          },
+        } as any);
+      },
+    });
+
+    expect(nextState.thread.responses[0].askingTask).toEqual(
+      expect.objectContaining({
+        queryId: 'task-sql-rerun-1',
+        status: AskingTaskStatus.SEARCHING,
+        type: AskingTaskType.TEXT_TO_SQL,
+      }),
+    );
+    expect(nextState.thread.responses[0].answerDetail).toBeNull();
+  });
+
+  it('hydrates failed text-to-sql reruns without SQL into SQL failure state', () => {
+    let nextState: any = null;
+
+    handleUpdateThreadCache(
+      {
+        queryId: 'task-sql-rerun-2',
+        status: AskingTaskStatus.FAILED,
+        type: AskingTaskType.TEXT_TO_SQL,
+        candidates: [],
+      } as AskingTask,
+      (updater) => {
+        nextState = updater({
+          thread: {
+            responses: [
+              {
+                id: 104,
+                question: '查询指标',
+                askingTask: {
+                  queryId: 'task-sql-rerun-2',
+                  status: AskingTaskStatus.SEARCHING,
+                  type: AskingTaskType.TEXT_TO_SQL,
+                },
+                answerDetail: null,
+                sql: null,
+              },
+            ],
+          },
+        } as any);
+      },
+    );
+
+    expect(nextState.thread.responses[0].answerDetail).toEqual({
+      status: ThreadResponseAnswerStatus.FAILED,
+      error: {
+        code: 'TEXT_TO_SQL_SQL_MISSING',
+        message:
+          'SQL 生成失败，未能生成可执行查询。请尝试重新生成，或调整问题描述。',
+      },
+    });
   });
 
   it('resolves the latest pending clarification session for follow-up submit', () => {

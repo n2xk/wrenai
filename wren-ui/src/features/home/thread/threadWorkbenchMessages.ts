@@ -21,6 +21,7 @@ export type ThreadWorkbenchMessages = {
       create: string;
       generating: string;
       regenerate: string;
+      unavailable: string;
       view: string;
     };
     descriptions: {
@@ -283,6 +284,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         view: '查看图表',
         regenerate: '重新生成',
         generating: '生成中',
+        unavailable: '暂不可生成',
         create: '生成图表',
       },
       alerts: {
@@ -453,6 +455,7 @@ const THREAD_WORKBENCH_MESSAGE_CATALOG: Record<
         view: 'View chart',
         regenerate: 'Regenerate',
         generating: 'Generating',
+        unavailable: 'Unavailable',
         create: 'Generate chart',
       },
       alerts: {

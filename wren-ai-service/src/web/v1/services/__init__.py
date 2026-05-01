@@ -169,6 +169,9 @@ from .ask import AskService  # noqa: E402
 from .ask_feedback import AskFeedbackService  # noqa: E402
 from .chart import ChartService  # noqa: E402
 from .chart_adjustment import ChartAdjustmentService  # noqa: E402
+from .dashboard_query_controls import (  # noqa: E402
+    DashboardQueryControlsProposalService,
+)
 from .instructions import InstructionsService  # noqa: E402
 from .question_recommendation import QuestionRecommendation  # noqa: E402
 from .relationship_recommendation import RelationshipRecommendation  # noqa: E402
@@ -184,6 +187,7 @@ __all__ = [
     "AskFeedbackService",
     "ChartService",
     "ChartAdjustmentService",
+    "DashboardQueryControlsProposalService",
     "QuestionRecommendation",
     "RelationshipRecommendation",
     "SemanticsDescription",

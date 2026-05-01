@@ -29,6 +29,10 @@ import type { ConversationAidItem } from '@/types/homeIntent';
 import ViewBlock from '@/components/pages/home/promptThread/ViewBlock';
 import TextBasedAnswer from '@/components/pages/home/promptThread/TextBasedAnswer';
 import RecommendedQuestions from '@/components/pages/home/RecommendedQuestions';
+import {
+  isChartRecommendationSelection,
+  resolveRecommendedQuestionIntentHint,
+} from '@/features/home/thread/recommendedQuestionIntent';
 import Preparation from '@/components/pages/home/preparation';
 import ResponseFeedbackModal from '@/components/pages/home/promptThread/ResponseFeedbackModal';
 import useThreadResponseFeedback from '@/hooks/useThreadResponseFeedback';
@@ -52,6 +56,26 @@ import { resolveThreadResponseSqlPreviewMode } from '@/features/home/thread/thre
 const adjustmentType = {
   [ThreadResponseAdjustmentType.APPLY_SQL]: '已应用手动 SQL',
   [ThreadResponseAdjustmentType.REASONING]: '已调整推理步骤',
+};
+
+const CHART_BLOCKING_REASON_CODES = new Set([
+  'EMPTY_RESULT_SET',
+  'INSUFFICIENT_NUMERIC_FIELDS',
+  'INSUFFICIENT_DATA_VARIATION',
+  'UNSUPPORTED_RESULT_SHAPE',
+]);
+
+const isChartRegenerationBlocked = (
+  chartDetail?: ThreadResponse['chartDetail'] | null,
+) => {
+  const chartability = chartDetail?.chartability;
+  const reasonCode = chartability?.reasonCode;
+
+  return Boolean(
+    chartability?.chartable === false ||
+    (typeof reasonCode === 'string' &&
+      CHART_BLOCKING_REASON_CODES.has(reasonCode)),
+  );
 };
 
 const clarificationSlotLabels: Record<string, string> = {
@@ -622,6 +646,9 @@ export default function AnswerResult(props: Props) {
         : null);
   const chartStatus = chartArtifactResponse?.chartDetail?.status;
   const chartError = chartArtifactResponse?.chartDetail?.error;
+  const chartRegenerationBlocked = isChartRegenerationBlocked(
+    chartArtifactResponse?.chartDetail,
+  );
   const hasChartArtifact = isRenderableWorkbenchArtifact(
     chartArtifactResponse,
     'chart',
@@ -837,7 +864,8 @@ export default function AnswerResult(props: Props) {
               >
                 {messages.chart.actions.view}
               </Button>
-            ) : chartStatus === ChartTaskStatus.FAILED ? (
+            ) : chartStatus === ChartTaskStatus.FAILED &&
+              !chartRegenerationBlocked ? (
               <Button
                 icon={<ReloadOutlined />}
                 size="small"
@@ -848,6 +876,10 @@ export default function AnswerResult(props: Props) {
                 }}
               >
                 {messages.chart.actions.regenerate}
+              </Button>
+            ) : chartStatus === ChartTaskStatus.FAILED ? (
+              <Button size="small" type="link" disabled>
+                {messages.chart.actions.unavailable}
               </Button>
             ) : (
               <Button size="small" type="link" disabled>
@@ -902,7 +934,8 @@ export default function AnswerResult(props: Props) {
               {messages.chart.actions.view}
             </Button>
           ) : chartStatus === ChartTaskStatus.FAILED &&
-            chartArtifactResponse ? (
+            chartArtifactResponse &&
+            !chartRegenerationBlocked ? (
             <Button
               icon={<ReloadOutlined />}
               size="small"
@@ -913,6 +946,10 @@ export default function AnswerResult(props: Props) {
               }}
             >
               {messages.chart.actions.regenerate}
+            </Button>
+          ) : chartStatus === ChartTaskStatus.FAILED ? (
+            <Button size="small" type="link" disabled>
+              {messages.chart.actions.unavailable}
             </Button>
           ) : chartStatus ? (
             <Button
@@ -1005,6 +1042,7 @@ export default function AnswerResult(props: Props) {
 
   const handleSelectRecommendedQuestion = useCallback(
     async ({
+      category,
       interactionMode,
       question: nextQuestion,
       sourceResponseId,
@@ -1012,7 +1050,14 @@ export default function AnswerResult(props: Props) {
       sql: _sql,
     }: Parameters<typeof onSelectRecommendedQuestion>[0]) => {
       if (interactionMode === 'execute_intent') {
-        if (suggestedIntent === 'CHART' && sourceResponseId) {
+        if (
+          isChartRecommendationSelection({
+            category,
+            question: nextQuestion,
+            suggestedIntent,
+          }) &&
+          sourceResponseId
+        ) {
           await onGenerateChartAnswer(sourceResponseId, {
             question: nextQuestion,
             sourceResponseId,
@@ -1022,7 +1067,11 @@ export default function AnswerResult(props: Props) {
       }
 
       onDraftConversationAid({
-        intentHint: suggestedIntent || 'ASK',
+        intentHint: resolveRecommendedQuestionIntentHint({
+          category,
+          question: nextQuestion,
+          suggestedIntent,
+        }),
         prompt: nextQuestion,
         sourceAidKind: null,
         sourceResponseId:

@@ -33,10 +33,12 @@ import MenuUnfoldOutlined from '@ant-design/icons/MenuUnfoldOutlined';
 import MoreOutlined from '@ant-design/icons/MoreOutlined';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import RobotOutlined from '@ant-design/icons/RobotOutlined';
+import RollbackOutlined from '@ant-design/icons/RollbackOutlined';
 import SaveOutlined from '@ant-design/icons/SaveOutlined';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import ShareAltOutlined from '@ant-design/icons/ShareAltOutlined';
 import TableOutlined from '@ant-design/icons/TableOutlined';
+import { format } from 'sql-formatter';
 import styled from 'styled-components';
 import PreviewData from '@/components/dataPreview/PreviewData';
 import DirectShellPageFrame from '@/components/reference/DirectShellPageFrame';
@@ -52,6 +54,7 @@ import {
   updateSpreadsheetSetting,
   type SpreadsheetAiOperationType,
   type SpreadsheetDetailData,
+  type SpreadsheetHistoryData,
   type SpreadsheetListItem,
   type SpreadsheetPreviewData,
 } from '@/utils/spreadsheetRest';
@@ -127,18 +130,26 @@ const MetaLine = styled.div`
 `;
 
 const ContentCard = styled(Card)`
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
   border-radius: var(--nova-radius-panel);
   border-color: rgba(15, 23, 42, 0.06);
   box-shadow: none;
 
-  .ant-card-body {
-    min-height: 0;
+  &.ant-card {
     display: flex;
     flex-direction: column;
-    padding: 8px 10px 10px;
+  }
+
+  .ant-card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 8px 10px 6px;
   }
 `;
 
@@ -241,16 +252,26 @@ const ToolbarHint = styled.span`
 
 const SpreadsheetPreviewShell = styled.div`
   min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 
   .spreadsheet-preview {
+    flex: 1 1 auto;
+    height: 100%;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
 
     > div:first-child {
-      margin-bottom: 6px;
+      flex: 0 0 auto;
+      margin-bottom: 4px;
     }
   }
 
   .ant-table-wrapper {
+    flex: 1 1 auto;
     min-height: 0;
   }
 
@@ -371,13 +392,15 @@ const RailItem = styled(DashboardRailItem)`
 const PreviewScroll = styled.div`
   flex: 1 1 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 `;
 
 const PaginationBar = styled.div`
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  padding-top: 8px;
+  padding-top: 4px;
 `;
 
 const SpreadsheetStage = styled.div`
@@ -428,6 +451,34 @@ const ColumnSettingRow = styled.div`
   }
 `;
 
+const SqlModalBody = styled.div`
+  .adm_code-block {
+    border-radius: var(--nova-radius-control);
+    background: #fbfcff !important;
+  }
+
+  .adm-code-wrap {
+    min-height: min(62vh, 620px);
+    max-height: min(62vh, 620px) !important;
+    overflow: auto;
+  }
+`;
+
+const HistoryListItem = styled(List.Item)`
+  &.ant-list-item {
+    align-items: flex-start;
+    padding: 14px 0;
+  }
+
+  .ant-list-item-meta-title {
+    margin-bottom: 6px;
+  }
+
+  .ant-list-item-action {
+    margin-inline-start: 12px;
+  }
+`;
+
 const OPERATION_OPTIONS: Array<{
   value: SpreadsheetAiOperationType;
   label: string;
@@ -454,6 +505,33 @@ const OPERATION_OPTIONS: Array<{
     description: '补充派生字段、标签或比例',
   },
 ];
+
+const SPREADSHEET_HISTORY_TYPE_META: Record<
+  SpreadsheetHistoryData['type'],
+  { label: string; color: string }
+> = {
+  INITIALIZE: { label: '初始化', color: 'blue' },
+  SAVE: { label: '手动保存', color: 'green' },
+  AI_OPERATION: { label: 'AI 操作', color: 'purple' },
+  RESTORE: { label: '回退', color: 'orange' },
+};
+
+const safeFormatSpreadsheetSql = (sql?: string | null) => {
+  const sourceSql = String(sql || '').trim();
+  if (!sourceSql) {
+    return '';
+  }
+
+  try {
+    return format(sourceSql, { language: 'mysql' });
+  } catch (_error) {
+    try {
+      return format(sourceSql, { language: 'trino' });
+    } catch (_fallbackError) {
+      return sourceSql;
+    }
+  }
+};
 
 const getRouterId = (value: string | string[] | undefined) => {
   const raw = Array.isArray(value) ? value[0] : value;
@@ -532,15 +610,8 @@ const applyColumnSetting = (
 };
 
 const SPREADSHEET_TABLE_SCROLL_ROW_THRESHOLD = 12;
-const SPREADSHEET_TABLE_SCROLL_Y = 'calc(100vh - 430px)';
+const SPREADSHEET_TABLE_MIN_SCROLL_Y = 220;
 const SPREADSHEET_COUNT_TIMEOUT_MS = 10_000;
-
-const resolveSpreadsheetTableScrollY = (
-  previewData?: { data?: Array<Array<any>> } | null,
-) =>
-  (previewData?.data?.length || 0) > SPREADSHEET_TABLE_SCROLL_ROW_THRESHOLD
-    ? SPREADSHEET_TABLE_SCROLL_Y
-    : false;
 
 const useSpreadsheetRailActions = ({
   activeSpreadsheetId,
@@ -990,6 +1061,9 @@ export function SpreadsheetDetailPage() {
   const [countHint, setCountHint] = useState<string | null>(null);
   const [savingSetting, setSavingSetting] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
+  const [restoringHistoryId, setRestoringHistoryId] = useState<number | null>(
+    null,
+  );
   const [runningOperation, setRunningOperation] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
@@ -1006,6 +1080,8 @@ export function SpreadsheetDetailPage() {
   const previewRequestIdRef = useRef(0);
   const countRequestIdRef = useRef(0);
   const countAbortRef = useRef<AbortController | null>(null);
+  const previewShellRef = useRef<HTMLDivElement | null>(null);
+  const [tableScrollY, setTableScrollY] = useState<number | false>(false);
   const spreadsheetRailActions = useSpreadsheetRailActions({
     activeSpreadsheetId: spreadsheetId,
     spreadsheets: spreadsheets.data.spreadsheets,
@@ -1253,6 +1329,85 @@ export function SpreadsheetDetailPage() {
     () => applyColumnSetting(previewData, spreadsheet?.setting),
     [previewData, spreadsheet?.setting],
   );
+  const shouldScrollPreviewTable =
+    (visiblePreviewData?.data?.length || 0) >
+    SPREADSHEET_TABLE_SCROLL_ROW_THRESHOLD;
+  const formattedSpreadsheetSql = useMemo(
+    () => safeFormatSpreadsheetSql(spreadsheet?.sql),
+    [spreadsheet?.sql],
+  );
+
+  useEffect(() => {
+    if (!shouldScrollPreviewTable) {
+      setTableScrollY(false);
+      return;
+    }
+
+    const shell = previewShellRef.current;
+    if (!shell) {
+      return;
+    }
+
+    let animationFrameId: number | null = null;
+    const measureTableBodyHeight = () => {
+      animationFrameId = null;
+      const previewRoot = shell.querySelector(
+        '.spreadsheet-preview',
+      ) as HTMLElement | null;
+      const toolbar = previewRoot?.firstElementChild as HTMLElement | null;
+      const tableHeader = shell.querySelector(
+        '.ant-table-thead',
+      ) as HTMLElement | null;
+      const shellHeight = shell.getBoundingClientRect().height;
+      const toolbarStyle = toolbar ? window.getComputedStyle(toolbar) : null;
+      const toolbarMarginBottom = toolbarStyle
+        ? parseFloat(toolbarStyle.marginBottom || '0') || 0
+        : 0;
+      const toolbarHeight = toolbar
+        ? toolbar.getBoundingClientRect().height + toolbarMarginBottom
+        : 0;
+      const tableHeaderHeight = tableHeader
+        ? tableHeader.getBoundingClientRect().height
+        : 38;
+      const nextHeight = Math.max(
+        SPREADSHEET_TABLE_MIN_SCROLL_Y,
+        Math.floor(shellHeight - toolbarHeight - tableHeaderHeight - 2),
+      );
+
+      setTableScrollY((currentHeight) =>
+        currentHeight === nextHeight ? currentHeight : nextHeight,
+      );
+    };
+
+    const scheduleMeasure = () => {
+      if (animationFrameId != null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      animationFrameId = window.requestAnimationFrame(measureTableBodyHeight);
+    };
+
+    scheduleMeasure();
+
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(scheduleMeasure);
+    resizeObserver?.observe(shell);
+    window.addEventListener('resize', scheduleMeasure);
+
+    return () => {
+      if (animationFrameId != null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', scheduleMeasure);
+    };
+  }, [
+    loadingPreview,
+    shouldScrollPreviewTable,
+    visiblePreviewData?.columns?.length,
+    visiblePreviewData?.data?.length,
+  ]);
 
   const saveColumns = async () => {
     if (!spreadsheetId || !previewData) {
@@ -1322,6 +1477,61 @@ export function SpreadsheetDetailPage() {
     } finally {
       setSavingVersion(false);
     }
+  };
+
+  const restoreHistoryVersion = (historyItem: SpreadsheetHistoryData) => {
+    if (!spreadsheetId || !spreadsheet) {
+      return;
+    }
+
+    if (historyItem.version === spreadsheet.currentVersion) {
+      appMessage.info('当前已经是这个版本。');
+      return;
+    }
+
+    appModal.confirm({
+      title: `恢复到 Version ${historyItem.version}？`,
+      content:
+        '恢复会基于该历史 SQL 新建一个“回退”版本，不会删除现有历史记录。',
+      okText: '恢复为新版本',
+      cancelText: '取消',
+      onOk: async () => {
+        setRestoringHistoryId(historyItem.id);
+        try {
+          const updated = await saveSpreadsheetVersion(
+            runtimeScopeNavigation.workspaceSelector,
+            spreadsheetId,
+            {
+              sql: historyItem.sql,
+              type: 'RESTORE',
+              payload: {
+                restoredFromHistoryId: historyItem.id,
+                restoredFromVersion: historyItem.version,
+              },
+            },
+          );
+          setSpreadsheet(updated);
+          setPage(0);
+          await loadPreview({
+            nextPage: 0,
+            nextPageSize: pageSize,
+            refresh: true,
+          });
+          void spreadsheets.refetch();
+          appMessage.success(`已恢复为 v${updated.currentVersion}`);
+        } catch (error) {
+          const errorMessage = resolveAbortSafeErrorMessage(
+            error,
+            '恢复历史版本失败。',
+          );
+          if (errorMessage) {
+            appMessage.error(errorMessage);
+          }
+        } finally {
+          setRestoringHistoryId(null);
+        }
+      },
+    });
   };
 
   const openOperationModal = (
@@ -1593,7 +1803,7 @@ export function SpreadsheetDetailPage() {
 
           <ContentCard>
             <PreviewScroll>
-              <SpreadsheetPreviewShell>
+              <SpreadsheetPreviewShell ref={previewShellRef}>
                 <PreviewData
                   className="spreadsheet-preview"
                   loading={loadingPreview}
@@ -1608,9 +1818,7 @@ export function SpreadsheetDetailPage() {
                     (previewData?.page ?? page) *
                     (previewData?.pageSize ?? pageSize)
                   }
-                  tableScrollY={resolveSpreadsheetTableScrollY(
-                    visiblePreviewData,
-                  )}
+                  tableScrollY={tableScrollY}
                 />
               </SpreadsheetPreviewShell>
             </PreviewScroll>
@@ -1629,17 +1837,25 @@ export function SpreadsheetDetailPage() {
           <Modal
             title="查看 SQL"
             open={sqlModalOpen}
-            width={1040}
+            width="min(1280px, calc(100vw - 64px))"
             footer={null}
-            bodyStyle={{ maxHeight: '76vh', overflow: 'auto' }}
+            styles={{
+              body: {
+                maxHeight: 'calc(100vh - 160px)',
+                overflow: 'hidden',
+                paddingTop: 12,
+              },
+            }}
             onCancel={() => setSqlModalOpen(false)}
           >
-            <SQLCodeBlock
-              code={spreadsheet?.sql || ''}
-              showLineNumbers
-              maxHeight="70vh"
-              copyable
-            />
+            <SqlModalBody>
+              <SQLCodeBlock
+                code={formattedSpreadsheetSql}
+                showLineNumbers
+                maxHeight="min(62vh, 620px)"
+                copyable
+              />
+            </SqlModalBody>
           </Modal>
 
           <Modal
@@ -1742,30 +1958,47 @@ export function SpreadsheetDetailPage() {
           <Drawer
             title="历史版本"
             placement="right"
-            width={420}
+            size={420}
             open={historyOpen}
             onClose={() => setHistoryOpen(false)}
           >
             <List
               dataSource={spreadsheet?.history || []}
               locale={{ emptyText: '暂无保存历史' }}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Space>
-                        <Tag
-                          color={item.type === 'INITIALIZE' ? 'blue' : 'green'}
-                        >
-                          {item.type}
-                        </Tag>
-                        <span>Version {item.version}</span>
-                      </Space>
-                    }
-                    description={formatDateTime(item.createdAt)}
-                  />
-                </List.Item>
-              )}
+              renderItem={(item) => {
+                const typeMeta =
+                  SPREADSHEET_HISTORY_TYPE_META[item.type] ||
+                  SPREADSHEET_HISTORY_TYPE_META.SAVE;
+                const isCurrentVersion =
+                  item.version === spreadsheet?.currentVersion;
+                return (
+                  <HistoryListItem
+                    actions={[
+                      <Button
+                        key="restore"
+                        size="small"
+                        type={isCurrentVersion ? 'text' : 'default'}
+                        icon={<RollbackOutlined />}
+                        disabled={isCurrentVersion || !item.sql}
+                        loading={restoringHistoryId === item.id}
+                        onClick={() => restoreHistoryVersion(item)}
+                      >
+                        {isCurrentVersion ? '当前版本' : '回退'}
+                      </Button>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Tag color={typeMeta.color}>{typeMeta.label}</Tag>
+                          <span>Version {item.version}</span>
+                        </Space>
+                      }
+                      description={formatDateTime(item.createdAt)}
+                    />
+                  </HistoryListItem>
+                );
+              }}
             />
           </Drawer>
         </SpreadsheetStage>

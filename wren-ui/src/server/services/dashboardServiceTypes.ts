@@ -15,6 +15,7 @@ import {
 
 export type DashboardItemCreateResult = DashboardItem & {
   alreadyExists?: boolean;
+  updatedQueryControls?: boolean;
 };
 
 export interface CreateDashboardItemInput {
@@ -27,6 +28,7 @@ export interface CreateDashboardItemInput {
   canonicalizationVersion?: DashboardItemDetail['canonicalizationVersion'];
   chartDataProfile?: DashboardItemDetail['chartDataProfile'];
   validationErrors?: DashboardItemDetail['validationErrors'];
+  queryControls?: DashboardItemDetail['queryControls'];
   sourceRuntimeIdentity?: DashboardItemDetail['runtimeIdentity'];
   sourceResponseId?: number | null;
   sourceThreadId?: number | null;

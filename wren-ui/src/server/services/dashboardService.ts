@@ -39,6 +39,7 @@ import {
 
 export type {
   CreateDashboardItemInput,
+  DashboardItemCreateResult,
   DashboardRuntimeBinding,
   DashboardServiceDependencies,
   IDashboardService,
@@ -548,6 +549,28 @@ export class DashboardService implements IDashboardService {
     });
   }
 
+  private async markOrUpdateExistingDashboardItem(
+    item: DashboardItem,
+    queryControls?: CreateDashboardItemInput['queryControls'],
+  ): Promise<DashboardItemCreateResult> {
+    if (!queryControls) {
+      return markExistingDashboardItem(item);
+    }
+
+    const updatedItem = await this.dashboardItemRepository.updateOne(item.id, {
+      detail: {
+        ...item.detail,
+        queryControls,
+      },
+    });
+
+    return {
+      ...updatedItem,
+      alreadyExists: true,
+      updatedQueryControls: true,
+    };
+  }
+
   public async createDashboardItem(
     input: CreateDashboardItemInput,
   ): Promise<DashboardItemCreateResult> {
@@ -565,7 +588,10 @@ export class DashboardService implements IDashboardService {
           input.type,
         );
       if (existingDashboardItem) {
-        return markExistingDashboardItem(existingDashboardItem);
+        return await this.markOrUpdateExistingDashboardItem(
+          existingDashboardItem,
+          input.queryControls,
+        );
       }
     }
 
@@ -585,6 +611,7 @@ export class DashboardService implements IDashboardService {
           canonicalizationVersion: input.canonicalizationVersion ?? null,
           chartDataProfile: input.chartDataProfile || undefined,
           validationErrors: input.validationErrors || [],
+          queryControls: input.queryControls || undefined,
           runtimeIdentity: toDashboardItemRuntimeIdentity(
             input.sourceRuntimeIdentity,
           ),
@@ -609,7 +636,10 @@ export class DashboardService implements IDashboardService {
             input.type,
           );
         if (existingDashboardItem) {
-          return markExistingDashboardItem(existingDashboardItem);
+          return await this.markOrUpdateExistingDashboardItem(
+            existingDashboardItem,
+            input.queryControls,
+          );
         }
       }
 

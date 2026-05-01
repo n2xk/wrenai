@@ -166,7 +166,10 @@ describe('homeIntentContract', () => {
     });
 
     expect(
-      resolveDefaultConversationAidPlanForIntent('ASK', { id: 11 }),
+      resolveDefaultConversationAidPlanForIntent('ASK', {
+        id: 11,
+        sql: 'select * from orders',
+      }),
     ).toMatchObject({
       responseAids: [
         {
@@ -181,6 +184,74 @@ describe('homeIntentContract', () => {
         },
       ],
     });
+  });
+
+  it('does not offer chart follow-up when the answer result is known to be empty', () => {
+    const intent = resolveResponseHomeIntent({
+      id: 41,
+      threadId: 9,
+      sql: 'select * from orders where 1 = 0',
+      askingTask: { type: 'TEXT_TO_SQL' },
+      answerDetail: {
+        status: 'FINISHED',
+        numRowsUsedInLLM: 0,
+      },
+    });
+
+    expect(intent?.conversationAidPlan?.responseAids).toEqual([
+      expect.objectContaining({
+        kind: 'TRIGGER_RECOMMEND_QUESTIONS',
+        sourceResponseId: 41,
+      }),
+    ]);
+  });
+
+  it('does not offer chart follow-up when SQL generation failed', () => {
+    const intent = resolveResponseHomeIntent({
+      id: 43,
+      threadId: 9,
+      sql: null,
+      askingTask: { type: 'TEXT_TO_SQL' },
+      answerDetail: {
+        status: 'FAILED',
+        error: {
+          code: 'TEXT_TO_SQL_SQL_MISSING',
+          message: 'SQL 生成失败，未能生成可执行查询。',
+        },
+      },
+    });
+
+    expect(intent?.conversationAidPlan?.responseAids).toEqual([
+      expect.objectContaining({
+        kind: 'TRIGGER_RECOMMEND_QUESTIONS',
+        sourceResponseId: 43,
+      }),
+    ]);
+  });
+
+  it('does not offer chart refine aids for chartability-blocked chart results', () => {
+    const intent = resolveResponseHomeIntent({
+      id: 42,
+      threadId: 9,
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 41,
+      sql: 'select * from orders where 1 = 0',
+      chartDetail: {
+        status: 'FAILED',
+        chartability: {
+          chartable: false,
+          reasonCode: 'EMPTY_RESULT_SET',
+          recommendedDisplay: null,
+        },
+      },
+    });
+
+    expect(intent?.conversationAidPlan?.responseAids).toEqual([
+      expect.objectContaining({
+        kind: 'TRIGGER_RECOMMEND_QUESTIONS',
+        sourceResponseId: 42,
+      }),
+    ]);
   });
 
   it('hydrates unresolved responses with resolvedIntent and lineage', () => {

@@ -8,6 +8,7 @@ import type {
   AskingTaskInput,
   CreateDashboardItemInput,
   CreateThreadInput,
+  DashboardQueryControlsProposalResponse,
   Task,
   Thread,
   ThreadResponse,
@@ -234,6 +235,16 @@ export const buildThreadResponseRerunAdjustmentUrl = (
     selector,
   );
 
+export const buildThreadResponseDashboardQueryControlsProposalUrl = (
+  responseId: number,
+  selector = resolveClientRuntimeScopeSelector(),
+) =>
+  buildRuntimeScopeUrl(
+    `/api/v1/thread-responses/${responseId}/dashboard-query-controls-proposal`,
+    {},
+    selector,
+  );
+
 export const buildAdjustmentTaskCancelUrl = (
   taskId: string,
   selector = resolveClientRuntimeScopeSelector(),
@@ -454,6 +465,25 @@ export const rerunAdjustmentTask = async (
   );
 };
 
+export const proposeDashboardQueryControls = async (
+  selector: ClientRuntimeScopeSelector,
+  responseId: number,
+  timezone?: string | null,
+) => {
+  const response = await fetch(
+    buildThreadResponseDashboardQueryControlsProposalUrl(responseId, selector),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timezone }),
+    },
+  );
+  return parseRestJsonResponse<DashboardQueryControlsProposalResponse>(
+    response,
+    '识别看板日期范围失败，将按当前 SQL 固定刷新。',
+  );
+};
+
 export const createDashboardItem = async (
   selector: ClientRuntimeScopeSelector,
   data: CreateDashboardItemInput,
@@ -465,6 +495,7 @@ export const createDashboardItem = async (
   });
   return parseRestJsonResponse<{
     alreadyExists?: boolean;
+    updatedQueryControls?: boolean;
     id: number;
     dashboardId: number;
   }>(response, '固定到看板失败，请稍后重试。');

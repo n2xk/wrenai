@@ -71,6 +71,10 @@ import {
 } from '@/features/home/thread/threadWorkbenchReplayState';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 import type { SelectQuestionProps } from '@/components/pages/home/RecommendedQuestions';
+import {
+  isChartRecommendationSelection,
+  resolveRecommendedQuestionIntentHint,
+} from '@/features/home/thread/recommendedQuestionIntent';
 
 export {
   buildPendingPromptThreadResponse,
@@ -1087,6 +1091,7 @@ export default function HomeThread() {
 
   const handleSelectRecommendedQuestion = useCallback(
     async ({
+      category,
       interactionMode,
       question,
       sourceResponseId,
@@ -1094,7 +1099,11 @@ export default function HomeThread() {
     }: SelectQuestionProps) => {
       if (
         interactionMode === 'execute_intent' &&
-        suggestedIntent === 'CHART' &&
+        isChartRecommendationSelection({
+          category,
+          question,
+          suggestedIntent,
+        }) &&
         sourceResponseId
       ) {
         await onGenerateThreadResponseChart(sourceResponseId, {
@@ -1105,7 +1114,11 @@ export default function HomeThread() {
       }
 
       handleDraftConversationAid({
-        intentHint: suggestedIntent || 'ASK',
+        intentHint: resolveRecommendedQuestionIntentHint({
+          category,
+          question,
+          suggestedIntent,
+        }),
         prompt: question,
         sourceResponseId: sourceResponseId ?? null,
       });

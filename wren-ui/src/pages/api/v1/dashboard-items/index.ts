@@ -4,6 +4,7 @@ import { DashboardItemType } from '@server/repositories/dashboardItemRepository'
 import { ApiError } from '@/server/utils/apiUtils';
 import { buildApiContextFromRequest } from '@/server/api/apiContext';
 import { sendRestApiError } from '@/server/api/restApi';
+import { normalizeDashboardQueryControls } from '@/utils/dashboardQueryControls';
 
 const dashboardController = new DashboardController();
 
@@ -21,6 +22,10 @@ export default async function handler(
     const itemType = req.body?.itemType;
     const dashboardId =
       req.body?.dashboardId == null ? null : Number(req.body.dashboardId);
+    const queryControls =
+      req.body?.queryControls == null
+        ? null
+        : normalizeDashboardQueryControls(req.body.queryControls);
 
     if (!Number.isFinite(responseId) || responseId <= 0) {
       throw new ApiError('Response ID is required', 400);
@@ -34,6 +39,9 @@ export default async function handler(
     if (itemType === DashboardItemType.TABLE) {
       throw new ApiError('表格结果请保存为数据表，不能固定到看板。', 400);
     }
+    if (req.body?.queryControls != null && !queryControls) {
+      throw new ApiError('Invalid dashboard query controls.', 400);
+    }
 
     const ctx = await buildApiContextFromRequest({ req });
     const item = await dashboardController.createDashboardItem(
@@ -45,6 +53,7 @@ export default async function handler(
           ...(dashboardId != null && Number.isFinite(dashboardId)
             ? { dashboardId }
             : {}),
+          ...(queryControls ? { queryControls } : {}),
         },
       },
       ctx,

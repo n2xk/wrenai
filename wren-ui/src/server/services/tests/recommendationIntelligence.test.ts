@@ -53,4 +53,40 @@ describe('recommendationIntelligence', () => {
       suggestedIntent: 'CHART',
     });
   });
+
+  it('downgrades non-chart recommended asks when upstream marks them as CHART', () => {
+    expect(
+      toStructuredRecommendationItem({
+        category: 'compare',
+        interactionMode: 'execute_intent',
+        question: '比较各渠道4月注册量',
+        suggestedIntent: 'CHART',
+      }),
+    ).toEqual({
+      category: 'compare',
+      interactionMode: 'execute_intent',
+      label: '比较各渠道4月注册量',
+      prompt: '比较各渠道4月注册量',
+      sql: null,
+      suggestedIntent: 'ASK',
+    });
+  });
+
+  it('does not let noisy CHART intent override an unstructured compare category', () => {
+    expect(
+      toStructuredRecommendationItem({
+        category: 'Comparative Questions',
+        interactionMode: 'execute_intent',
+        question: '比较各渠道4月注册量',
+        suggestedIntent: 'CHART',
+      }),
+    ).toEqual({
+      category: 'compare',
+      interactionMode: 'execute_intent',
+      label: '比较各渠道4月注册量',
+      prompt: '比较各渠道4月注册量',
+      sql: null,
+      suggestedIntent: 'ASK',
+    });
+  });
 });

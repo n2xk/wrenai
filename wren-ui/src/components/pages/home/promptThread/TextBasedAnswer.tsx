@@ -5,7 +5,10 @@ import LoadingOutlined from '@ant-design/icons/LoadingOutlined';
 import styled from 'styled-components';
 import { BinocularsIcon } from '@/utils/icons';
 import { nextTick } from '@/utils/time';
-import { usePromptThreadActionsStore } from './store';
+import {
+  usePromptThreadActionsStore,
+  usePromptThreadPreparationStore,
+} from './store';
 import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
@@ -61,8 +64,23 @@ const TRANSIENT_TEXT_ANSWER_ERROR_PATTERNS = [
   /socket hang up/i,
   /Connection reset by peer/i,
 ];
+const TEXT_TO_SQL_SQL_MISSING_ERROR_CODE = 'TEXT_TO_SQL_SQL_MISSING';
+const SQL_GENERATION_ERROR_PATTERN =
+  /(SQL\s*生成失败|未能生成可执行查询|has no SQL|no SQL)/i;
+const SQL_GENERATION_FALLBACK_DESCRIPTION =
+  '未能生成可执行查询。请尝试重新生成 SQL，或调整问题描述。';
+
+const resolveSqlGenerationErrorDescription = (message: string) => {
+  const normalized = message
+    .replace(/^SQL\s*生成失败[，,。:：\s]*/i, '')
+    .replace('请尝试重新生成，', '请尝试重新生成 SQL，')
+    .trim();
+
+  return normalized || SQL_GENERATION_FALLBACK_DESCRIPTION;
+};
 
 type TextAnswerErrorLike = {
+  code?: string | null;
   message?: string | null;
   shortMessage?: string | null;
 } | null;
@@ -79,26 +97,47 @@ export const resolveTextAnswerErrorPresentation = (
   const combinedRawMessage = [rawShortMessage, rawMessage]
     .filter(Boolean)
     .join(' ');
+  const isSqlGenerationError =
+    error?.code === TEXT_TO_SQL_SQL_MISSING_ERROR_CODE ||
+    SQL_GENERATION_ERROR_PATTERN.test(combinedRawMessage);
+
+  if (isSqlGenerationError) {
+    return {
+      actionLabel: '重新生成 SQL',
+      actionTitle: '重新生成 SQL',
+      message: 'SQL 生成失败',
+      retryTarget: 'asking_task' as const,
+      description: resolveSqlGenerationErrorDescription(rawMessage || ''),
+    };
+  }
+
   const isTransientUpstreamError = TRANSIENT_TEXT_ANSWER_ERROR_PATTERNS.some(
     (pattern) => pattern.test(combinedRawMessage),
   );
 
   if (isTransientUpstreamError) {
     return {
+      actionLabel: '重新生成解读',
+      actionTitle: '重新生成解读',
       message: '文字解读生成失败',
+      retryTarget: 'text_answer' as const,
       description:
         '数据结果已生成，但文字解读生成失败，可能是上游服务连接中断。你可以继续查看数据，或只重新生成文字解读。',
     };
   }
 
   return {
+    actionLabel: '重新生成解读',
+    actionTitle: '重新生成解读',
     message: rawShortMessage || '文字解读生成失败',
+    retryTarget: 'text_answer' as const,
     description: rawMessage || '文字解读生成失败，请稍后重试。',
   };
 };
 
 export default function TextBasedAnswer(props: AnswerResultProps) {
   const { onGenerateTextBasedAnswer } = usePromptThreadActionsStore();
+  const { preparation } = usePromptThreadPreparationStore();
   const {
     isLastThreadResponse,
     mode,
@@ -168,6 +207,8 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const previewData = previewDataResult.data?.previewData;
   const hasPreviewData = !!previewData;
   const hasPreviewRows = hasExportablePreviewData(previewData);
+  const [regenerateFailureLoading, setRegenerateFailureLoading] =
+    useState(false);
 
   const fetchPreviewData = async () => {
     await ensurePreviewLoaded();
@@ -208,9 +249,27 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
 
   const loading = !getIsLoadingFinished(status);
 
-  const onRegenerateAnswer = () => {
+  const onRegenerateAnswer = async () => {
     setTextAnswer('');
-    onGenerateTextBasedAnswer(id);
+    await onGenerateTextBasedAnswer(id);
+  };
+
+  const onRegenerateFailure = async () => {
+    if (!answerErrorPresentation) {
+      return;
+    }
+
+    setRegenerateFailureLoading(true);
+    try {
+      if (answerErrorPresentation.retryTarget === 'asking_task') {
+        await preparation.onReRunAskingTask?.(threadResponse);
+        return;
+      }
+
+      await onRegenerateAnswer();
+    } finally {
+      setRegenerateFailureLoading(false);
+    }
   };
 
   const answerErrorPresentation = resolveTextAnswerErrorPresentation(error);
@@ -228,12 +287,17 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
             action={
               <ResultActionButton
                 icon={<ReloadOutlined />}
+                disabled={
+                  answerErrorPresentation.retryTarget === 'asking_task' &&
+                  !preparation.onReRunAskingTask
+                }
+                loading={regenerateFailureLoading}
                 size="small"
                 type="link"
-                title="重新生成解读"
-                onClick={onRegenerateAnswer}
+                title={answerErrorPresentation.actionTitle}
+                onClick={onRegenerateFailure}
               >
-                重新生成解读
+                {answerErrorPresentation.actionLabel}
               </ResultActionButton>
             }
           />

@@ -119,11 +119,9 @@ export const normalizeRecommendationInteractionMode = (
 export const normalizeRecommendationCategory = ({
   rawCategory,
   question,
-  suggestedIntent,
 }: {
   rawCategory?: string | null;
   question?: string | null;
-  suggestedIntent?: string | null;
 }): RecommendationItemCategory => {
   if (
     rawCategory &&
@@ -134,8 +132,11 @@ export const normalizeRecommendationCategory = ({
 
   const normalizedQuestion = normalizeText(question);
   const normalizedCategory = normalizeText(rawCategory).toLowerCase();
+  const chartRequested = CHART_PATTERN.test(
+    `${normalizedCategory} ${normalizedQuestion}`,
+  );
 
-  if (suggestedIntent === 'CHART' || CHART_PATTERN.test(normalizedQuestion)) {
+  if (chartRequested) {
     return /refine|调整|优化|换一种图|switch chart|change chart/i.test(
       `${normalizedCategory} ${normalizedQuestion}`,
     )
@@ -190,18 +191,23 @@ export const normalizeRecommendationSuggestedIntent = ({
   question?: string | null;
   suggestedIntent?: string | null;
 }): RecommendationSuggestedIntent => {
+  const chartRequested =
+    category === 'chart_followup' ||
+    category === 'chart_refine' ||
+    CHART_PATTERN.test(normalizeText(question));
+
   if (
     suggestedIntent &&
     STRUCTURED_INTENT_SET.has(suggestedIntent as RecommendationSuggestedIntent)
   ) {
+    if (suggestedIntent === 'CHART' && !chartRequested) {
+      return 'ASK';
+    }
+
     return suggestedIntent as RecommendationSuggestedIntent;
   }
 
-  if (
-    category === 'chart_followup' ||
-    category === 'chart_refine' ||
-    CHART_PATTERN.test(normalizeText(question))
-  ) {
+  if (chartRequested) {
     return 'CHART';
   }
 
@@ -227,7 +233,6 @@ export const toStructuredRecommendationItem = (
   const category = normalizeRecommendationCategory({
     rawCategory: item.category,
     question: prompt,
-    suggestedIntent: item.suggestedIntent || item.suggested_intent,
   });
 
   return {

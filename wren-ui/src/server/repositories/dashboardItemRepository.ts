@@ -7,6 +7,7 @@ import {
   mapValues,
   snakeCase,
 } from 'lodash';
+import type { DashboardQueryControls } from '@/types/home';
 
 export enum DashboardItemType {
   // AI chart types, refer to ChartType in adaptor.ts
@@ -37,6 +38,7 @@ export interface DashboardItemDetail {
   canonicalizationVersion?: string | null;
   chartDataProfile?: Record<string, any>;
   validationErrors?: string[];
+  queryControls?: DashboardQueryControls | null;
   runtimeIdentity?: {
     projectId?: number | null;
     workspaceId?: string | null;

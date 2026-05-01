@@ -258,6 +258,64 @@ describe('useThreadResponseMutationActions', () => {
     expect(startThreadResponsePolling).toHaveBeenCalledWith(31);
   });
 
+  it('blocks chart generation before creating a follow-up when the answer result is empty', async () => {
+    const { hook } = renderHarness({
+      currentResponses: [
+        {
+          id: 30,
+          question: '原始回答',
+          sql: 'select * from orders where 1 = 0',
+          answerDetail: {
+            status: 'FINISHED',
+            numRowsUsedInLLM: 0,
+          },
+        },
+      ],
+      currentThreadId: 19,
+    });
+
+    await hook.onGenerateThreadResponseChart(30, {
+      question: '生成一张图表给我',
+      sourceResponseId: 30,
+    });
+
+    expect(mockCreateThreadResponse).not.toHaveBeenCalled();
+    expect(mockTriggerThreadResponseChart).not.toHaveBeenCalled();
+    expect(mockMessageError).toHaveBeenCalledWith(
+      '当前查询结果为空，暂时无法生成图表。',
+    );
+  });
+
+  it('does not retry chartability-blocked chart follow-up responses', async () => {
+    const { hook } = renderHarness({
+      currentResponses: [
+        {
+          id: 31,
+          question: '生成图表',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 30,
+          sql: 'select * from orders where 1 = 0',
+          chartDetail: {
+            status: 'FAILED',
+            chartability: {
+              chartable: false,
+              reasonCode: 'EMPTY_RESULT_SET',
+              message: '当前查询结果为空，暂时无法生成图表。',
+            },
+          },
+        },
+      ],
+      currentThreadId: 19,
+    });
+
+    await hook.onGenerateThreadResponseChart(31);
+
+    expect(mockTriggerThreadResponseChart).not.toHaveBeenCalled();
+    expect(mockMessageError).toHaveBeenCalledWith(
+      '当前查询结果为空，暂时无法生成图表。',
+    );
+  });
+
   it('clears stale chart validation failure while regenerating an existing chart follow-up', async () => {
     mockTriggerThreadResponseChart.mockResolvedValue({
       id: 31,

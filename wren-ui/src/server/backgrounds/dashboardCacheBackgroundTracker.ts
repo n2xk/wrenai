@@ -14,6 +14,7 @@ import {
 } from '@server/services';
 import { resolveDashboardExecutionContext } from '@server/utils/dashboardRuntime';
 import { registerShutdownCallback } from '@server/utils/shutdown';
+import { compileDashboardItemSql } from '@/utils/dashboardQueryControls';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -171,7 +172,11 @@ export class DashboardCacheBackgroundTracker {
                   deployService: this.deployService,
                   responseRuntimeIdentity: item.detail.runtimeIdentity || null,
                 });
-              await this.queryService.preview(item.detail.sql, {
+              const previewSql = compileDashboardItemSql({
+                sql: item.detail.sql,
+                queryControls: item.detail.queryControls,
+              });
+              await this.queryService.preview(previewSql, {
                 project,
                 manifest: mdl,
                 cacheEnabled: true,

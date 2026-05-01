@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ChartAnswer from './ChartAnswer';
 
 const mockCreateDashboardItem = jest.fn();
+const mockProposeDashboardQueryControls = jest.fn();
 const mockUsePromptThreadActionsStore = jest.fn();
 const mockEnsureLoaded = jest.fn();
 const mockLoadDashboardListPayload = jest.fn();
@@ -22,6 +23,7 @@ const capturedButtons: any[] = [];
 let capturedChartProps: any = null;
 
 let capturedPinModalProps: any = null;
+let capturedPinConfigModalProps: any = null;
 
 jest.mock('next/dynamic', () => () => {
   const React = jest.requireActual('react');
@@ -86,6 +88,19 @@ jest.mock('./ChartAnswerPinModal', () => ({
   },
 }));
 
+jest.mock('./ChartAnswerPinConfigModal', () => ({
+  __esModule: true,
+  default: (props: any) => {
+    capturedPinConfigModalProps = props;
+    const React = jest.requireActual('react');
+    return React.createElement(
+      'section',
+      null,
+      props.open ? 'PinConfigModalOpen' : 'PinConfigModalClosed',
+    );
+  },
+}));
+
 jest.mock('./ChartAnswerPinPopover', () => ({
   __esModule: true,
   default: () => {
@@ -140,6 +155,8 @@ jest.mock('@/utils/dashboardRest', () => ({
 
 jest.mock('@/utils/homeRest', () => ({
   createDashboardItem: (...args: any[]) => mockCreateDashboardItem(...args),
+  proposeDashboardQueryControls: (...args: any[]) =>
+    mockProposeDashboardQueryControls(...args),
 }));
 
 jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
@@ -172,6 +189,7 @@ describe('ChartAnswer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedPinModalProps = null;
+    capturedPinConfigModalProps = null;
     capturedChartProps = null;
     capturedButtons.length = 0;
     mockWatchedChartType = 'LINE';
@@ -202,6 +220,12 @@ describe('ChartAnswer', () => {
     mockCreateDashboardItem.mockResolvedValue({
       id: 901,
       dashboardId: 11,
+    });
+    mockProposeDashboardQueryControls.mockResolvedValue({
+      candidate: null,
+      source: 'ai',
+      confidence: null,
+      warnings: ['ai_proposal_unavailable'],
     });
   });
 
@@ -255,6 +279,31 @@ describe('ChartAnswer', () => {
     });
 
     useStateSpy.mockRestore();
+  });
+
+  it('hides the chart style adjustment action while preserving pin actions', () => {
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 91,
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(capturedChartProps.hideEditAction).toBe(true);
+    expect(capturedChartProps.onEdit).toBeUndefined();
+    expect(capturedChartProps.onPin).toEqual(expect.any(Function));
   });
 
   it('submits createDashboardItem with selected dashboard id from the popover when multiple dashboards exist', async () => {
@@ -539,7 +588,7 @@ describe('ChartAnswer', () => {
     expect(markup).toContain('Vega-Lite schema warning');
   });
 
-  it('uses the dashboard pin text button while exposing inline chart edit actions', () => {
+  it('uses the dashboard pin text button while hiding inline chart edit actions', () => {
     renderToStaticMarkup(
       React.createElement(ChartAnswer, {
         threadResponse: {
@@ -560,7 +609,7 @@ describe('ChartAnswer', () => {
     );
 
     expect(capturedChartProps?.pinButtonLabel).toBe('固定到看板');
-    expect(capturedChartProps?.hideEditAction).toBeUndefined();
+    expect(capturedChartProps?.hideEditAction).toBe(true);
     expect(capturedChartProps?.hideReloadAction).toBe(true);
   });
 
@@ -674,6 +723,85 @@ describe('ChartAnswer', () => {
     useStateSpy.mockRestore();
   });
 
+  it('shows an updated date-setting hint when duplicate pin updates query controls', async () => {
+    const queryControls = {
+      version: 'dashboard-query-controls-v1',
+      timeFilters: [
+        {
+          id: 'time_filter_1',
+          field: 'order_date',
+          mode: 'rolling_window',
+          originalStartDate: '2026-04-03',
+          originalEndDate: '2026-04-07',
+          windowDays: 5,
+          anchor: 'last_complete_day',
+          timezone: 'UTC',
+          sqlBinding: {
+            kind: 'between',
+            startLiteral: '2026-04-03',
+            endLiteral: '2026-04-07',
+          },
+        },
+      ],
+    };
+    const useStateSpy = setStateOverrides({
+      // 8th state: dashboardOptions
+      8: [{ id: 11, name: 'Dashboard' }],
+      // 12th state: pendingPinTarget
+      12: {
+        dashboardId: 11,
+        dashboardName: 'Dashboard',
+        detectedTimeFilter: {
+          field: 'order_date',
+          originalStartDate: '2026-04-03',
+          originalEndDate: '2026-04-07',
+          timezone: 'UTC',
+          windowDays: 5,
+          sqlBinding: {
+            kind: 'between',
+            startLiteral: '2026-04-03',
+            endLiteral: '2026-04-07',
+          },
+        },
+      },
+    });
+    mockCreateDashboardItem.mockResolvedValueOnce({
+      id: 902,
+      dashboardId: 11,
+      alreadyExists: true,
+      updatedQueryControls: true,
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 99,
+          sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'order_date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedPinConfigModalProps.onSubmit(queryControls);
+
+    expect(mockMessageInfo).toHaveBeenCalledWith(
+      '这个图表已在看板「默认看板」中，已更新日期范围设置。',
+    );
+    expect(mockMessageSuccess).not.toHaveBeenCalled();
+
+    useStateSpy.mockRestore();
+  });
+
   it('creates a dashboard before pinning when using create-and-pin action', async () => {
     const useStateSpy = setStateOverrides({
       6: true,
@@ -727,6 +855,143 @@ describe('ChartAnswer', () => {
       selector: { workspaceId: 'ws-1' },
       useCache: false,
     });
+
+    useStateSpy.mockRestore();
+  });
+
+  it('passes detected rolling date controls when creating and pinning a dashboard', async () => {
+    const useStateSpy = setStateOverrides({
+      6: true,
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    const queryControls = {
+      version: 'dashboard-query-controls-v1',
+      timeFilters: [
+        {
+          id: 'time_filter_1',
+          field: 'order_date',
+          mode: 'rolling_window',
+          originalStartDate: '2026-04-03',
+          originalEndDate: '2026-04-07',
+          windowDays: 5,
+          anchor: 'last_complete_day',
+          timezone: 'UTC',
+          sqlBinding: {
+            kind: 'between',
+            startLiteral: '2026-04-03',
+            endLiteral: '2026-04-07',
+          },
+        },
+      ],
+    };
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 98,
+          sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'order_date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(capturedPinModalProps.detectedTimeFilter).toEqual(
+      expect.objectContaining({
+        field: 'order_date',
+        windowDays: 5,
+      }),
+    );
+
+    await capturedPinModalProps.onSubmit('动态经营看板', queryControls);
+
+    expect(mockCreateDashboardItem).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+      {
+        itemType: 'LINE',
+        responseId: 98,
+        dashboardId: 13,
+        queryControls,
+      },
+    );
+
+    useStateSpy.mockRestore();
+  });
+
+  it('uses AI-proposed date controls when deterministic detection cannot choose one', async () => {
+    const aiCandidate = {
+      field: 'order_date',
+      originalStartDate: '2026-04-03',
+      originalEndDate: '2026-04-07',
+      timezone: 'UTC',
+      windowDays: 5,
+      sqlBinding: {
+        kind: 'between',
+        startLiteral: '2026-04-03',
+        endLiteral: '2026-04-07',
+      },
+    };
+    const useStateSpy = setStateOverrides({
+      8: [{ id: 11, name: '经营总览' }],
+    });
+    mockLoadDashboardListPayload.mockResolvedValueOnce([
+      { id: 11, name: '经营总览' },
+    ]);
+    mockProposeDashboardQueryControls.mockResolvedValueOnce({
+      candidate: aiCandidate,
+      source: 'ai',
+      confidence: 'high',
+      warnings: [],
+    });
+
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 101,
+          sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07' and created_at between '2026-04-01' and '2026-04-30'",
+          chartDetail: {
+            status: 'FINISHED',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'order_date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    await capturedChartProps.onPin();
+
+    expect(mockProposeDashboardQueryControls).toHaveBeenCalledWith(
+      {
+        workspaceId: 'ws-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snap-1',
+        deployHash: 'deploy-1',
+      },
+      101,
+      expect.any(String),
+    );
+    expect(capturedPinConfigModalProps.onSubmit).toEqual(expect.any(Function));
+    expect(mockCreateDashboardItem).not.toHaveBeenCalled();
 
     useStateSpy.mockRestore();
   });

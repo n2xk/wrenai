@@ -5,7 +5,12 @@ import { Alert, Form, Popover } from 'antd';
 import { attachLoading } from '@/utils/helper';
 import ReloadOutlined from '@ant-design/icons/ReloadOutlined';
 import PushPinOutlined from '@ant-design/icons/PushpinOutlined';
-import { ChartType, DashboardItemType } from '@/types/home';
+import {
+  ChartType,
+  DashboardItemType,
+  type DashboardQueryControls,
+  type DashboardTimeFilterCandidate,
+} from '@/types/home';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import { isEmpty, isEqual } from 'lodash';
 import {
@@ -23,13 +28,22 @@ import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { usePromptThreadActionsStore } from './store';
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
-import { createDashboardItem } from '@/utils/homeRest';
+import {
+  createDashboardItem,
+  proposeDashboardQueryControls,
+} from '@/utils/homeRest';
+import {
+  detectDashboardTimeFilterCandidate,
+  hasDashboardSqlDateLiteral,
+  resolveDashboardQueryControlTimezone,
+} from '@/utils/dashboardQueryControls';
 import {
   ChartWrapper,
   ResultActionButton,
   StyledSkeleton,
   Toolbar,
 } from './chartAnswerStyles';
+import ChartAnswerPinConfigModal from './ChartAnswerPinConfigModal';
 import ChartAnswerPinModal from './ChartAnswerPinModal';
 import ChartAnswerPinPopover from './ChartAnswerPinPopover';
 import {
@@ -51,6 +65,12 @@ type DashboardOption = Pick<
   DashboardListItem,
   'id' | 'isDefault' | 'name' | 'cacheEnabled' | 'scheduleFrequency'
 >;
+
+type PendingPinTarget = {
+  dashboardId: number | null;
+  dashboardName?: string | null;
+  detectedTimeFilter: DashboardTimeFilterCandidate;
+};
 
 const sortDashboardOptions = (dashboards: DashboardOption[]) =>
   [...dashboards].sort((left, right) => {
@@ -100,6 +120,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
   );
   const [pinSubmitting, setPinSubmitting] = useState(false);
   const [createAndPinSubmitting, setCreateAndPinSubmitting] = useState(false);
+  const [isPinConfigModalOpen, setIsPinConfigModalOpen] = useState(false);
+  const [pendingPinTarget, setPendingPinTarget] =
+    useState<PendingPinTarget | null>(null);
+  const [proposedPinTimeFilter, setProposedPinTimeFilter] =
+    useState<DashboardTimeFilterCandidate | null>(null);
+  const [pinProposalLoading, setPinProposalLoading] = useState(false);
 
   const refreshDashboardOptions = useCallback(
     async (useCache: boolean) => {
@@ -182,6 +208,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   useEffect(() => {
     setHasRequestedPreview(false);
+    setProposedPinTimeFilter(null);
   }, [threadResponse.id]);
 
   useEffect(() => {
@@ -214,6 +241,12 @@ export default function ChartAnswer(props: AnswerResultProps) {
     }
     return getChartSpecOptionValues(chartDetail);
   }, [chartDetail]);
+
+  const detectedPinTimeFilter = useMemo(
+    () => detectDashboardTimeFilterCandidate(threadResponse.sql),
+    [threadResponse.sql],
+  );
+  const effectivePinTimeFilter = detectedPinTimeFilter || proposedPinTimeFilter;
 
   const chartSpecFieldTitleMap = useMemo(() => {
     return getChartSpecFieldTitleMap(chartSpec?.encoding);
@@ -363,11 +396,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
     });
   };
 
-  const onEdit = () => setIsEditMode(!isEditMode);
-
   const submitPinToDashboard = async (
     targetDashboardId: number | null,
     targetDashboardName?: string | null,
+    queryControls?: DashboardQueryControls | null,
   ) => {
     const itemType = (
       isNumberCard
@@ -382,6 +414,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
       itemType,
       responseId: threadResponse.id,
       ...(targetDashboardId != null ? { dashboardId: targetDashboardId } : {}),
+      ...(queryControls ? { queryControls } : {}),
     });
     await loadDashboardDetailPayload({
       dashboardId: payload.dashboardId,
@@ -396,33 +429,83 @@ export default function ChartAnswer(props: AnswerResultProps) {
       : targetDashboard
         ? resolveDashboardDisplayName(targetDashboard.name)
         : null;
-    if (payload.alreadyExists) {
+    if (payload.updatedQueryControls) {
+      appMessage.info(
+        dashboardName
+          ? `这个图表已在看板「${dashboardName}」中，已更新日期范围设置。`
+          : '这个图表已在当前工作空间的默认看板中，已更新日期范围设置。',
+      );
+    } else if (payload.alreadyExists) {
       appMessage.info(
         dashboardName
           ? `这个图表已在看板「${dashboardName}」中，无需重复固定。`
           : '这个图表已在当前工作空间的默认看板中，无需重复固定。',
       );
     } else {
+      const hasRollingTimeFilter = queryControls?.timeFilters?.some(
+        (filter) => filter.mode === 'rolling_window',
+      );
       appMessage.success(
         dashboardName
-          ? `已固定到看板「${dashboardName}」`
-          : '已固定到当前工作空间的默认看板。',
+          ? `已固定到看板「${dashboardName}」${
+              hasRollingTimeFilter ? '，日期范围将随刷新自动滚动。' : ''
+            }`
+          : `已固定到当前工作空间的默认看板${
+              hasRollingTimeFilter ? '，日期范围将随刷新自动滚动' : ''
+            }。`,
       );
     }
     setIsPinPopoverOpen(false);
     setIsCreatePinModalOpen(false);
+    setIsPinConfigModalOpen(false);
+    setPendingPinTarget(null);
+    setProposedPinTimeFilter(null);
   };
 
   const shouldUsePinPopover = dashboardOptions.length !== 1;
-  const pinActionDisabled = pinSubmitting || createAndPinSubmitting;
+  const pinActionDisabled =
+    pinSubmitting || createAndPinSubmitting || pinProposalLoading;
+
+  const resolvePinTimeFilter = async () => {
+    if (detectedPinTimeFilter) {
+      return detectedPinTimeFilter;
+    }
+    if (proposedPinTimeFilter) {
+      return proposedPinTimeFilter;
+    }
+    if (!hasDashboardSqlDateLiteral(threadResponse.sql)) {
+      return null;
+    }
+
+    setPinProposalLoading(true);
+    try {
+      const proposal = await proposeDashboardQueryControls(
+        responseRuntimeSelector,
+        threadResponse.id,
+        resolveDashboardQueryControlTimezone(),
+      );
+      const candidate = proposal.candidate || null;
+      setProposedPinTimeFilter(candidate);
+      return candidate;
+    } catch (_error) {
+      return null;
+    } finally {
+      setPinProposalLoading(false);
+    }
+  };
 
   const runPinToDashboard = async (
     targetDashboardId: number | null,
     targetDashboardName?: string | null,
+    queryControls?: DashboardQueryControls | null,
   ) => {
     setPinSubmitting(true);
     try {
-      await submitPinToDashboard(targetDashboardId, targetDashboardName);
+      await submitPinToDashboard(
+        targetDashboardId,
+        targetDashboardName,
+        queryControls,
+      );
     } catch (error) {
       const errorMessage = resolveAbortSafeErrorMessage(
         error,
@@ -434,6 +517,24 @@ export default function ChartAnswer(props: AnswerResultProps) {
     } finally {
       setPinSubmitting(false);
     }
+  };
+
+  const handlePinTargetSelected = async (
+    targetDashboardId: number | null,
+    targetDashboardName?: string | null,
+  ) => {
+    const timeFilter = await resolvePinTimeFilter();
+    if (timeFilter) {
+      setPendingPinTarget({
+        dashboardId: targetDashboardId,
+        dashboardName: targetDashboardName,
+        detectedTimeFilter: timeFilter,
+      });
+      setIsPinConfigModalOpen(true);
+      return;
+    }
+
+    await runPinToDashboard(targetDashboardId, targetDashboardName);
   };
 
   const onPin = async () => {
@@ -448,7 +549,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
       null;
 
     if (latestDashboardOptions.length === 1) {
-      await runPinToDashboard(
+      await handlePinTargetSelected(
         latestDefaultDashboardOption?.id ?? null,
         latestDefaultDashboardOption?.name,
       );
@@ -529,11 +630,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
       disabled={pinActionDisabled}
       onCreateAndPin={() => {
         setIsPinPopoverOpen(false);
-        setIsCreatePinModalOpen(true);
+        void resolvePinTimeFilter().finally(() => {
+          setIsCreatePinModalOpen(true);
+        });
       }}
       onSelectDashboard={async (dashboardId, dashboardName) => {
         setIsPinPopoverOpen(false);
-        await runPinToDashboard(dashboardId, dashboardName);
+        await handlePinTargetSelected(dashboardId, dashboardName);
       }}
     />
   ) : undefined;
@@ -651,8 +754,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
               width={isWorkbenchMode ? '100%' : 700}
               spec={chartSpec}
               values={dataValues}
+              hideEditAction
               hideReloadAction
-              onEdit={onEdit}
               onReload={onReload}
               onPin={onPin}
               pinButtonLabel={messages.headerActions.pinDashboard}
@@ -683,12 +786,13 @@ export default function ChartAnswer(props: AnswerResultProps) {
         )}
       </div>
       <ChartAnswerPinModal
+        detectedTimeFilter={effectivePinTimeFilter}
         open={isCreatePinModalOpen}
         submitting={createAndPinSubmitting}
         onCancel={() => {
           setIsCreatePinModalOpen(false);
         }}
-        onSubmit={async (dashboardName) => {
+        onSubmit={async (dashboardName, queryControls) => {
           const normalizedName = dashboardName.trim();
           if (!normalizedName) {
             appMessage.warning('请输入新看板名称。');
@@ -706,7 +810,11 @@ export default function ChartAnswer(props: AnswerResultProps) {
             setDashboardOptions((previous) =>
               sortDashboardOptions([...previous, dashboard]),
             );
-            await submitPinToDashboard(dashboard.id, dashboard.name);
+            await submitPinToDashboard(
+              dashboard.id,
+              dashboard.name,
+              queryControls,
+            );
           } catch (error) {
             const errorMessage = resolveAbortSafeErrorMessage(
               error,
@@ -718,6 +826,26 @@ export default function ChartAnswer(props: AnswerResultProps) {
           } finally {
             setCreateAndPinSubmitting(false);
           }
+        }}
+      />
+      <ChartAnswerPinConfigModal
+        dashboardName={pendingPinTarget?.dashboardName}
+        detectedTimeFilter={pendingPinTarget?.detectedTimeFilter || null}
+        open={isPinConfigModalOpen}
+        submitting={pinSubmitting}
+        onCancel={() => {
+          setIsPinConfigModalOpen(false);
+          setPendingPinTarget(null);
+        }}
+        onSubmit={async (queryControls) => {
+          if (!pendingPinTarget) {
+            return;
+          }
+          await runPinToDashboard(
+            pendingPinTarget.dashboardId,
+            pendingPinTarget.dashboardName,
+            queryControls,
+          );
         }}
       />
     </StyledSkeleton>

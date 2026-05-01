@@ -9,6 +9,8 @@ import {
   ChartAdjustmentInput,
   ChartInput,
   ChartResult,
+  DashboardQueryControlsProposalInput,
+  DashboardQueryControlsProposalResult,
   DeleteSemanticsInput,
   DeployData,
   RelationshipRecommendationInput,
@@ -58,6 +60,37 @@ import { IWrenAIAdaptor } from './wrenAIAdaptorTypes';
 
 const logger = getLogger('WrenAIAdaptor');
 logger.level = 'debug';
+
+const transformDashboardQueryControlsProposalResult = (
+  data: any,
+): DashboardQueryControlsProposalResult => {
+  const response = data?.response || null;
+  const timeFilter = response?.time_filter || response?.timeFilter || null;
+
+  return {
+    response: response
+      ? {
+          confidence: response.confidence || null,
+          reason: response.reason || null,
+          timeFilter: timeFilter
+            ? {
+                field: timeFilter.field || null,
+                kind: timeFilter.kind || null,
+                startLiteral:
+                  timeFilter.start_literal || timeFilter.startLiteral || null,
+                endLiteral:
+                  timeFilter.end_literal || timeFilter.endLiteral || null,
+                endLiteralOffsetDays:
+                  timeFilter.end_literal_offset_days ??
+                  timeFilter.endLiteralOffsetDays ??
+                  null,
+              }
+            : null,
+        }
+      : null,
+    traceId: data?.trace_id || data?.traceId || null,
+  };
+};
 
 export type { IWrenAIAdaptor } from './wrenAIAdaptorTypes';
 
@@ -515,6 +548,29 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       return { queryId: res.data.query_id };
     } catch (err: any) {
       logger.debug(`Got error when adjusting chart: ${getAIServiceError(err)}`);
+      throw err;
+    }
+  }
+
+  public async proposeDashboardQueryControls(
+    input: DashboardQueryControlsProposalInput,
+  ): Promise<DashboardQueryControlsProposalResult> {
+    try {
+      const res = await axios.post(
+        `${this.wrenAIBaseEndpoint}/v1/dashboard-query-controls/proposal`,
+        {
+          query: input.query,
+          sql: input.sql,
+          timezone: input.timezone,
+          runtime_identity: transformRuntimeIdentity(input.runtimeIdentity),
+          configurations: input.configurations,
+        },
+      );
+      return transformDashboardQueryControlsProposalResult(res.data);
+    } catch (err: any) {
+      logger.debug(
+        `Got error when proposing dashboard query controls: ${getAIServiceError(err)}`,
+      );
       throw err;
     }
   }

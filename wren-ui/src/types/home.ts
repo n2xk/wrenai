@@ -291,7 +291,65 @@ export type CreateThreadResponseInput = {
 export type CreateDashboardItemInput = {
   dashboardId?: number | null;
   itemType: string;
+  queryControls?: DashboardQueryControls | null;
   responseId: number;
+};
+
+export type DashboardTimeFilterSqlBindingKind =
+  | 'between'
+  | 'gte_lte'
+  | 'gte_lt';
+
+export type DashboardTimeFilterMode = 'fixed' | 'rolling_window';
+
+export type DashboardTimeFilterAnchor = 'today' | 'last_complete_day';
+
+export type DashboardTimeFilterSqlBinding = {
+  endLiteralOffsetDays?: number;
+  kind: DashboardTimeFilterSqlBindingKind;
+  startLiteral: string;
+  endLiteral: string;
+};
+
+export type DashboardTimeFilterControl = {
+  anchor: DashboardTimeFilterAnchor;
+  field: string;
+  id: string;
+  mode: DashboardTimeFilterMode;
+  originalEndDate: string;
+  originalStartDate: string;
+  sqlBinding: DashboardTimeFilterSqlBinding;
+  timezone: string;
+  windowDays: number;
+};
+
+export type DashboardQueryControls = {
+  timeFilters?: DashboardTimeFilterControl[];
+  version: 'dashboard-query-controls-v1';
+};
+
+export type DashboardTimeFilterCandidate = {
+  field: string;
+  originalEndDate: string;
+  originalStartDate: string;
+  sqlBinding: DashboardTimeFilterSqlBinding;
+  timezone: string;
+  windowDays: number;
+};
+
+export type DashboardTimeFilterAiProposal = {
+  field: string;
+  sqlBinding: DashboardTimeFilterSqlBinding;
+};
+
+export type DashboardQueryControlsProposalSource = 'rule' | 'ai';
+
+export type DashboardQueryControlsProposalResponse = {
+  candidate?: DashboardTimeFilterCandidate | null;
+  confidence?: 'high' | 'medium' | 'low' | null;
+  reason?: string | null;
+  source?: DashboardQueryControlsProposalSource | null;
+  warnings?: string[];
 };
 
 export type DetailStep = {

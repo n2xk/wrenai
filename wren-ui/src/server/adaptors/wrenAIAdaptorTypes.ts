@@ -10,6 +10,8 @@ import {
   ChartAdjustmentInput,
   ChartInput,
   ChartResult,
+  DashboardQueryControlsProposalInput,
+  DashboardQueryControlsProposalResult,
   DeleteInstructionsInput,
   DeleteSemanticsInput,
   DeleteSqlPairsInput,
@@ -69,6 +71,9 @@ export interface IWrenAIAdaptor {
   adjustChart(input: ChartAdjustmentInput): Promise<AsyncQueryResponse>;
   getChartAdjustmentResult(queryId: string): Promise<ChartResult>;
   cancelChartAdjustment(queryId: string): Promise<void>;
+  proposeDashboardQueryControls(
+    input: DashboardQueryControlsProposalInput,
+  ): Promise<DashboardQueryControlsProposalResult>;
   deploySqlPair(input: DeploySqlPairInput): Promise<AsyncQueryResponse>;
   getSqlPairResult(queryId: string): Promise<SqlPairResult>;
   deleteSqlPairs(input: DeleteSqlPairsInput): Promise<void>;

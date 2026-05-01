@@ -137,7 +137,7 @@ const resolvePinPopover = (page: Page) =>
 const pinChartToDashboard = async (page: Page, dashboardName: string) => {
   const pinButton = page
     .getByTestId('thread-workbench')
-    .getByRole('button', { name: /Pin to dashboard/ })
+    .getByRole('button', { name: /固定到看板|Pin to dashboard/ })
     .first();
   await expect(pinButton).toBeVisible({ timeout: 60_000 });
   await pinButton.click();

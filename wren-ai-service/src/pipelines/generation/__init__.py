@@ -1,5 +1,6 @@
 from .chart_adjustment import ChartAdjustment
 from .chart_generation import ChartGeneration
+from .dashboard_query_controls import DashboardQueryControlsProposal
 from .data_assistance import DataAssistance
 from .followup_sql_generation import FollowUpSQLGeneration
 from .followup_sql_generation_reasoning import FollowUpSQLGenerationReasoning
@@ -22,6 +23,7 @@ from .user_guide_assistance import UserGuideAssistance
 __all__ = [
     "ChartGeneration",
     "ChartAdjustment",
+    "DashboardQueryControlsProposal",
     "DataAssistance",
     "FollowUpSQLGeneration",
     "IntentClassification",

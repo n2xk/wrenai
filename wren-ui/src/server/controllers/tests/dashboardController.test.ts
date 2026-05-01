@@ -752,6 +752,96 @@ describe('DashboardController scope guards', () => {
     );
   });
 
+  it('compiles rolling dashboard query controls before validating pinned SQL', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.dashboardService.getDashboardForScope.mockResolvedValue({
+      id: 7,
+      projectId: 999,
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 12,
+      threadId: 34,
+      question: '统计 04-03 到 04-07 的销售趋势',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+      sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+      chartDetail: {
+        chartSchema: { mark: 'line' },
+      },
+    });
+    ctx.kbSnapshotRepository.findOneBy.mockResolvedValue({
+      id: 'snapshot-1',
+      projectBridgeId: 42,
+      deployHash: 'deploy-from-snapshot',
+    });
+    ctx.projectService.getProjectById.mockResolvedValue({
+      id: 42,
+      type: 'view',
+    });
+    ctx.deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 42,
+      manifest: 'manifest-42',
+    });
+    ctx.dashboardService.createDashboardItem.mockResolvedValue({
+      id: 88,
+      dashboardId: 7,
+      type: 'LINE',
+    });
+
+    const queryControls = {
+      version: 'dashboard-query-controls-v1' as const,
+      timeFilters: [
+        {
+          id: 'time_filter_1',
+          field: 'order_date',
+          mode: 'rolling_window' as const,
+          originalStartDate: '2026-04-03',
+          originalEndDate: '2026-04-07',
+          windowDays: 5,
+          anchor: 'last_complete_day' as const,
+          timezone: 'UTC',
+          sqlBinding: {
+            kind: 'between' as const,
+            startLiteral: '2026-04-03',
+            endLiteral: '2026-04-07',
+          },
+        },
+      ],
+    };
+
+    await resolver.createDashboardItem(
+      null,
+      {
+        data: {
+          responseId: 12,
+          itemType: 'LINE' as any,
+          dashboardId: 7,
+          queryControls,
+        },
+      },
+      ctx,
+    );
+
+    expect(ctx.queryService.preview).toHaveBeenCalledWith(
+      expect.stringContaining("order_date between '"),
+      expect.objectContaining({
+        cacheEnabled: true,
+        refresh: true,
+      }),
+    );
+    expect(ctx.dashboardService.createDashboardItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryControls,
+      }),
+    );
+  });
+
   it('rejects pinning response SQL results as dashboard table items', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();

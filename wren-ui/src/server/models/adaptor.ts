@@ -81,6 +81,29 @@ export interface AskRuntimeIdentity {
   actorUserId?: string | null;
 }
 
+export interface DashboardQueryControlsProposalInput {
+  configurations?: ProjectConfigurations;
+  query?: string | null;
+  runtimeIdentity?: AskRuntimeIdentity | null;
+  sql: string;
+  timezone?: string | null;
+}
+
+export interface DashboardQueryControlsProposalResult {
+  response?: {
+    confidence?: 'high' | 'medium' | 'low' | null;
+    reason?: string | null;
+    timeFilter?: {
+      endLiteral?: string | null;
+      endLiteralOffsetDays?: number | null;
+      field?: string | null;
+      kind?: 'between' | 'gte_lte' | 'gte_lt' | null;
+      startLiteral?: string | null;
+    } | null;
+  } | null;
+  traceId?: string | null;
+}
+
 export interface DeleteSemanticsInput {
   runtimeIdentity?: AskRuntimeIdentity | null;
 }

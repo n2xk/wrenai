@@ -257,10 +257,6 @@ export const resetDatabase = async () => {
       primary_connector_id: null,
       runtime_project_id: null,
       sample_dataset: null,
-      recommendation_query_id: null,
-      recommendation_status: null,
-      recommendation_questions: null,
-      recommendation_error: null,
     });
 
     // insert learning table data to skip guide

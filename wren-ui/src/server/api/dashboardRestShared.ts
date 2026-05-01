@@ -22,6 +22,7 @@ import {
 } from '@server/utils/dashboardRuntime';
 import type { SetDashboardCacheData } from '@server/models/dashboard';
 import { shapeChartPreviewData } from '@/utils/chartSpecRuntime';
+import { compileDashboardItemSql } from '@/utils/dashboardQueryControls';
 import type { PreviewDataResponse } from '@server/services';
 import { DEFAULT_PREVIEW_LIMIT } from '@server/services';
 import { resolveDashboardItemSqlMode } from '@server/utils/dashboardItemSqlMode';
@@ -232,7 +233,12 @@ export const buildDashboardPreviewResponse = async ({
     runtimeIdentitySource: item.detail.runtimeIdentity || null,
   });
 
-  const rawData = (await ctx.queryService.preview(item.detail.sql, {
+  const previewSql = compileDashboardItemSql({
+    sql: item.detail.sql,
+    queryControls: item.detail.queryControls,
+  });
+
+  const rawData = (await ctx.queryService.preview(previewSql, {
     project,
     manifest,
     limit: limit || DEFAULT_PREVIEW_LIMIT,

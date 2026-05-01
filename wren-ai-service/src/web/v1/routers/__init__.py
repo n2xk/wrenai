@@ -5,6 +5,7 @@ from src.web.v1.routers import (
     ask_feedbacks,
     chart,
     chart_adjustment,
+    dashboard_query_controls,
     instructions,
     question_recommendation,
     relationship_recommendation,
@@ -26,6 +27,7 @@ router.include_router(semantics_preparation.router)
 router.include_router(sql_answers.router)
 router.include_router(chart.router)
 router.include_router(chart_adjustment.router)
+router.include_router(dashboard_query_controls.router)
 router.include_router(sql_pairs.router)
 router.include_router(sql_question.router)
 router.include_router(instructions.router)

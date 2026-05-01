@@ -190,6 +190,48 @@ describe('DashboardCacheBackgroundTracker', () => {
     );
   });
 
+  it('compiles dynamic dashboard item dates during scheduled refresh', async () => {
+    dashboardItemRepository.findAllBy.mockResolvedValue([
+      {
+        id: 11,
+        dashboardId: 1,
+        detail: {
+          sql: "SELECT * FROM orders WHERE order_date BETWEEN '2026-04-03' AND '2026-04-07'",
+          queryControls: {
+            version: 'dashboard-query-controls-v1',
+            timeFilters: [
+              {
+                id: 'time_filter_1',
+                field: 'order_date',
+                mode: 'rolling_window',
+                originalStartDate: '2026-04-03',
+                originalEndDate: '2026-04-07',
+                windowDays: 5,
+                anchor: 'last_complete_day',
+                timezone: 'UTC',
+                sqlBinding: {
+                  kind: 'between',
+                  startLiteral: '2026-04-03',
+                  endLiteral: '2026-04-07',
+                },
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    await tracker.refreshDashboardById(1);
+
+    expect(queryService.preview).toHaveBeenCalledWith(
+      expect.not.stringContaining("'2026-04-03'"),
+      expect.objectContaining({
+        cacheEnabled: true,
+        refresh: true,
+      }),
+    );
+  });
+
   it('only refreshes dashboards whose schedule is due', async () => {
     dashboardRepository.findAllBy.mockResolvedValue([
       {

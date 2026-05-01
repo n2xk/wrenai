@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button, Input, type InputRef, Modal, Space, Typography } from 'antd';
-import PlusOutlined from '@ant-design/icons/PlusOutlined';
+import { useEffect, useState } from 'react';
+import { Button, Modal, Space, Typography } from 'antd';
+import PushPinOutlined from '@ant-design/icons/PushpinOutlined';
 import type {
   DashboardQueryControls,
   DashboardTimeFilterAnchor,
@@ -10,8 +10,9 @@ import type {
 import { buildDashboardQueryControls } from '@/utils/dashboardQueryControls';
 import ChartAnswerPinTimeControlOptions from './ChartAnswerPinTimeControlOptions';
 
-export default function ChartAnswerPinModal({
+export default function ChartAnswerPinConfigModal({
   artifactLabel = '当前图表',
+  dashboardName,
   detectedTimeFilter,
   open,
   submitting,
@@ -19,50 +20,31 @@ export default function ChartAnswerPinModal({
   onSubmit,
 }: {
   artifactLabel?: string;
-  detectedTimeFilter?: DashboardTimeFilterCandidate | null;
+  dashboardName?: string | null;
+  detectedTimeFilter: DashboardTimeFilterCandidate | null;
   open: boolean;
   submitting: boolean;
   onCancel: () => void;
-  onSubmit: (
-    dashboardName: string,
-    queryControls?: DashboardQueryControls | null,
-  ) => void | Promise<void>;
+  onSubmit: (queryControls: DashboardQueryControls) => void | Promise<void>;
 }) {
-  const [dashboardName, setDashboardName] = useState('');
   const [timeFilterMode, setTimeFilterMode] =
     useState<DashboardTimeFilterMode>('rolling_window');
   const [timeFilterAnchor, setTimeFilterAnchor] =
     useState<DashboardTimeFilterAnchor>('last_complete_day');
-  const inputRef = useRef<InputRef>(null);
 
   useEffect(() => {
     if (!open) {
-      setDashboardName('');
-      setTimeFilterMode('rolling_window');
-      setTimeFilterAnchor('last_complete_day');
       return;
     }
+    setTimeFilterMode('rolling_window');
+    setTimeFilterAnchor('last_complete_day');
+  }, [detectedTimeFilter, open]);
 
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [open]);
-
-  const canSubmit = dashboardName.trim().length > 0 && !submitting;
-  const resolveQueryControls = () =>
-    detectedTimeFilter
-      ? buildDashboardQueryControls({
-          candidate: detectedTimeFilter,
-          mode: timeFilterMode,
-          anchor: timeFilterAnchor,
-        })
-      : null;
+  const canSubmit = Boolean(detectedTimeFilter) && !submitting;
 
   return (
     <Modal
-      title="新建看板并固定"
+      title="固定到看板"
       open={open}
       onCancel={onCancel}
       footer={null}
@@ -70,21 +52,11 @@ export default function ChartAnswerPinModal({
     >
       <Space orientation="vertical" size={14} style={{ width: '100%' }}>
         <Typography.Text type="secondary">
-          创建一个新的工作空间看板，并在创建后立即固定{artifactLabel}。
+          将{artifactLabel}
+          {dashboardName ? `固定到看板「${dashboardName}」` : '固定到看板'}
+          ，并设置看板刷新时的日期行为。
         </Typography.Text>
-        <Input
-          ref={inputRef}
-          value={dashboardName}
-          disabled={submitting}
-          placeholder="输入新看板名称，例如：本周经营复盘"
-          onChange={(event) => setDashboardName(event.target.value)}
-          onPressEnter={() => {
-            if (!canSubmit) {
-              return;
-            }
-            void onSubmit(dashboardName, resolveQueryControls());
-          }}
-        />
+
         {detectedTimeFilter ? (
           <ChartAnswerPinTimeControlOptions
             anchor={timeFilterAnchor}
@@ -99,6 +71,7 @@ export default function ChartAnswerPinModal({
             未识别到可安全滚动的日期范围，本次固定后将按当前 SQL 固定刷新。
           </Typography.Text>
         )}
+
         <div
           style={{
             display: 'flex',
@@ -111,14 +84,23 @@ export default function ChartAnswerPinModal({
           </Button>
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            icon={<PushPinOutlined />}
             loading={submitting}
             disabled={!canSubmit}
             onClick={() => {
-              void onSubmit(dashboardName, resolveQueryControls());
+              if (!detectedTimeFilter) {
+                return;
+              }
+              void onSubmit(
+                buildDashboardQueryControls({
+                  candidate: detectedTimeFilter,
+                  mode: timeFilterMode,
+                  anchor: timeFilterAnchor,
+                }),
+              );
             }}
           >
-            新建并固定
+            固定到看板
           </Button>
         </div>
       </Space>

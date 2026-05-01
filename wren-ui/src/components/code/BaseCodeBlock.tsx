@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Button, Typography } from 'antd';
+import { Typography } from 'antd';
 import CheckOutlined from '@ant-design/icons/CheckOutlined';
 import CopyOutlined from '@ant-design/icons/CopyOutlined';
 import { Loading } from '@/components/PageLoading';
@@ -36,6 +36,17 @@ const getBlockStyles = (props: {
   `;
 };
 
+const resolveCssLength = (value?: string) => {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) {
+    return '';
+  }
+
+  return /^-?\d+(\.\d+)?$/.test(normalizedValue)
+    ? `${normalizedValue}px`
+    : normalizedValue;
+};
+
 export const Block = styled.div<{
   maxHeight?: string;
   inline?: boolean;
@@ -56,7 +67,10 @@ export const Block = styled.div<{
 
   .adm-code-wrap {
     ${(props) => (props.inline ? '' : 'overflow: auto;')}
-    ${(props) => (props.maxHeight ? `max-height: ${props.maxHeight}px;` : ``)}
+    ${(props) =>
+      props.maxHeight
+        ? `max-height: ${resolveCssLength(props.maxHeight)};`
+        : ``}
     user-select: text;
   }
 
@@ -194,17 +208,8 @@ export const createCodeBlock = (HighlightRules: any) => {
                 copyable={{
                   onCopy,
                   icon: [
-                    <Button
-                      key="copy-icon"
-                      icon={<CopyOutlined />}
-                      size="small"
-                      style={{ backgroundColor: 'transparent' }}
-                    />,
-                    <Button
-                      key="copied-icon"
-                      icon={<CheckOutlined className="green-6" />}
-                      size="small"
-                    />,
+                    <CopyOutlined key="copy-icon" />,
+                    <CheckOutlined key="copied-icon" className="green-6" />,
                   ],
                   text: code,
                 }}

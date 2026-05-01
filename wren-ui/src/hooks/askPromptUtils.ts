@@ -37,6 +37,9 @@ export const ASKING_TASK_POLL_INTERVAL_MS = 1500;
 export const ASKING_TASK_POLL_TIMEOUT_MS = 5 * 60_000;
 export const INSTANT_RECOMMEND_POLL_INTERVAL_MS = 1500;
 export const INSTANT_RECOMMEND_POLL_TIMEOUT_MS = 20_000;
+const TEXT_TO_SQL_SQL_MISSING_ERROR_CODE = 'TEXT_TO_SQL_SQL_MISSING';
+const TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE =
+  'SQL 生成失败，未能生成可执行查询。请尝试重新生成，或调整问题描述。';
 
 export const getIsFinished = (status?: AskingTaskStatus | null) =>
   status != null &&
@@ -175,6 +178,38 @@ const buildTextAnswerFallbackFromAskingTask = ({
   };
 };
 
+const buildAnswerDetailFromAskingTask = ({
+  askingTask,
+  existingAnswerDetail,
+}: {
+  askingTask: NullableAskingTask;
+  existingAnswerDetail?: ThreadResponseAnswerDetail | null;
+}): ThreadResponseAnswerDetail | null | undefined => {
+  if (askingTask?.type !== AskingTaskType.TEXT_TO_SQL) {
+    return buildTextAnswerFallbackFromAskingTask({
+      askingTask,
+      existingAnswerDetail,
+    });
+  }
+
+  const generatedSql = resolveGeneratedSqlFromAskingTask(askingTask);
+  if (!getIsFinished(askingTask.status)) {
+    return null;
+  }
+
+  if (askingTask.status === AskingTaskStatus.FAILED && !generatedSql) {
+    return {
+      status: ThreadResponseAnswerStatus.FAILED,
+      error: {
+        code: TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+        message: TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+      },
+    };
+  }
+
+  return existingAnswerDetail ?? null;
+};
+
 const resolveGeneratedSqlFromAskingTask = (askingTask: NullableAskingTask) => {
   if (
     askingTask?.status !== AskingTaskStatus.FINISHED ||
@@ -223,7 +258,7 @@ export const handleUpdateThreadCache = (
         ...existingData.thread,
         responses: existingData.thread.responses.map((response) => {
           if (response.askingTask?.queryId === askingTask.queryId) {
-            const answerDetail = buildTextAnswerFallbackFromAskingTask({
+            const answerDetail = buildAnswerDetailFromAskingTask({
               askingTask,
               existingAnswerDetail: response.answerDetail,
             });
@@ -275,7 +310,7 @@ export const handleUpdateRerunAskingTaskCache = ({
             return {
               ...response,
               askingTask: task,
-              answerDetail: buildTextAnswerFallbackFromAskingTask({
+              answerDetail: buildAnswerDetailFromAskingTask({
                 askingTask: task,
                 existingAnswerDetail: response.answerDetail,
               }),

@@ -5,7 +5,11 @@ import type {
   AdjustThreadResponseChartInput,
   ThreadResponse,
 } from '@/types/home';
-import { ChartTaskStatus, ThreadResponseKind } from '@/types/home';
+import {
+  ChartTaskStatus,
+  ThreadResponseAnswerStatus,
+  ThreadResponseKind,
+} from '@/types/home';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import {
   createThreadResponse as createThreadResponseRequest,
@@ -24,6 +28,38 @@ const reportThreadError = (_error: unknown, fallbackMessage: string) => {
 type GenerateChartOptions = {
   question?: string;
   sourceResponseId?: number;
+};
+
+const CHART_BLOCKING_REASON_CODES = new Set([
+  'EMPTY_RESULT_SET',
+  'INSUFFICIENT_NUMERIC_FIELDS',
+  'INSUFFICIENT_DATA_VARIATION',
+  'UNSUPPORTED_RESULT_SHAPE',
+]);
+
+const EMPTY_RESULT_CHART_MESSAGE = '当前查询结果为空，暂时无法生成图表。';
+const DEFAULT_NON_CHARTABLE_MESSAGE = '当前结果暂时无法生成图表。';
+
+const isKnownEmptyAnswerResult = (response?: ThreadResponse | null) =>
+  Boolean(
+    response?.answerDetail?.error?.code === 'EMPTY_RESULT_SET' ||
+    (response?.answerDetail?.status === ThreadResponseAnswerStatus.FINISHED &&
+      response.answerDetail.numRowsUsedInLLM === 0),
+  );
+
+const readChartBlockingMessage = (response?: ThreadResponse | null) => {
+  const chartability = response?.chartDetail?.chartability;
+  const reasonCode = chartability?.reasonCode;
+
+  if (
+    chartability?.chartable === false ||
+    (typeof reasonCode === 'string' &&
+      CHART_BLOCKING_REASON_CODES.has(reasonCode))
+  ) {
+    return chartability?.message || DEFAULT_NON_CHARTABLE_MESSAGE;
+  }
+
+  return null;
 };
 
 const buildOptimisticChartGeneratingResponse = (
@@ -131,6 +167,16 @@ export function useThreadResponseMutationActions({
         );
         if (!currentResponse) {
           message.error('当前回答不存在，请刷新后重试');
+          return;
+        }
+
+        const blockingMessage =
+          readChartBlockingMessage(currentResponse) ||
+          (isKnownEmptyAnswerResult(currentResponse)
+            ? EMPTY_RESULT_CHART_MESSAGE
+            : null);
+        if (blockingMessage) {
+          message.error(blockingMessage);
           return;
         }
 

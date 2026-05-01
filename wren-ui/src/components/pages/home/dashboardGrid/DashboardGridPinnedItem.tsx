@@ -26,6 +26,7 @@ import {
   previewDashboardItem,
   type DashboardPreviewData,
 } from '@/utils/dashboardRest';
+import { formatDashboardQueryControlsLabel } from '@/utils/dashboardQueryControls';
 import PreviewDataContent from '@/components/dataPreview/PreviewDataContent';
 import { DashboardItemType } from '@/types/home';
 import NumberCardGroup from '@/components/numberCard/NumberCard';
@@ -292,6 +293,7 @@ export const DashboardGridPinnedItem = forwardRef(
       void loadPreview();
     }, [
       detail.canonicalizationVersion,
+      detail.queryControls,
       detail.sql,
       item.id,
       loadPreview,
@@ -325,6 +327,10 @@ export const DashboardGridPinnedItem = forwardRef(
         item.detail?.sourceQuestion,
         item.displayName,
       ],
+    );
+    const queryControlsLabel = useMemo(
+      () => formatDashboardQueryControlsLabel(detail.queryControls),
+      [detail.queryControls],
     );
 
     const onMoreClick = async (
@@ -365,6 +371,14 @@ export const DashboardGridPinnedItem = forwardRef(
               runtimeScopeSelector={runtimeScopeSelector}
               onRename={onItemUpdated}
             />
+            {queryControlsLabel ? (
+              <div
+                className="adm-pinned-item-query-control"
+                title={queryControlsLabel}
+              >
+                {queryControlsLabel}
+              </div>
+            ) : null}
           </div>
 
           <div className="adm-pinned-actions">

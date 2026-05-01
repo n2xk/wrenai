@@ -20,6 +20,11 @@ type HomeIntentResponseLike = {
     type?: string | null;
   } | null;
   answerDetail?: {
+    error?: {
+      code?: string | null;
+      message?: string | null;
+    } | null;
+    numRowsUsedInLLM?: number | null;
     status?: string | null;
   } | null;
   breakdownDetail?: {
@@ -28,7 +33,9 @@ type HomeIntentResponseLike = {
   chartDetail?: {
     status?: string | null;
     chartability?: {
+      chartable?: boolean | null;
       recommendedDisplay?: string | null;
+      reasonCode?: string | null;
     } | null;
     chartSchema?: unknown;
     chartType?: string | null;
@@ -168,20 +175,49 @@ const resolveConversationAidSourceResponseId = (
   response?: HomeIntentResponseLike | null,
 ) => response?.id ?? null;
 
+const isKnownEmptyAnswerResult = (response?: HomeIntentResponseLike | null) => {
+  if (!response?.answerDetail) {
+    return false;
+  }
+
+  return (
+    response.answerDetail.error?.code === 'EMPTY_RESULT_SET' ||
+    (response.answerDetail.status === 'FINISHED' &&
+      response.answerDetail.numRowsUsedInLLM === 0)
+  );
+};
+
+const isKnownNonChartableResult = (response?: HomeIntentResponseLike | null) =>
+  Boolean(
+    response?.chartDetail?.chartability?.chartable === false ||
+    response?.chartDetail?.chartability?.reasonCode,
+  );
+
+const canOfferChartFollowUp = (response?: HomeIntentResponseLike | null) =>
+  hasNonEmptySql(response?.sql) &&
+  !isKnownEmptyAnswerResult(response) &&
+  !isKnownNonChartableResult(response);
+
 const buildAskConversationAids = (
   response?: HomeIntentResponseLike | null,
 ): ConversationAidItem[] => {
   const sourceResponseId = resolveConversationAidSourceResponseId(response);
   const recommendationTriggerCopy = getRecommendationTriggerLabel();
+  const aids: ConversationAidItem[] = [];
 
-  return [
-    buildConversationAid({
-      kind: 'TRIGGER_CHART_FOLLOWUP',
-      label: '生成一张图表给我',
-      prompt: '生成一张图表给我',
-      sourceResponseId,
-      suggestedIntent: 'CHART',
-    }),
+  if (canOfferChartFollowUp(response)) {
+    aids.push(
+      buildConversationAid({
+        kind: 'TRIGGER_CHART_FOLLOWUP',
+        label: '生成一张图表给我',
+        prompt: '生成一张图表给我',
+        sourceResponseId,
+        suggestedIntent: 'CHART',
+      }),
+    );
+  }
+
+  aids.push(
     buildConversationAid({
       kind: 'TRIGGER_RECOMMEND_QUESTIONS',
       label: recommendationTriggerCopy,
@@ -189,7 +225,9 @@ const buildAskConversationAids = (
       sourceResponseId,
       suggestedIntent: 'RECOMMEND_QUESTIONS',
     }),
-  ];
+  );
+
+  return aids;
 };
 
 const resolveChartMarkType = (chartSchema?: unknown): string | null => {
@@ -247,17 +285,20 @@ const buildChartConversationAids = (
 ): ConversationAidItem[] => {
   const sourceResponseId = resolveConversationAidSourceResponseId(response);
   const recommendationTriggerCopy = getRecommendationTriggerLabel();
+  const chartFollowUpAids = isKnownNonChartableResult(response)
+    ? []
+    : resolveChartAidPromptSet(response).map((prompt) =>
+        buildConversationAid({
+          kind: 'TRIGGER_CHART_REFINE',
+          label: prompt,
+          prompt,
+          sourceResponseId,
+          suggestedIntent: 'CHART',
+        }),
+      );
 
   return [
-    ...resolveChartAidPromptSet(response).map((prompt) =>
-      buildConversationAid({
-        kind: 'TRIGGER_CHART_REFINE',
-        label: prompt,
-        prompt,
-        sourceResponseId,
-        suggestedIntent: 'CHART',
-      }),
-    ),
+    ...chartFollowUpAids,
     buildConversationAid({
       kind: 'TRIGGER_RECOMMEND_QUESTIONS',
       label: recommendationTriggerCopy,

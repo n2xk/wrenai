@@ -23,6 +23,7 @@ class ServiceContainer:
     semantics_preparation_service: services.SemanticsPreparationService
     chart_service: services.ChartService
     chart_adjustment_service: services.ChartAdjustmentService
+    dashboard_query_controls_proposal_service: services.DashboardQueryControlsProposalService
     sql_answer_service: services.SqlAnswerService
     sql_pairs_service: services.SqlPairsService
     sql_question_service: services.SqlQuestionService
@@ -84,6 +85,10 @@ def create_service_container(
     )
     semantic_plan_components = (
         pipe_components.get("semantic_plan") or pipe_components["intent_classification"]
+    )
+    dashboard_query_controls_components = (
+        pipe_components.get("dashboard_query_controls_proposal")
+        or pipe_components["sql_tables_extraction"]
     )
     return ServiceContainer(
         semantics_description=services.SemanticsDescription(
@@ -208,6 +213,14 @@ def create_service_container(
                 "sql_executor": _sql_executor_pipeline,
                 "chart_adjustment": generation.ChartAdjustment(
                     **pipe_components["chart_adjustment"],
+                ),
+            },
+            **query_cache,
+        ),
+        dashboard_query_controls_proposal_service=services.DashboardQueryControlsProposalService(
+            pipelines={
+                "dashboard_query_controls_proposal": generation.DashboardQueryControlsProposal(
+                    **dashboard_query_controls_components,
                 ),
             },
             **query_cache,

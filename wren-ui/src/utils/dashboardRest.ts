@@ -3,6 +3,7 @@ import {
   resolveClientRuntimeScopeSelector,
   type ClientRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
+import type { DashboardQueryControls } from '@/types/home';
 import { parseRestJsonResponse } from './rest';
 
 export type DashboardScheduleData = {
@@ -39,6 +40,7 @@ export type DashboardGridItemData = {
     renderHints?: Record<string, unknown> | null;
     canonicalizationVersion?: string | null;
     chartDataProfile?: Record<string, unknown> | null;
+    queryControls?: DashboardQueryControls | null;
     validationErrors?: string[] | null;
     sourceResponseId?: number | null;
     sourceThreadId?: number | null;

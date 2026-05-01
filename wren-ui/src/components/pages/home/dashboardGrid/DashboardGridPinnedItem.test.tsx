@@ -199,4 +199,50 @@ describe('DashboardGridPinnedItem', () => {
     expect(markup).toContain('暂无可展示的指标数据');
     expect(markup).not.toContain('chart');
   });
+
+  it('shows dashboard date strategy for dynamic pinned items', () => {
+    const markup = renderToStaticMarkup(
+      <DashboardGridPinnedItem
+        item={{
+          id: 4,
+          dashboardId: 10,
+          type: 'LINE',
+          displayName: '销售趋势',
+          layout: { x: 0, y: 0, w: 4, h: 3 },
+          detail: {
+            sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+            chartSchema: { title: '销售趋势' },
+            validationErrors: [],
+            queryControls: {
+              version: 'dashboard-query-controls-v1',
+              timeFilters: [
+                {
+                  id: 'time_filter_1',
+                  field: 'order_date',
+                  mode: 'rolling_window',
+                  originalStartDate: '2026-04-03',
+                  originalEndDate: '2026-04-07',
+                  windowDays: 5,
+                  anchor: 'last_complete_day',
+                  timezone: 'UTC',
+                  sqlBinding: {
+                    kind: 'between',
+                    startLiteral: '2026-04-03',
+                    endLiteral: '2026-04-07',
+                  },
+                },
+              ],
+            },
+          },
+        }}
+        isSupportCached
+        runtimeScopeSelector={runtimeScopeSelector}
+        onDelete={jest.fn().mockResolvedValue(undefined)}
+        onItemUpdated={jest.fn()}
+        onNavigateToThread={jest.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    expect(markup).toContain('日期策略：滚动 5 天 · 到昨天');
+  });
 });

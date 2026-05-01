@@ -95,6 +95,17 @@ const StyledDashboardGrid = styled.div`
     flex-grow: 1;
   }
 
+  .adm-pinned-item-query-control {
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 18px;
+    color: var(--gray-6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .adm-pinned-actions {
     display: flex;
     gap: 4px;

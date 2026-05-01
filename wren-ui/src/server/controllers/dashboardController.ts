@@ -1,6 +1,7 @@
 import { IContext } from '@server/types';
 import { ChartType } from '@server/models/adaptor';
 import {
+  DashboardItemCreateResult,
   UpdateDashboardItemLayouts,
   PreviewDataResponse,
   DEFAULT_PREVIEW_LIMIT,
@@ -28,6 +29,10 @@ import {
 import { resolvePersistedProjectBridgeId } from '@server/utils/persistedRuntimeIdentity';
 import { shapeChartPreviewData } from '@/utils/chartSpecRuntime';
 import {
+  compileDashboardItemSql,
+  normalizeDashboardQueryControls,
+} from '@/utils/dashboardQueryControls';
+import {
   assertDashboardExecutableRuntimeScope,
   assertDashboardKnowledgeBaseReadAccess,
   ensureCurrentDashboardForRequestedScope,
@@ -47,6 +52,7 @@ import {
   resolveDashboardItemSqlMode,
   resolveThreadResponseSqlMode,
 } from '@server/utils/dashboardItemSqlMode';
+import type { DashboardQueryControls } from '@/types/home';
 
 const logger = getLogger('DashboardController');
 logger.level = 'debug';
@@ -216,13 +222,21 @@ export class DashboardController {
     args: {
       data: {
         itemType: DashboardItemType;
+        queryControls?: DashboardQueryControls | null;
         responseId: number;
         dashboardId?: number | null;
       };
     },
     ctx: IContext,
-  ): Promise<DashboardItem> {
+  ): Promise<DashboardItemCreateResult> {
     const { responseId, itemType, dashboardId } = args.data;
+    const queryControls =
+      args.data.queryControls == null
+        ? null
+        : normalizeDashboardQueryControls(args.data.queryControls);
+    if (args.data.queryControls != null && !queryControls) {
+      throw new Error('Invalid dashboard query controls.');
+    }
     await assertDashboardExecutableRuntimeScope(ctx);
     const dashboard =
       dashboardId != null
@@ -298,7 +312,11 @@ export class DashboardController {
           ? sourceRuntimeIdentity
           : toDashboardResponseRuntimeIdentitySource(response),
     });
-    await ctx.queryService.preview(responseSql, {
+    const previewSql = compileDashboardItemSql({
+      sql: responseSql,
+      queryControls,
+    });
+    await ctx.queryService.preview(previewSql, {
       project,
       manifest,
       limit: DEFAULT_PREVIEW_LIMIT,
@@ -327,6 +345,7 @@ export class DashboardController {
       validationErrors: isChartItem
         ? response.chartDetail?.validationErrors
         : undefined,
+      ...(queryControls ? { queryControls } : {}),
       sourceRuntimeIdentity:
         Object.keys(sourceRuntimeIdentity).length > 0
           ? sourceRuntimeIdentity
@@ -403,7 +422,11 @@ export class DashboardController {
         requestRuntimeIdentity: runtimeIdentity,
         responseRuntimeIdentity: item.detail.runtimeIdentity || null,
       });
-      const rawData = (await ctx.queryService.preview(item.detail.sql, {
+      const previewSql = compileDashboardItemSql({
+        sql: item.detail.sql,
+        queryControls: item.detail.queryControls,
+      });
+      const rawData = (await ctx.queryService.preview(previewSql, {
         project,
         manifest,
         limit: limit || DEFAULT_PREVIEW_LIMIT,

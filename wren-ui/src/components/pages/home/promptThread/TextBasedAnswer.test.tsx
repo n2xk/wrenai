@@ -7,11 +7,17 @@ import { ThreadResponseAnswerStatus } from '@/types/home';
 
 const mockUseTextBasedAnswerStreamTask = jest.fn();
 const mockOnGenerateTextBasedAnswer = jest.fn();
+const mockOnReRunAskingTask = jest.fn();
 const mockUseResponsePreviewData = jest.fn();
 
 jest.mock('./store', () => ({
   usePromptThreadActionsStore: () => ({
     onGenerateTextBasedAnswer: mockOnGenerateTextBasedAnswer,
+  }),
+  usePromptThreadPreparationStore: () => ({
+    preparation: {
+      onReRunAskingTask: mockOnReRunAskingTask,
+    },
   }),
 }));
 
@@ -123,6 +129,42 @@ describe('TextBasedAnswer', () => {
     expect(markup).not.toContain('socket hang up');
   });
 
+  it('renders SQL generation failures as SQL failures instead of text answer failures', () => {
+    const markup = renderToStaticMarkup(
+      <TextBasedAnswer
+        motion={false}
+        mode="timeline"
+        isLastThreadResponse={false}
+        isOpeningQuestion={false}
+        onInitPreviewDone={() => undefined}
+        shouldAutoPreview={false}
+        threadResponse={
+          {
+            id: 23,
+            threadId: 9,
+            question: '统计首存 cohort 累计收入',
+            workspaceId: 'ws-response',
+            knowledgeBaseId: 'kb-response',
+            sql: null,
+            answerDetail: {
+              status: ThreadResponseAnswerStatus.FAILED,
+              error: {
+                code: 'TEXT_TO_SQL_SQL_MISSING',
+                message:
+                  'SQL 生成失败，未能生成可执行查询。请尝试重新生成，或调整问题描述。',
+              },
+            },
+          } as any
+        }
+      />,
+    );
+
+    expect(markup).toContain('SQL 生成失败');
+    expect(markup).toContain('重新生成 SQL');
+    expect(markup).not.toContain('文字解读生成失败');
+    expect(markup).not.toContain('重新生成解读');
+  });
+
   it('keeps non-transient text answer errors specific', () => {
     expect(
       resolveTextAnswerErrorPresentation({
@@ -130,7 +172,10 @@ describe('TextBasedAnswer', () => {
         message: '模型返回为空',
       }),
     ).toEqual({
+      actionLabel: '重新生成解读',
+      actionTitle: '重新生成解读',
       message: '回答生成失败',
+      retryTarget: 'text_answer',
       description: '模型返回为空',
     });
   });
