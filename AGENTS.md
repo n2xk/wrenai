@@ -23,7 +23,6 @@ WrenAI 是一个 GenBI（Generative BI）系统：用户用自然语言提问，
 | `wren-engine/` | SQL engine git submodule，包含 engine / ibis-server 相关代码；本仓库只做必要联调，不把它当普通目录随意重置 |
 | `wren-mdl/` | MDL JSON Schema 和相关 schema 测试 |
 | `docker/` | 本地 Docker Compose 依赖服务配置 |
-| `deployment/` | Kubernetes / Kustomize 部署配置 |
 | `docs/` | 当前需求、设计方案、测试计划、测试结果和本地验收文档 |
 | `misc/` | 辅助资源和脚本 |
 
