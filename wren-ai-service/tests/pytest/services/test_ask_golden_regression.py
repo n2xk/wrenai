@@ -318,6 +318,43 @@ async def test_ask_golden_regression_baseline(case: dict):
 
 
 @pytest.mark.asyncio
+async def test_sql_correction_continues_when_sql_diagnosis_parsing_fails():
+    case = {
+        "query": "本月 GMV",
+        "scenario": {
+            "schema_documents": [
+                {"table_name": "orders", "table_ddl": "CREATE TABLE orders(id bigint);"}
+            ],
+            "sql_generation": {
+                "invalid_generation_result": {
+                    "type": "EXECUTION_ERROR",
+                    "original_sql": "SELECT broken",
+                    "sql": "SELECT broken",
+                    "error": "syntax error",
+                }
+            },
+            "sql_correction": {"valid_sql": "SELECT fixed_sql"},
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+    pipelines["sql_diagnosis"].run.side_effect = ValueError(
+        "unexpected character: line 2 column 69 (char 70)"
+    )
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert result["metadata"]["ask_path"] == "correction"
+    assert ask_result.status == "finished"
+    assert ask_result.response is not None
+    assert ask_result.response[0].sql == "SELECT fixed_sql"
+    correction_kwargs = pipelines["sql_correction"].run.await_args.kwargs
+    assert correction_kwargs["invalid_generation_result"]["error"] == "syntax error"
+
+
+@pytest.mark.asyncio
 async def test_ask_reports_template_decision_for_sql_pairs():
     case = {
         "query": "首存金额分桶",
@@ -545,6 +582,66 @@ async def test_ask_rewrites_direct_template_to_retrieved_physical_tables():
     assert ask_result.response[0].type == "sql_pair"
     assert "tidb_business_demo_dim_player" in ask_result.response[0].sql
     assert "tidb_business_demo_dwd_order_deposit" in ask_result.response[0].sql
+
+
+@pytest.mark.asyncio
+async def test_ask_validates_direct_template_when_schema_retrieval_is_empty():
+    template_sql = (
+        "SELECT d.player_id, SUM(d.actual_amount) AS deposit_amount "
+        "FROM dwd_order_deposit d "
+        "WHERE d.tenant_plat_id = :tenant_plat_id "
+        "AND d.channel_id = :channel_id "
+        "AND d.callback_time >= :start_date "
+        "AND d.callback_time < DATE_ADD(:end_date, INTERVAL 1 DAY) "
+        "GROUP BY d.player_id"
+    )
+    case = {
+        "query": (
+            "统计租户平台990001下渠道990011在2026-04-01到2026-04-07"
+            "的充值用户和金额"
+        ),
+        "scenario": {
+            "sql_pairs_documents": [
+                {
+                    "id": "template-direct-no-schema",
+                    "question": "充值用户和金额",
+                    "sql": template_sql,
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "anchored_template",
+                    "source_type": "business_import",
+                    "score": 0.95,
+                    "business_signature": {
+                        "sourceTables": ["dwd_order_deposit"],
+                    },
+                }
+            ],
+            "schema_documents": [],
+            "template_sql_validation": {"valid_sql": "SELECT 1"},
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+
+    async def _validate_template_sql(**kwargs):
+        assert "FROM dwd_order_deposit d" in kwargs["sql"]
+        assert "tenant_plat_id = 990001" in kwargs["sql"]
+        assert "channel_id = 990011" in kwargs["sql"]
+        return _template_validation_result(valid_sql=kwargs["sql"])
+
+    pipelines["template_sql_validation"].run.side_effect = _validate_template_sql
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert result["metadata"]["ask_path"] == "sql_pairs"
+    assert result["metadata"]["template_decision"]["schema_compatible"] is True
+    assert ask_result.status == "finished"
+    assert ask_result.response is not None
+    assert ask_result.response[0].type == "sql_pair"
+    assert ask_result.response[0].sqlpairId == "template-direct-no-schema"
+    pipelines["sql_generation"].run.assert_not_called()
 
 
 @pytest.mark.asyncio

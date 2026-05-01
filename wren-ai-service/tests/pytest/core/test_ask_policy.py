@@ -56,6 +56,27 @@ def test_evaluate_policy_context_reports_missing_required_slots():
     assert evaluation.violations[0]["type"] == "missing_required_slot"
 
 
+def test_evaluate_policy_context_skips_required_slots_for_metadata_questions():
+    evaluation = evaluate_policy_context(
+        query="当前TiDB workspace里和充值、提现、投注相关的主要表有哪些？分别大概记录什么？",
+        semantic_plan={},
+        config=AskPolicyConfig(
+            rules=(
+                AskPolicyRule(
+                    id="require_tenant_for_core_metrics",
+                    reason_code="missing_required_tenant_plat_id",
+                    query_contains_any=("充值", "提现", "投注"),
+                    required_slots=("tenant_plat_id",),
+                ),
+            ),
+        ),
+    )
+
+    assert evaluation.required_slots == ()
+    assert evaluation.missing_required_slots == ()
+    assert evaluation.violations == ()
+
+
 def test_load_ask_policy_config_from_yaml(tmp_path: Path):
     policy_file = tmp_path / "ask_policy.yaml"
     policy_file.write_text(

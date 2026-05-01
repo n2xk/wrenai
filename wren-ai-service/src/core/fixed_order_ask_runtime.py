@@ -10,6 +10,7 @@ from typing import Any, Callable, Iterable, Optional, Protocol, Sequence
 from src.core.ask_policy import (
     coerce_ask_policy_config,
     evaluate_policy_context,
+    is_metadata_explanation_query,
     load_ask_policy_config,
 )
 from src.core.mixed_answer_composer import MixedAnswerComposer
@@ -36,6 +37,7 @@ class AskRequestLike(Protocol):
     request_from: str
     skills: Sequence[Any]
     ask_policy: Optional[dict[str, Any]]
+    slot_values: dict[str, Any]
 
 
 class SkillCandidateLike(Protocol):
@@ -69,6 +71,7 @@ class AskExecutionState:
     template_decision: Optional[dict[str, Any]] = None
     semantic_plan: Optional[dict[str, Any]] = None
     clarification_state: Optional[dict[str, Any]] = None
+    slot_values: dict[str, Any] = field(default_factory=dict)
 
 
 def _normalize_instruction(value: Any) -> Optional[str]:
@@ -663,7 +666,11 @@ def _extract_channel_ids_from_text(text: Optional[str]) -> list[int]:
 
 
 def _query_requires_tenant_plat_id(query: Optional[str]) -> bool:
-    if not query or _extract_tenant_plat_ids_from_text(query):
+    if (
+        not query
+        or is_metadata_explanation_query(query)
+        or _extract_tenant_plat_ids_from_text(query)
+    ):
         return False
     return bool(_extract_channel_ids_from_text(query))
 
@@ -694,8 +701,11 @@ def detect_missing_tenant_plat_id_requirement(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not _tenant_slot_guard_enabled() or not _query_requires_tenant_plat_id(query):
+        return None
+    if _slot_value_is_present(resolved_slots, "tenant_plat_id"):
         return None
 
     history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
@@ -750,6 +760,7 @@ def detect_missing_ambiguous_channel_requirement(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not _query_is_ambiguous_channel_performance_question(query):
         return None
@@ -758,13 +769,32 @@ def detect_missing_ambiguous_channel_requirement(
     history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
     history_channel_ids = _resolve_history_channel_ids(histories)
 
-    if not _extract_tenant_plat_ids_from_text(query) and len(history_tenant_ids) != 1:
+    if (
+        not _extract_tenant_plat_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "tenant_plat_id")
+        and len(history_tenant_ids) != 1
+    ):
         missing_parameters.append("tenant_plat_id")
-    if not _extract_channel_ids_from_text(query) and len(history_channel_ids) != 1:
+    if (
+        not _extract_channel_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "channel_id")
+        and len(history_channel_ids) != 1
+    ):
         missing_parameters.append("channel_id")
-    if not _extract_date_range_from_text(query) and not _history_has_date_context(histories):
+    if (
+        not _extract_date_range_from_text(query)
+        and not _slot_values_resolve_date_range(resolved_slots)
+        and not _history_has_date_context(histories)
+    ):
         missing_parameters.append("date_range")
-    missing_parameters.append("metric_focus")
+    if not _query_has_metric_focus(query) and not _slot_value_is_present(
+        resolved_slots,
+        "metric_focus",
+    ):
+        missing_parameters.append("metric_focus")
+
+    if not missing_parameters:
+        return None
 
     return {
         "slot": "channel_performance_context",
@@ -782,6 +812,7 @@ def detect_missing_financial_ratio_scope_requirement(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not query:
         return None
@@ -792,16 +823,20 @@ def detect_missing_financial_ratio_scope_requirement(
     missing_parameters: list[str] = []
     if (
         not _extract_tenant_plat_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "tenant_plat_id")
         and len(_resolve_history_tenant_plat_ids(histories)) != 1
     ):
         missing_parameters.append("tenant_plat_id")
     if (
         not _extract_channel_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "channel_id")
         and len(_resolve_history_channel_ids(histories)) != 1
     ):
         missing_parameters.append("channel_id")
-    if not _extract_date_range_from_text(query) and not _history_has_date_context(
-        histories,
+    if (
+        not _extract_date_range_from_text(query)
+        and not _slot_values_resolve_date_range(resolved_slots)
+        and not _history_has_date_context(histories)
     ):
         missing_parameters.append("date_range")
 
@@ -824,6 +859,7 @@ def detect_missing_distribution_scope_requirement(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not query:
         return None
@@ -838,17 +874,21 @@ def detect_missing_distribution_scope_requirement(
     missing_parameters: list[str] = []
     if (
         not _extract_tenant_plat_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "tenant_plat_id")
         and len(_resolve_history_tenant_plat_ids(histories)) != 1
     ):
         missing_parameters.append("tenant_plat_id")
     if (
         "渠道" in query
         and not _extract_channel_ids_from_text(query)
+        and not _slot_value_is_present(resolved_slots, "channel_id")
         and len(_resolve_history_channel_ids(histories)) != 1
     ):
         missing_parameters.append("channel_id")
-    if not _extract_date_range_from_text(query) and not _history_has_date_context(
-        histories,
+    if (
+        not _extract_date_range_from_text(query)
+        and not _slot_values_resolve_date_range(resolved_slots)
+        and not _history_has_date_context(histories)
     ):
         missing_parameters.append("date_range")
 
@@ -870,19 +910,24 @@ def detect_missing_required_slot_requirement(
     query: Optional[str],
     *,
     histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     return detect_missing_tenant_plat_id_requirement(
         query,
         histories=histories,
+        resolved_slots=resolved_slots,
     ) or detect_missing_ambiguous_channel_requirement(
         query,
         histories=histories,
+        resolved_slots=resolved_slots,
     ) or detect_missing_financial_ratio_scope_requirement(
         query,
         histories=histories,
+        resolved_slots=resolved_slots,
     ) or detect_missing_distribution_scope_requirement(
         query,
         histories=histories,
+        resolved_slots=resolved_slots,
     )
 
 
@@ -953,6 +998,100 @@ def _collapse_single_or_list(values: list[Any]) -> Any:
     if len(values) == 1:
         return values[0]
     return values
+
+
+def _slot_value_is_present(slot_values: dict[str, Any] | None, slot: str) -> bool:
+    if not isinstance(slot_values, dict) or slot not in slot_values:
+        return False
+
+    value = slot_values.get(slot)
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _slot_values_resolve_date_range(slot_values: dict[str, Any] | None) -> bool:
+    if not isinstance(slot_values, dict):
+        return False
+    if _slot_value_is_present(slot_values, "date_range"):
+        return True
+    return _slot_value_is_present(slot_values, "start_date") and _slot_value_is_present(
+        slot_values,
+        "end_date",
+    )
+
+
+def _extract_slot_value_ids(slot_values: dict[str, Any] | None, slot: str) -> list[int]:
+    if not isinstance(slot_values, dict) or slot not in slot_values:
+        return []
+
+    value = slot_values.get(slot)
+    if value is None:
+        return []
+    if isinstance(value, int):
+        return [value]
+    if isinstance(value, str):
+        return _extract_integer_values([r"((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)"], value)
+    if isinstance(value, (list, tuple, set)):
+        ids: list[int] = []
+        for item in value:
+            if isinstance(item, int):
+                ids.append(item)
+            elif isinstance(item, str):
+                ids.extend(
+                    _extract_integer_values(
+                        [r"((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)"],
+                        item,
+                    )
+                )
+        return list(dict.fromkeys(ids))
+    return []
+
+
+def _extract_slot_value_date_range(
+    slot_values: dict[str, Any] | None,
+) -> dict[str, str]:
+    if not isinstance(slot_values, dict):
+        return {}
+
+    raw_range = slot_values.get("date_range")
+    if isinstance(raw_range, dict):
+        start_date = raw_range.get("start_date")
+        end_date = raw_range.get("end_date")
+        single_date = raw_range.get("date")
+        if start_date and end_date:
+            return {"start_date": str(start_date), "end_date": str(end_date)}
+        if single_date:
+            return {"date": str(single_date)}
+    elif isinstance(raw_range, str):
+        parsed = _extract_date_range_from_text(raw_range)
+        if parsed:
+            return parsed
+
+    start_date = slot_values.get("start_date")
+    end_date = slot_values.get("end_date")
+    if start_date and end_date:
+        return {"start_date": str(start_date), "end_date": str(end_date)}
+    if start_date:
+        return {"date": str(start_date)}
+    return {}
+
+
+def _query_has_metric_focus(query: Optional[str]) -> bool:
+    if not query:
+        return False
+    return bool(
+        _extract_pattern_keys(query, SEMANTIC_METRIC_PATTERNS)
+        or re.search(
+            r"(?:关注指标|指标方向|metric_focus)\s*[=:：]?\s*[\\w\\u4e00-\\u9fff]+",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
 
 
 def _extract_semantic_features(query: Optional[str]) -> list[str]:
@@ -1254,6 +1393,7 @@ def build_minimal_semantic_plan(
     *,
     histories: Sequence[Any] | None = None,
     template_decision: Optional[dict[str, Any]] = None,
+    resolved_slot_values: dict[str, Any] | None = None,
     intent: Optional[str] = None,
     route_override: Optional[str] = None,
     reason_codes: Sequence[str] | None = None,
@@ -1267,16 +1407,26 @@ def build_minimal_semantic_plan(
     """
 
     explicit_tenant_ids = _extract_tenant_plat_ids_from_text(query)
+    slot_tenant_ids = _extract_slot_value_ids(
+        resolved_slot_values,
+        "tenant_plat_id",
+    )
     history_tenant_ids: list[int] = []
-    tenant_ids = explicit_tenant_ids
+    tenant_ids = explicit_tenant_ids or slot_tenant_ids
     if not tenant_ids:
         history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
         tenant_ids = history_tenant_ids
-    channel_ids = _extract_channel_ids_from_text(query)
-    date_range = _extract_date_range_from_text(query)
+    channel_ids = _extract_channel_ids_from_text(query) or _extract_slot_value_ids(
+        resolved_slot_values,
+        "channel_id",
+    )
+    date_range = _extract_date_range_from_text(query) or _extract_slot_value_date_range(
+        resolved_slot_values,
+    )
     missing_slot_requirement = detect_missing_required_slot_requirement(
         query,
         histories=histories,
+        resolved_slots=resolved_slot_values,
     ) or detect_missing_template_parameter_requirement(
         query,
         template_decision,
@@ -1309,6 +1459,8 @@ def build_minimal_semantic_plan(
             value=_collapse_single_or_list(tenant_ids),
             source="explicit_user_input"
             if explicit_tenant_ids
+            else "clarification_reply"
+            if slot_tenant_ids
             else "history_context"
             if history_tenant_ids
             else "unknown",
@@ -1321,7 +1473,14 @@ def build_minimal_semantic_plan(
     for key, value in date_range.items():
         resolved_slots[key] = _build_resolved_slot(
             value=value,
-            source="explicit_user_input",
+            source="explicit_user_input"
+            if _extract_date_range_from_text(query)
+            else "clarification_reply",
+        )
+    if _slot_value_is_present(resolved_slot_values, "metric_focus"):
+        resolved_slots["metric_focus"] = _build_resolved_slot(
+            value=(resolved_slot_values or {}).get("metric_focus"),
+            source="clarification_reply",
         )
 
     missing_slot_details = _build_slot_details(
@@ -1420,6 +1579,60 @@ def _query_requests_player_level_detail(query: Optional[str]) -> bool:
         re.search(
             r"玩家\s*ID|player[_\s-]?id|用户\s*ID|名单|明细|给出玩家|列出",
             query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _query_requests_retention_deposit(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    return bool(
+        re.search(
+            r"续存|复存|留存|[二三四五六]\s*存|[2-6]\s*存|2\s*(?:~|-|到|至)\s*6\s*存",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _sample_supports_retention_deposit(sample: Any) -> bool:
+    business_signature = _get_business_signature(sample)
+    positive_values: list[str] = []
+    for key in (
+        "templateId",
+        "template_id",
+        "concepts",
+        "features",
+        "metrics",
+        "positiveCues",
+        "positive_cues",
+        "expectedGrain",
+        "expected_grain",
+        "resultGrain",
+        "result_grain",
+    ):
+        value = business_signature.get(key)
+        if isinstance(value, str):
+            positive_values.append(value)
+        else:
+            positive_values.extend(_normalize_string_list(value))
+
+    sample_text = " ".join(
+        filter(
+            None,
+            [
+                str(_get_sample_value(sample, "question", "")),
+                str(_get_sample_value(sample, "title", "")),
+                " ".join(positive_values),
+            ],
+        )
+    )
+    return bool(
+        re.search(
+            r"\\bT08\\b|retention[_\\s-]?deposit|\\bretention\\b|续存|复存|[二三四五六]\\s*存|[2-6]\\s*存|2\\s*(?:~|-|到|至)\\s*6\\s*存",
+            sample_text,
             flags=re.IGNORECASE,
         )
     )
@@ -1620,6 +1833,11 @@ def _resolve_template_route_guard_failure(
     ):
         return "template_guard_login_without_deposit_mismatch"
 
+    if _query_requests_retention_deposit(query) and not _sample_supports_retention_deposit(
+        sample,
+    ):
+        return "template_guard_retention_mismatch"
+
     return None
 
 
@@ -1806,6 +2024,12 @@ def _score_sql_sample_for_query(
             score += 2.5
         else:
             score -= 3.0
+
+    if _query_requests_retention_deposit(query):
+        if _sample_supports_retention_deposit(sample):
+            score += 2.0
+        else:
+            score -= 2.5
 
     if _resolve_template_route_guard_failure(query, sample):
         score -= 6.0
@@ -3454,13 +3678,22 @@ class NL2SQLToolset:
         if not self._allow_sql_diagnosis:
             return None
 
-        sql_diagnosis_results = await self._pipelines["sql_diagnosis"].run(
-            contexts=contexts,
-            original_sql=original_sql,
-            invalid_sql=invalid_sql,
-            error_message=error_message,
-            language=language,
-        )
+        try:
+            sql_diagnosis_results = await self._pipelines["sql_diagnosis"].run(
+                contexts=contexts,
+                original_sql=original_sql,
+                invalid_sql=invalid_sql,
+                error_message=error_message,
+                language=language,
+            )
+        except Exception as exc:
+            logger.warning(
+                "SQL diagnosis failed; continuing SQL correction with the original validation error: %s",
+                exc,
+                exc_info=True,
+            )
+            return None
+
         return sql_diagnosis_results["post_process"].get("reasoning")
 
     async def correct_sql(
@@ -3599,7 +3832,10 @@ class BaseFixedOrderAskRuntime:
         return "nl2sql"
 
     def _build_initial_state(self, ask_request: AskRequestLike) -> AskExecutionState:
-        return AskExecutionState(user_query=ask_request.query)
+        return AskExecutionState(
+            user_query=ask_request.query,
+            slot_values=dict(getattr(ask_request, "slot_values", {}) or {}),
+        )
 
     def _sync_semantic_plan_state(
         self,
@@ -3615,6 +3851,7 @@ class BaseFixedOrderAskRuntime:
             state.user_query,
             histories=histories,
             template_decision=state.template_decision,
+            resolved_slot_values=state.slot_values,
             intent=intent,
             route_override=route_override,
             reason_codes=reason_codes,
@@ -3982,10 +4219,13 @@ class BaseFixedOrderAskRuntime:
                 "construct_retrieval_results", {}
             )
 
+        selected_template = state.sql_samples[0]
         documents = state.retrieval_result.get("retrieval_results", [])
         state.table_names = [document.get("table_name") for document in documents]
         state.table_ddls = [document.get("table_ddl") for document in documents]
-        has_schema_support = bool(documents)
+        if not state.table_names:
+            state.table_names = _extract_template_source_tables(selected_template)
+        has_schema_support = bool(documents or state.table_names)
         self._sync_template_decision_state_metrics(
             state,
             schema_compatible=has_schema_support,
@@ -3999,7 +4239,6 @@ class BaseFixedOrderAskRuntime:
                 state.template_decision["sql_source"] = "generated"
             return
 
-        selected_template = state.sql_samples[0]
         rendered_sql = build_reusable_template_sql(
             selected_template, state.template_decision
         )
@@ -4136,6 +4375,12 @@ class BaseFixedOrderAskRuntime:
         state: AskExecutionState,
         status: str,
     ) -> dict[str, Any]:
+        template_sql_source = (state.template_decision or {}).get("sql_source")
+        is_direct_template_sql = (
+            bool(state.template_decision)
+            and template_sql_source in {"anchored_template", "rendered_template"}
+            and not (state.template_decision or {}).get("missing_parameters")
+        )
         retrieval_finished = bool(
             state.intent_reasoning
             or state.rephrased_question
@@ -4183,6 +4428,9 @@ class BaseFixedOrderAskRuntime:
         )
 
         sql_reasoned_status = (
+            "skipped"
+            if is_direct_template_sql and (state.api_results or status == "finished")
+            else
             "running"
             if status == "planning" and not state.sql_generation_reasoning
             else "finished"
@@ -4254,7 +4502,11 @@ class BaseFixedOrderAskRuntime:
                 key="ask.sql_reasoned",
                 status=sql_reasoned_status,
                 phase="reasoning",
-                detail=state.sql_generation_reasoning,
+                detail=(
+                    "当前 SQL 由已校验模板直接生成，无需额外组织 LLM 分析思路。"
+                    if sql_reasoned_status == "skipped"
+                    else state.sql_generation_reasoning
+                ),
             ),
             self._build_thinking_step(
                 key="ask.sql_generated",
@@ -4402,6 +4654,7 @@ class BaseFixedOrderAskRuntime:
         missing_slot_requirement = detect_missing_required_slot_requirement(
             state.user_query,
             histories=histories,
+            resolved_slots=state.slot_values,
         ) or detect_missing_template_parameter_requirement(
             state.user_query,
             state.template_decision,

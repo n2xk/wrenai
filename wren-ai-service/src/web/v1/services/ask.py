@@ -438,6 +438,8 @@ class AskService:
                     formatted_values.append(f"时间范围{start_date}到{end_date}")
                 elif single_date:
                     formatted_values.append(f"日期{single_date}")
+            elif key == "date_range":
+                formatted_values.append(f"时间范围{value}")
             elif key == "cohort_start_date":
                 formatted_values.append(f"首存cohort开始日期{value}")
             elif key == "cohort_end_date":

@@ -1,4 +1,5 @@
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -68,6 +69,31 @@ def _as_tuple_of_str(value: Any) -> tuple[str, ...]:
 
 def _normalize_text(value: Any) -> str:
     return str(value or "").strip().lower()
+
+
+def is_metadata_explanation_query(query: Optional[str]) -> bool:
+    """Return True for schema/metadata inventory questions.
+
+    Required business-slot policies are meant to protect metric SQL generation,
+    not questions that ask what tables, models or fields exist. Without this
+    guard a broad tenant policy can incorrectly block questions such as
+    “充值/提现/投注相关的主要表有哪些”.
+    """
+
+    if not query:
+        return False
+
+    text = str(query).strip()
+    if not text:
+        return False
+
+    metadata_patterns = (
+        r"(?:有哪些|哪些|列出|说明|介绍|查看).{0,24}(?:表|数据表|模型|字段|schema|metadata|元数据)",
+        r"(?:表|数据表|模型|字段).{0,24}(?:有哪些|记录什么|是干嘛|干什么|含义|说明|介绍)",
+        r"(?:workspace|知识库|数据集|schema|metadata|元数据).{0,24}(?:表|数据表|模型|字段)",
+        r"(?:充值|提现|提款|投注).{0,16}(?:相关|有关).{0,16}(?:主要)?(?:表|数据表|模型)",
+    )
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in metadata_patterns)
 
 
 def _parse_rule(raw_rule: dict[str, Any], index: int) -> AskPolicyRule:
@@ -193,6 +219,12 @@ def evaluate_policy_context(
         if not _rule_matches_template(rule, template_decision):
             continue
 
+        skip_required_slots = is_metadata_explanation_query(query) and bool(
+            rule.required_slots
+        )
+        if skip_required_slots and not rule.forbidden_templates:
+            continue
+
         if rule.reason_code not in reason_codes:
             reason_codes.append(rule.reason_code)
 
@@ -207,6 +239,9 @@ def evaluate_policy_context(
                         "template_id": template_id,
                     }
                 )
+
+        if skip_required_slots:
+            continue
 
         for slot in rule.required_slots:
             if slot not in required_slots:

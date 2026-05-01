@@ -397,6 +397,14 @@ def test_detect_missing_tenant_plat_id_requirement_uses_unique_history_context()
     assert result is None
 
 
+def test_detect_missing_tenant_plat_id_requirement_skips_metadata_inventory_query():
+    result = detect_missing_tenant_plat_id_requirement(
+        "当前TiDB workspace里和充值、提现、投注相关的主要表有哪些？分别大概记录什么？"
+    )
+
+    assert result is None
+
+
 def test_detect_missing_required_slot_requirement_clarifies_vague_channel_performance():
     result = detect_missing_required_slot_requirement("帮我看看这个渠道最近表现怎么样")
 
@@ -413,6 +421,20 @@ def test_detect_missing_required_slot_requirement_clarifies_vague_channel_perfor
 
 def test_detect_missing_required_slot_requirement_keeps_metric_specific_channel_query():
     result = detect_missing_required_slot_requirement("这个渠道新客首充成本是多少")
+
+    assert result is None
+
+
+def test_detect_missing_required_slot_requirement_uses_clarification_slot_values():
+    result = detect_missing_required_slot_requirement(
+        "帮我看看这个渠道最近表现怎么样",
+        resolved_slots={
+            "tenant_plat_id": 990001,
+            "channel_id": 990011,
+            "date_range": "2026-04-01 到 2026-04-07",
+            "metric_focus": "充值表现",
+        },
+    )
 
     assert result is None
 
@@ -465,6 +487,26 @@ def test_build_minimal_semantic_plan_treats_plain_sql_guard_as_normal_sql():
     )
 
     assert plan["decision"]["route"] == "normal_text_to_sql"
+
+
+def test_text_to_sql_thinking_marks_direct_template_reasoning_as_skipped():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(user_query="统计租户平台990001渠道990011首存趋势")
+    state.template_decision = {
+        "mode": "anchored_template",
+        "sql_source": "anchored_template",
+        "missing_parameters": [],
+    }
+    state.api_results = [{"sql": "select 1", "type": "sql_pair"}]
+    state.table_names = ["dws_first_deposit"]
+
+    thinking = runtime._build_text_to_sql_thinking(state=state, status="finished")
+
+    sql_reasoned = next(
+        step for step in thinking["steps"] if step["key"] == "ask.sql_reasoned"
+    )
+    assert sql_reasoned["status"] == "skipped"
+    assert "已校验模板直接生成" in sql_reasoned["detail"]
 
 
 def test_build_minimal_semantic_plan_exposes_blocking_slot_clarification():
@@ -524,6 +566,32 @@ def test_build_minimal_semantic_plan_marks_vague_channel_question_as_clarificati
     ]
     assert plan["clarification_request"]["slot"] == "channel_performance_context"
     assert "指标方向" in plan["clarification_request"]["prompt"]
+
+
+def test_build_minimal_semantic_plan_consumes_clarification_slot_values():
+    plan = build_minimal_semantic_plan(
+        "帮我看看这个渠道最近表现怎么样",
+        resolved_slot_values={
+            "tenant_plat_id": 990001,
+            "channel_id": 990011,
+            "date_range": "2026-04-01 到 2026-04-07",
+            "metric_focus": "充值表现",
+        },
+    )
+
+    assert plan["missing_slots"] == []
+    assert plan["clarification_request"] is None
+    assert plan["filters"] == {
+        "tenant_plat_id": 990001,
+        "channel_id": 990011,
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-07",
+    }
+    assert plan["resolved_slots"]["metric_focus"] == {
+        "value": "充值表现",
+        "source": "clarification_reply",
+    }
+    assert plan["decision"]["route"] == "normal_text_to_sql"
 
 
 def test_detect_missing_template_parameter_requirement_clarifies_cohort_dates():
@@ -1296,6 +1364,72 @@ def test_build_template_decision_keeps_retention_template_anchored_for_2_to_6_de
 
     assert result["template_id"] == "template-08"
     assert result["mode"] == "anchored_template"
+    assert result["fallback_reason"] is None
+    assert result["parameters"] == {
+        "tenant_plat_id": 990001,
+        "channel_id": 990011,
+        "cohort_start_date": "2026-04-01",
+        "cohort_end_date": "2026-04-03",
+    }
+
+
+def test_build_template_decision_keeps_retention_template_after_tenant_clarification_resume():
+    query = (
+        "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况"
+        "（已补充：租户平台990001）"
+    )
+    reranked_samples = rerank_sql_samples(
+        query,
+        [
+            {
+                "id": "template-03",
+                "title": "首存 cohort 提取",
+                "question": "查询某渠道在指定时间段的首存用户名单与首存金额",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T03",
+                    "features": ["cohort", "first_deposit"],
+                    "positiveCues": ["首存用户", "首次存款用户"],
+                    "negativeCues": ["续存", "二存", "六存"],
+                    "resultGrain": "first_deposit_user",
+                },
+                "score": 0.85,
+                "status": "active",
+            },
+            {
+                "id": "template-08",
+                "title": "首存 cohort 续存",
+                "question": "统计某日/某段首存 cohort 的 2~6 存人数、率、人均金额",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T08",
+                    "features": ["cohort", "retention"],
+                    "concepts": ["first_deposit", "retention_deposit"],
+                    "positiveCues": ["二存", "六存", "续存", "复存"],
+                    "resultGrain": "first_deposit_date + channel_id",
+                },
+                "score": 0.78,
+                "status": "active",
+            },
+        ],
+    )
+    result = build_template_decision(reranked_samples, query=query)
+
+    assert result["template_id"] == "template-08"
     assert result["fallback_reason"] is None
     assert result["parameters"] == {
         "tenant_plat_id": 990001,
