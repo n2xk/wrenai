@@ -24,7 +24,6 @@ WrenAI 是一个 GenBI（Generative BI）系统：用户用自然语言提问，
 | `wren-mdl/` | MDL JSON Schema 和相关 schema 测试 |
 | `docker/` | 本地 Docker Compose 依赖服务配置 |
 | `docs/` | 当前需求、设计方案、测试计划、测试结果和本地验收文档 |
-| `misc/` | 辅助资源和脚本 |
 
 已移除 / 不再作为当前主路径维护：
 

@@ -21,7 +21,7 @@ init dev='--dev':
 	fi
 
 up:
-	docker compose -f ../docker/docker-compose.yaml --env-file ../docker/.env up -d --build bootstrap postgres wren-engine ibis-server trino wren-ui
+	docker compose -f ../docker/docker-compose.yaml --env-file ../docker/.env up -d --build postgres wren-engine ibis-server trino wren-ui
 
 down:
 	docker compose -f ../docker/docker-compose.yaml --env-file ../docker/.env down
