@@ -1,0 +1,80 @@
+volumes:
+  data:
+  postgres_data:
+
+networks:
+  app:
+    driver: bridge
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: on-failure
+    expose:
+      - "5432"
+    ports:
+      - "${POSTGRES_FORWARD_PORT:-9432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wrenai}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    networks:
+      - app
+
+  engine:
+    image: ${WREN_ENGINE_IMAGE_REPO:-engine}:${WREN_ENGINE_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/wren-engine.Dockerfile
+    restart: on-failure
+    platform: ${PLATFORM:-linux/amd64}
+    expose:
+      - "${WREN_ENGINE_PORT:-8080}"
+      - "${WREN_ENGINE_SQL_PORT:-7432}"
+    ports:
+      - "${WREN_ENGINE_PORT:-8080}:${WREN_ENGINE_PORT:-8080}"
+      - "${WREN_ENGINE_SQL_PORT:-7432}:${WREN_ENGINE_SQL_PORT:-7432}"
+    volumes:
+      - data:/usr/src/app/etc
+      - ./data:/usr/src/app/data
+    networks:
+      - app
+
+  ibis-server:
+    image: ${IBIS_SERVER_IMAGE_REPO:-engine-ibis}:${IBIS_SERVER_IMAGE_TAG:-local}
+    build:
+      context: ../wren-engine
+      dockerfile: docker/ibis-server.Dockerfile
+      args:
+        ENV: ${IBIS_SERVER_BUILD_ENV:-prod}
+    restart: on-failure
+    platform: ${PLATFORM:-linux/amd64}
+    expose:
+      - "${IBIS_SERVER_PORT:-8000}"
+    ports:
+      - "${IBIS_SERVER_PORT:-8000}:${IBIS_SERVER_PORT:-8000}"
+    environment:
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT:-8080}
+    volumes:
+      - ${LOCAL_STORAGE:-./data}:/usr/src/app/data
+    networks:
+      - app
+    depends_on:
+      - engine
+
+  trino:
+    image: trinodb/trino:${TRINO_VERSION:-475}
+    restart: on-failure
+    platform: ${PLATFORM:-linux/amd64}
+    environment:
+      CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}
+    expose:
+      - "8080"
+    ports:
+      - "${TRINO_FORWARD_PORT:-8081}:8080"
+    volumes:
+      - ./trino/catalog:/etc/trino/catalog
+    networks:
+      - app

@@ -1,0 +1,41 @@
+COMPOSE_PROJECT_NAME=local
+PLATFORM=linux/amd64
+
+# Dependency-layer ports exposed to the host for source-run UI/AI Service.
+POSTGRES_FORWARD_PORT=9432
+WREN_ENGINE_PORT=8080
+WREN_ENGINE_SQL_PORT=7432
+IBIS_SERVER_PORT=8000
+TRINO_FORWARD_PORT=8081
+TRINO_CATALOG_MANAGEMENT=dynamic
+
+# Local source services should use these host endpoints.
+PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai
+PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai
+WREN_ENGINE_ENDPOINT=http://127.0.0.1:8080
+IBIS_SERVER_ENDPOINT=http://127.0.0.1:8000
+WREN_AI_ENDPOINT=http://127.0.0.1:5555
+
+# Base dependency versions / local image names.
+TRINO_VERSION=475
+WREN_ENGINE_VERSION=local
+IBIS_SERVER_VERSION=local
+WREN_ENGINE_IMAGE_REPO=engine
+WREN_ENGINE_IMAGE_TAG=local
+IBIS_SERVER_IMAGE_REPO=engine-ibis
+IBIS_SERVER_IMAGE_TAG=local
+IBIS_SERVER_BUILD_ENV=prod
+LOCAL_STORAGE=./data
+
+# Database defaults.
+POSTGRES_DB=wrenai
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
+# Optional LLM keys for source-run AI Service.
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_PUBLIC_KEY=
+EMBEDDING_MODEL_DIMENSION=4096
+GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash

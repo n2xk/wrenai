@@ -1,0 +1,76 @@
+services:
+  ai-service:
+    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION:-0.29.0}
+    restart: on-failure
+    platform: ${PLATFORM:-linux/amd64}
+    expose:
+      - "${WREN_AI_SERVICE_PORT:-5555}"
+    ports:
+      - "${AI_SERVICE_FORWARD_PORT:-5555}:${WREN_AI_SERVICE_PORT:-5555}"
+    env_file:
+      - ${AI_SERVICE_ENV_FILE:-./env/prod.example}
+    environment:
+      PYTHONUNBUFFERED: "1"
+      CONFIG_PATH: /app/config.yaml
+      PG_CONN_STR: ${PG_CONN_STR:-postgresql://postgres:postgres@postgres:5432/wrenai}
+      EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION:-3072}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+    volumes:
+      - ${AI_CONFIG_FILE:-./config/ai.config.example.yaml}:/app/config.yaml:ro
+      - ./data:/app/data:ro
+    networks:
+      - app
+    depends_on:
+      - postgres
+      - ibis-server
+
+  ui:
+    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION:-0.32.2}
+    restart: on-failure
+    platform: ${PLATFORM:-linux/amd64}
+    environment:
+      PG_URL: ${PG_URL:-postgres://postgres:postgres@postgres:5432/wrenai}
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT:-8080}
+      WREN_AI_ENDPOINT: http://ai-service:${WREN_AI_SERVICE_PORT:-5555}
+      IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT:-8000}
+      TRINO_CATALOG_DIR: /app/trino/catalog
+      TRINO_CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}
+      TRINO_CATALOG_MANAGEMENT_HOST: trino
+      TRINO_CATALOG_MANAGEMENT_PORT: 8080
+      TRINO_CATALOG_MANAGEMENT_SSL: "false"
+      TRINO_RUNTIME_HOST: trino
+      TRINO_RUNTIME_PORT: 8080
+      TRINO_RUNTIME_USER: ${TRINO_RUNTIME_USER:-wrenai}
+      TRINO_RUNTIME_PASSWORD: ${TRINO_RUNTIME_PASSWORD:-}
+      TRINO_RUNTIME_SSL: ${TRINO_RUNTIME_SSL:-false}
+      GENERATION_MODEL: ${GENERATION_MODEL:-gpt-4o-mini}
+      WREN_ENGINE_PORT: ${WREN_ENGINE_PORT:-8080}
+      WREN_AI_SERVICE_VERSION: ${WREN_AI_SERVICE_VERSION:-0.29.0}
+      WREN_UI_VERSION: ${WREN_UI_VERSION:-0.32.2}
+      WREN_ENGINE_VERSION: ${WREN_ENGINE_VERSION:-local}
+      USER_UUID: ${USER_UUID:-}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      NEXT_PUBLIC_USER_UUID: ${USER_UUID:-}
+      NEXT_PUBLIC_POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      NEXT_PUBLIC_POSTHOG_HOST: ${POSTHOG_HOST:-}
+      NEXT_PUBLIC_TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      EXPERIMENTAL_ENGINE_RUST_VERSION: ${EXPERIMENTAL_ENGINE_RUST_VERSION:-false}
+      WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION:-local}
+      BACKGROUND_TRACKER_WORKSPACE_ID: ${BACKGROUND_TRACKER_WORKSPACE_ID:-}
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    volumes:
+      - data:/app/data
+      - ./trino/catalog:/app/trino/catalog
+    networks:
+      - app
+    depends_on:
+      - ai-service
+      - engine
+      - postgres
+      - trino

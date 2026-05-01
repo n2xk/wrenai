@@ -67,7 +67,7 @@ Wren Engine / Ibis Server / Trino
 当前开发环境推荐使用：
 
 - Docker 启动基础依赖和部分后端依赖服务。
-- background terminal 启动 UI 和 AI Service，便于实时调试。
+- 日常开发可用 background terminal 启动 UI 和 AI Service；长时间回归 / 测试环境用 PM2 管理 UI 和 AI Service。
 
 ### 启动 UI
 
@@ -80,19 +80,40 @@ PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn 
 
 ```bash
 cd wren-ai-service
-poetry run python -m src.__main__
+PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run python -m src.__main__
 ```
 
 ### Docker 依赖服务
 
+本地开发只用 Docker 启动依赖层，不默认启动 UI / AI Service：
+
 ```bash
-cd docker
-cp .env.example .env.local
-cp config.example.yaml config.yaml
-docker compose --env-file .env.local up -d
+./docker/scripts/dev-up.sh
 ```
 
-具体启动组合以当前开发任务为准。如果只调试 UI 或 AI Service，可以只保留必要的依赖服务在 Docker 中运行。
+如需当前问数回归测试环境，还需要 TiDB demo，并用 PM2 管理 UI / AI Service。先准备本地 LLM key：
+
+```bash
+cp docker/env/test.example docker/env/test.local
+# 编辑 docker/env/test.local，填 OPENROUTER_API_KEY / OPENAI_API_KEY 等
+./docker/scripts/test-env-up.sh
+```
+
+这会启动 PostgreSQL、engine、ibis-server、Trino、TiDB demo，并用 PM2 启动 `test-ui` / `test-ai-service`。修改 engine / ibis-server 后重建：
+
+```bash
+./docker/scripts/rebuild-engine.sh
+```
+
+单机完整栈 / 演示部署使用：
+
+```bash
+cp docker/env/prod.example docker/env/prod.local
+cp docker/config/ai.config.example.yaml docker/config/ai.config.local.yaml
+./docker/scripts/prod-up.sh
+```
+
+具体说明见 `docker/README.md`。
 
 ## 常用命令
 
@@ -146,11 +167,20 @@ just down
 
 ## LLM 配置
 
-AI Service 支持通过配置文件接入不同 LLM Provider。配置入口主要在：
+AI Service 支持通过配置文件接入不同 LLM Provider。当前本地 / 测试口径与 `wren-ai-service/config.local.yaml` 对齐：
 
-- `wren-ai-service/config.yaml`
-- `wren-ai-service/.env.dev`
-- `wren-ai-service/docs/config_examples/`
+- LLM：`openrouter/deepseek/deepseek-v4-flash`
+- OpenRouter provider 顺序：`deepseek` → `siliconflow/fp8` → `novita`
+- Embedder：`openai/qwen/qwen3-embedding-8b`
+- Embedding dimension：`4096`
+
+相关配置入口：
+
+- PM2 测试环境变量：`docker/env/test.local`（由 `docker/env/test.example` 复制，私密不提交）
+- PM2 测试进程配置：`docker/pm2.test.config.cjs`
+- Docker 完整栈 AI 配置：`docker/config/ai.config.example.yaml` / `docker/config/ai.config.local.yaml`
+- Docker 完整栈环境变量：`docker/env/prod.example` / `docker/env/prod.local`
+- AI Service 本地源码配置：`wren-ai-service/config.local.yaml`
 
 当前问数质量高度依赖模型能力、限流策略、Provider 稳定性和业务知识配置。测试时应遵守回归测试文档中的节流和重试规则，避免因 429 限流误判业务能力。
 

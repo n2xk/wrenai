@@ -1,0 +1,28 @@
+# Local development override.
+#
+# Dev mode intentionally runs only the dependency layer in Docker:
+#   - postgres
+#   - engine
+#   - ibis-server
+#   - trino
+#
+# Run these from source in background terminals for hot reload/debugging:
+#   - ui source app on host port 3002
+#   - ai-service source app on host port 5555
+
+services:
+  postgres:
+    restart: unless-stopped
+
+  engine:
+    restart: unless-stopped
+
+  ibis-server:
+    restart: unless-stopped
+    environment:
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT:-8080}
+
+  trino:
+    restart: unless-stopped
+    environment:
+      CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}

@@ -1,0 +1,104 @@
+# Optional Docker-backed source databases for connector validation.
+# Keep at most 3 test-source profiles running at the same time.
+
+volumes:
+  test_postgres_data:
+  test_mysql_data:
+  tidb_demo_data:
+  test_clickhouse_data:
+  test_mssql_data:
+  test_oracle_data:
+
+services:
+  test-postgres:
+    image: postgres:16
+    profiles: ["postgres"]
+    restart: on-failure
+    ports:
+      - "${TEST_POSTGRES_PORT:-15432}:5432"
+    environment:
+      POSTGRES_DB: ${TEST_POSTGRES_DB:-external_qa}
+      POSTGRES_USER: ${TEST_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    networks:
+      - app
+
+  test-mysql:
+    image: mysql:8.4
+    profiles: ["mysql"]
+    restart: on-failure
+    ports:
+      - "${TEST_MYSQL_PORT:-13306}:3306"
+    environment:
+      MYSQL_DATABASE: ${TEST_MYSQL_DB:-external_qa}
+      MYSQL_USER: ${TEST_MYSQL_USER:-wren}
+      MYSQL_PASSWORD: ${TEST_MYSQL_PASSWORD:-wren}
+      MYSQL_ROOT_PASSWORD: ${TEST_MYSQL_ROOT_PASSWORD:-root}
+    volumes:
+      - test_mysql_data:/var/lib/mysql
+    networks:
+      - app
+
+  tidb-demo:
+    image: pingcap/tidb:${TIDB_DEMO_VERSION:-v8.5.4}
+    profiles: ["tidb"]
+    restart: on-failure
+    command:
+      - --store=unistore
+      - --path=/tidb-data
+    ports:
+      - "${TIDB_DEMO_PORT:-4000}:4000"
+      - "${TIDB_DEMO_STATUS_PORT:-10080}:10080"
+    volumes:
+      - tidb_demo_data:/tidb-data
+    networks:
+      app:
+        aliases:
+          - tidb-demo
+
+  test-clickhouse:
+    image: clickhouse/clickhouse-server:${TEST_CLICKHOUSE_VERSION:-24.8}
+    profiles: ["clickhouse"]
+    restart: on-failure
+    ports:
+      - "${TEST_CLICKHOUSE_HTTP_PORT:-18123}:8123"
+      - "${TEST_CLICKHOUSE_NATIVE_PORT:-19000}:9000"
+    environment:
+      CLICKHOUSE_DB: ${TEST_CLICKHOUSE_DB:-external_qa}
+      CLICKHOUSE_USER: ${TEST_CLICKHOUSE_USER:-default}
+      CLICKHOUSE_PASSWORD: ${TEST_CLICKHOUSE_PASSWORD:-}
+    volumes:
+      - test_clickhouse_data:/var/lib/clickhouse
+    networks:
+      - app
+
+  test-mssql:
+    image: mcr.microsoft.com/azure-sql-edge:${TEST_MSSQL_VERSION:-latest}
+    profiles: ["mssql"]
+    restart: on-failure
+    ports:
+      - "${TEST_MSSQL_PORT:-11433}:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${TEST_MSSQL_SA_PASSWORD:-YourStrong!Passw0rd}
+    volumes:
+      - test_mssql_data:/var/opt/mssql
+    networks:
+      - app
+
+  test-oracle:
+    image: gvenzl/oracle-free:${TEST_ORACLE_VERSION:-23-slim}
+    profiles: ["oracle"]
+    restart: on-failure
+    ports:
+      - "${TEST_ORACLE_PORT:-11521}:1521"
+    environment:
+      ORACLE_PASSWORD: ${TEST_ORACLE_PASSWORD:-oracle}
+      APP_USER: ${TEST_ORACLE_USER:-wren}
+      APP_USER_PASSWORD: ${TEST_ORACLE_USER_PASSWORD:-wren}
+    volumes:
+      - test_oracle_data:/opt/oracle/oradata
+    networks:
+      - app

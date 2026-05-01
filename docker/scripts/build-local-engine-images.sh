@@ -3,10 +3,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-WREN_ENGINE_IMAGE="${WREN_ENGINE_IMAGE_REPO:-wren-engine}:${WREN_ENGINE_IMAGE_TAG:-local}"
-IBIS_SERVER_IMAGE="${IBIS_SERVER_IMAGE_REPO:-wren-engine-ibis}:${IBIS_SERVER_IMAGE_TAG:-local}"
+WREN_ENGINE_IMAGE="${WREN_ENGINE_IMAGE_REPO:-engine}:${WREN_ENGINE_IMAGE_TAG:-local}"
+IBIS_SERVER_IMAGE="${IBIS_SERVER_IMAGE_REPO:-engine-ibis}:${IBIS_SERVER_IMAGE_TAG:-local}"
 IBIS_SERVER_BUILD_ENV="${IBIS_SERVER_BUILD_ENV:-prod}"
 
 platform_args=()

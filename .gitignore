@@ -29,7 +29,13 @@ wren-ai-service/tools/dev/etc/**
 .deepeval-cache.json
 .deepeval_telemtry.txt
 docker/config.yaml
-docker/data
+docker/config/ai.config.yaml
+docker/config/*.local.yaml
+docker/env/*.local
+docker/data/*
+!docker/data/.gitkeep
+docker/trino/catalog/*.properties
+!docker/trino/catalog/.gitkeep
 
 # python
 .python-version

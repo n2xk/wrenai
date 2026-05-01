@@ -1,0 +1,37 @@
+# PM2-managed local test/regression app environment.
+# Copy this file to docker/env/test.local and fill provider keys there.
+# docker/env/*.local is ignored by git.
+
+# AI Service runtime
+WREN_AI_SERVICE_HOST=127.0.0.1
+WREN_AI_SERVICE_PORT=5555
+PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai
+PYTHONUNBUFFERED=1
+
+# Use the checked-in local AI config by default. If you need a different model
+# stack, set CONFIG_PATH in docker/env/test.local to an absolute path or a path
+# relative to the repository root.
+CONFIG_PATH=wren-ai-service/config.local.yaml
+
+# LLM / embedder provider keys. Fill these in docker/env/test.local, not here.
+OPENROUTER_API_KEY=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+AZURE_OPENAI_API_KEY=
+GOOGLE_API_KEY=
+
+# Optional observability / model metadata
+GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash
+EMBEDDING_MODEL_DIMENSION=4096
+LANGFUSE_SECRET_KEY=
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLE=false
+
+# UI runtime
+PORT=3002
+PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai
+WREN_ENGINE_ENDPOINT=http://127.0.0.1:8080
+WREN_AI_ENDPOINT=http://127.0.0.1:5555
+IBIS_SERVER_ENDPOINT=http://127.0.0.1:8000
+TZ=UTC

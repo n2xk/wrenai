@@ -115,15 +115,17 @@ The semantic layer that maps business concepts to database schema. Defines model
 
 ## Docker Development
 
-To run the full stack locally:
+Local development uses Docker for the dependency layer. Temporary manual debugging can run UI / AI Service from source terminals, while the long-running test/regression environment uses PM2 for those two source services:
+
 ```bash
-cd docker
-cp .env.example .env.local    # Configure API keys and ports
-cp config.example.yaml config.yaml
-docker compose --env-file .env.local up -d
+# Dependency layer only
+./docker/scripts/dev-up.sh
+
+# Full local test environment: dependency layer + TiDB demo + PM2-managed UI/AI
+./docker/scripts/test-env-up.sh
 ```
 
-For developing a single service while others run in Docker, use `docker-compose-dev.yaml` in the AI service's `tools/dev/` directory.
+PM2 process names are `test-ui` and `test-ai-service`. For a single-machine full-stack deployment, copy `docker/env/prod.example` and `docker/config/ai.config.example.yaml` to local files, then run `./docker/scripts/prod-up.sh`.
 
 ## Commit Convention
 
