@@ -1,5 +1,9 @@
 import { TextBasedAnswerStatus } from '@server/models/adaptor';
-import { ThreadResponseAnswerStatus } from '@server/services/askingService';
+import {
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+  ThreadResponseAnswerStatus,
+} from '@server/services/askingService';
 import { TextBasedAnswerBackgroundTracker } from '../textBasedAnswerBackgroundTracker';
 
 describe('TextBasedAnswerBackgroundTracker', () => {
@@ -719,7 +723,8 @@ describe('TextBasedAnswerBackgroundTracker', () => {
       answerDetail: {
         status: ThreadResponseAnswerStatus.FAILED,
         error: expect.objectContaining({
-          message: 'SQL is missing for response 52',
+          code: TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+          message: TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
         }),
       },
     });

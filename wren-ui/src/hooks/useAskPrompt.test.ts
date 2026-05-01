@@ -96,6 +96,46 @@ describe('useAskPrompt helpers', () => {
     });
   });
 
+  it('hydrates generated SQL into the cached thread response when text-to-sql finishes', () => {
+    let nextState: any = null;
+
+    handleUpdateThreadCache(
+      {
+        queryId: 'task-sql-1',
+        status: AskingTaskStatus.FINISHED,
+        type: AskingTaskType.TEXT_TO_SQL,
+        candidates: [
+          {
+            type: 'LLM',
+            sql: 'SELECT 1 AS value',
+          },
+        ],
+      } as AskingTask,
+      (updater) => {
+        nextState = updater({
+          thread: {
+            responses: [
+              {
+                id: 102,
+                question: '查询指标',
+                askingTask: {
+                  queryId: 'task-sql-1',
+                  status: AskingTaskStatus.SEARCHING,
+                  type: AskingTaskType.TEXT_TO_SQL,
+                },
+                answerDetail: null,
+                sql: null,
+              },
+            ],
+          },
+        } as any);
+      },
+    );
+
+    expect(nextState.thread.responses[0].sql).toBe('SELECT 1 AS value');
+    expect(nextState.thread.responses[0].answerDetail).toBeNull();
+  });
+
   it('resolves the latest pending clarification session for follow-up submit', () => {
     expect(
       resolvePendingClarificationSubmitDefaults([

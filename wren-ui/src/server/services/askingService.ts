@@ -36,6 +36,8 @@ import {
   InstantRecommendedQuestionsInput,
   RecommendQuestionResultStatus,
   Task,
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
   ThreadResponseAnswerStatus,
 } from './askingServiceShared';
 import { applyAskingServiceActionPrototype } from './askingServicePrototypeActions';
@@ -359,6 +361,8 @@ ensureAskingServicePrototypePatched();
 export {
   constructCteSql,
   RecommendQuestionResultStatus,
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
   ThreadResponseAnswerStatus,
 };
 export type {

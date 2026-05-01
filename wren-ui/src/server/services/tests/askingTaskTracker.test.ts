@@ -1,5 +1,10 @@
 import { AskingTaskTracker } from '../askingTaskTracker';
 import { AskResultStatus } from '@server/models/adaptor';
+import {
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+  ThreadResponseAnswerStatus,
+} from '../askingServiceShared';
 
 describe('AskingTaskTracker', () => {
   const createTracker = () => {
@@ -349,6 +354,39 @@ describe('AskingTaskTracker', () => {
 
     expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(21, {
       sql: 'SELECT 1',
+    });
+  });
+
+  it('persists failed text-to-sql results without SQL as a friendly answer failure', async () => {
+    const tracker = createTracker();
+    const threadResponseRepository = ((
+      tracker as any
+    ).threadResponseRepository = {
+      updateOne: jest.fn(),
+    });
+
+    await (tracker as any).updateThreadResponseWhenTaskFinalized({
+      queryId: 'query-failed-sql',
+      threadResponseId: 22,
+      result: {
+        status: AskResultStatus.FAILED,
+        type: 'TEXT_TO_SQL',
+        response: [],
+        error: {
+          code: 'OTHERS',
+          message: 'unexpected character: line 2 column 69 (char 70)',
+        },
+      },
+    });
+
+    expect(threadResponseRepository.updateOne).toHaveBeenCalledWith(22, {
+      answerDetail: {
+        status: ThreadResponseAnswerStatus.FAILED,
+        error: {
+          code: TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+          message: TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+        },
+      },
     });
   });
 

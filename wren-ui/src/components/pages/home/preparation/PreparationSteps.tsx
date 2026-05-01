@@ -1,4 +1,4 @@
-import { Typography, Timeline, Badge, Tag } from 'antd';
+import { Typography, Timeline, Tag } from 'antd';
 import { useState } from 'react';
 import styled from 'styled-components';
 import CheckCircleFilled from '@ant-design/icons/CheckCircleFilled';
@@ -10,17 +10,13 @@ import type {
   PreparationTimelineStepStatus,
 } from './preparationTimelineModel';
 
-const StyledBadge = styled(Badge)`
-  position: absolute;
-  top: -5px;
-  left: -3px;
-  .ant-badge-status-dot {
-    width: 7px;
-    height: 7px;
-  }
-  .ant-badge-status-text {
-    display: none;
-  }
+const TimelineMarker = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  line-height: 1;
 `;
 
 const StyledTimeline = styled(Timeline)`
@@ -50,6 +46,15 @@ const StyledTimeline = styled(Timeline)`
 
   .ant-timeline-item-head {
     background: transparent;
+  }
+
+  .ant-timeline-item-head-custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
   }
 `;
 
@@ -133,8 +138,19 @@ const StepTags = styled.div`
   }
 `;
 
-const getProcessDot = (processing: boolean) =>
-  processing ? <StyledBadge color="geekblue" status="processing" /> : null;
+const RunningDot = styled.span`
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #1677ff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
+`;
+
+const getProcessDot = () => (
+  <TimelineMarker aria-label="进行中">
+    <RunningDot />
+  </TimelineMarker>
+);
 
 export default function PreparationSteps(
   props: Props & { preparationModel: PreparationTimelineModel },
@@ -153,15 +169,23 @@ export default function PreparationSteps(
 
   const getDot = (status: PreparationTimelineStepStatus) => {
     if (status === 'running') {
-      return getProcessDot(true);
+      return getProcessDot();
     }
 
     if (status === 'finished') {
-      return <CheckCircleFilled style={{ color: '#52c41a' }} />;
+      return (
+        <TimelineMarker>
+          <CheckCircleFilled style={{ color: '#52c41a', fontSize: 13 }} />
+        </TimelineMarker>
+      );
     }
 
     if (status === 'failed') {
-      return <CloseCircleFilled style={{ color: '#ff4d4f' }} />;
+      return (
+        <TimelineMarker>
+          <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 13 }} />
+        </TimelineMarker>
+      );
     }
 
     return undefined;

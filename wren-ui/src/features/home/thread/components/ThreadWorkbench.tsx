@@ -1,6 +1,10 @@
-import { Segmented, Typography } from 'antd';
+import { Typography } from 'antd';
 import { useMemo, useRef } from 'react';
 import styled from 'styled-components';
+import {
+  NovaSectionTab,
+  NovaSectionTabs,
+} from '@/components/app/NovaSectionTabs';
 import type { ThreadResponse } from '@/types/home';
 import type { WorkbenchArtifactKind } from '@/features/home/thread/threadWorkbenchState';
 import {
@@ -61,56 +65,6 @@ const WorkbenchSegmentedRow = styled.div`
   padding: 0 20px 12px;
   background: #fff;
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-
-  .ant-segmented {
-    display: inline-flex;
-    width: auto;
-    max-width: 100%;
-    background: rgba(15, 23, 42, 0.04);
-    padding: 4px;
-    border-radius: var(--nova-radius-control);
-    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
-  }
-
-  .ant-segmented-group {
-    display: flex;
-    width: auto;
-  }
-
-  .ant-segmented-item {
-    flex: 0 1 auto;
-    min-width: 104px;
-    min-height: 32px;
-    padding-inline: 14px;
-    font-weight: 600;
-    text-align: center;
-    transition:
-      color 0.18s ease,
-      background 0.18s ease;
-  }
-
-  .ant-segmented-item-label {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .ant-segmented-item-selected {
-    color: #6f47ff;
-  }
-
-  .ant-segmented-thumb {
-    border-radius: var(--nova-radius-control);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-  }
-
-  @media (max-width: 1280px) {
-    .ant-segmented-item {
-      min-width: 92px;
-      padding-inline: 10px;
-    }
-  }
 `;
 
 const WorkbenchBody = styled.div`
@@ -229,14 +183,20 @@ export default function ThreadWorkbench(props: {
         />
       </WorkbenchHeader>
       <WorkbenchSegmentedRow>
-        <Segmented
-          value={activeKey}
-          options={artifactItems.map((artifact) => ({
-            label: tabLabelMap[artifact],
-            value: artifact,
-          }))}
-          onChange={(value) => onArtifactChange(value as WorkbenchArtifactKind)}
-        />
+        <NovaSectionTabs role="tablist" aria-label="回答工作区视图">
+          {artifactItems.map((artifact) => (
+            <NovaSectionTab
+              key={artifact}
+              type="button"
+              role="tab"
+              aria-selected={activeKey === artifact}
+              $active={activeKey === artifact}
+              onClick={() => onArtifactChange(artifact)}
+            >
+              {tabLabelMap[artifact]}
+            </NovaSectionTab>
+          ))}
+        </NovaSectionTabs>
       </WorkbenchSegmentedRow>
       <WorkbenchBody>
         <WorkbenchContent>{renderActiveArtifact()}</WorkbenchContent>

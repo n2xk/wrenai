@@ -57,7 +57,7 @@ describe('PreparationSteps', () => {
           key: 'ask.candidate_models_selected',
           status: 'finished',
           tags: ['tidb_business_demo_dwd_bet_order'],
-          title: '已匹配 1 个候选模型',
+          title: '已匹配 1 个候选数据模型',
         },
       ],
       title: '思考步骤',
@@ -69,7 +69,7 @@ describe('PreparationSteps', () => {
     );
 
     expect(markup).toContain('已采用可信 SQL 参考');
-    expect(markup).toContain('已匹配 1 个候选模型');
+    expect(markup).toContain('已匹配 1 个候选数据模型');
     expect(markup).toContain('优先使用最相关的数据模型回答当前问题');
     expect(markup).toContain('详情');
     expect(markup).not.toContain('投注次数、有效投注');

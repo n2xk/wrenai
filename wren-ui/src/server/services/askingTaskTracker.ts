@@ -13,6 +13,11 @@ import {
   IViewRepository,
 } from '@server/repositories';
 import { IWrenAIAdaptor } from '../adaptors';
+import {
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+  ThreadResponseAnswerStatus,
+} from './askingServiceShared';
 import * as Errors from '@server/utils/error';
 import { toPersistedRuntimeIdentityPatch } from '@server/utils/persistedRuntimeIdentity';
 import { toAskRuntimeIdentity } from './askingServiceRuntimeSupport';
@@ -492,8 +497,26 @@ export class AskingTaskTracker implements IAskingTaskTracker {
       answerContent
     ) {
       updatePayload.answerDetail = {
-        status: 'FINISHED',
+        status: ThreadResponseAnswerStatus.FINISHED,
         content: answerContent,
+      };
+    }
+
+    const isTextToSqlFailedWithoutSql =
+      resultType === AskResultType.TEXT_TO_SQL &&
+      task?.result?.status === AskResultStatus.FAILED &&
+      !response?.viewId &&
+      !response?.sql;
+    if (isTextToSqlFailedWithoutSql) {
+      logger.warn(
+        `Text-to-SQL task ${task.queryId || task.taskId || 'unknown'} failed without SQL; marking bound thread response as failed.`,
+      );
+      updatePayload.answerDetail = {
+        status: ThreadResponseAnswerStatus.FAILED,
+        error: {
+          code: TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+          message: TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+        },
       };
     }
 

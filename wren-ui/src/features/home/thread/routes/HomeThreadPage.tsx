@@ -38,7 +38,10 @@ import useThreadDetail from '@/hooks/useThreadDetail';
 import useThreadResponsePolling from '@/hooks/useThreadResponsePolling';
 import ThreadConversationStage from '@/features/home/thread/components/ThreadConversationStage';
 import ClarificationSlotForm from '@/features/home/thread/components/ClarificationSlotForm';
-import { appendClarificationSlotSummary } from '@/features/home/thread/components/clarificationSlotDisplay';
+import {
+  appendClarificationSlotSummary,
+  coerceClarificationSlotValuesFromText,
+} from '@/features/home/thread/components/clarificationSlotDisplay';
 import ThreadPageOverlays from '@/features/home/thread/components/ThreadPageOverlays';
 import ThreadWorkbench from '@/features/home/thread/components/ThreadWorkbench';
 import { resolveComposerIntent } from '@/features/home/thread/homeIntentRouting';
@@ -898,6 +901,54 @@ export default function HomeThread() {
     [],
   );
 
+  const continueClarificationWithSlots = useCallback(
+    async (slotValues: Record<string, string>) => {
+      const clarificationSessionId =
+        latestPendingClarification?.clarificationSessionId;
+      if (!clarificationSessionId) {
+        message.warning('补充会话已失效，请重新提问。');
+        return;
+      }
+
+      const originalQuestion =
+        latestPendingClarification.originalQuestion?.trim() || primaryQuestion;
+      const displayQuestion = appendClarificationSlotSummary({
+        question: originalQuestion,
+        slotValues,
+      });
+      const askTask = await askPrompt.onSubmit(originalQuestion, {
+        clarificationSessionId,
+        clarificationState: latestPendingClarification as Record<
+          string,
+          unknown
+        >,
+        displayQuestion,
+        slotValues,
+      });
+      if (!askTask?.taskId) {
+        return;
+      }
+
+      pendingThreadResponseSeedRef.current = {
+        question: askTask.question,
+        sourceResponseId: null,
+        taskId: askTask.taskId,
+      };
+      autoCreateResponseTaskIdRef.current = askTask.taskId;
+      const createdResponse = await onCreateResponse({
+        question: askTask.question,
+        taskId: askTask.taskId,
+      });
+
+      if (createdResponse) {
+        pendingThreadResponseSeedRef.current = null;
+      } else if (autoCreateResponseTaskIdRef.current === askTask.taskId) {
+        autoCreateResponseTaskIdRef.current = null;
+      }
+    },
+    [askPrompt, latestPendingClarification, onCreateResponse, primaryQuestion],
+  );
+
   const handlePromptSubmit = useCallback(
     async (value: string) => {
       const composerIntent = resolveComposerIntent({
@@ -907,6 +958,17 @@ export default function HomeThread() {
         selectedResponseId,
       });
       setComposerDraftIntent(null);
+
+      const clarificationSlotValues = coerceClarificationSlotValuesFromText({
+        pendingSlots: latestPendingClarification?.pendingSlots,
+        text: value,
+      });
+      if (clarificationSlotValues) {
+        await continueClarificationWithSlots(clarificationSlotValues);
+        return {
+          handledInlineResult: true,
+        };
+      }
 
       if (composerIntent.resolvedIntent.kind === 'RECOMMEND_QUESTIONS') {
         await handleGenerateThreadRecommendedQuestions({
@@ -958,60 +1020,17 @@ export default function HomeThread() {
     [
       askPrompt,
       composerDraftIntent,
+      continueClarificationWithSlots,
       displayThread?.responses,
       handleGenerateThreadRecommendedQuestions,
+      latestPendingClarification?.pendingSlots,
+      onCreateResponse,
       onGenerateThreadResponseChart,
       selectedResponseId,
     ],
   );
 
-  const handleClarificationSlotSubmit = useCallback(
-    async (slotValues: Record<string, string>) => {
-      const clarificationSessionId =
-        latestPendingClarification?.clarificationSessionId;
-      if (!clarificationSessionId) {
-        message.warning('补充会话已失效，请重新提问。');
-        return;
-      }
-
-      const originalQuestion =
-        latestPendingClarification.originalQuestion?.trim() || primaryQuestion;
-      const displayQuestion = appendClarificationSlotSummary({
-        question: originalQuestion,
-        slotValues,
-      });
-      const askTask = await askPrompt.onSubmit(originalQuestion, {
-        clarificationSessionId,
-        clarificationState: latestPendingClarification as Record<
-          string,
-          unknown
-        >,
-        displayQuestion,
-        slotValues,
-      });
-      if (!askTask?.taskId) {
-        return;
-      }
-
-      pendingThreadResponseSeedRef.current = {
-        question: askTask.question,
-        sourceResponseId: null,
-        taskId: askTask.taskId,
-      };
-      autoCreateResponseTaskIdRef.current = askTask.taskId;
-      const createdResponse = await onCreateResponse({
-        question: askTask.question,
-        taskId: askTask.taskId,
-      });
-
-      if (createdResponse) {
-        pendingThreadResponseSeedRef.current = null;
-      } else if (autoCreateResponseTaskIdRef.current === askTask.taskId) {
-        autoCreateResponseTaskIdRef.current = null;
-      }
-    },
-    [askPrompt, latestPendingClarification, onCreateResponse, primaryQuestion],
-  );
+  const handleClarificationSlotSubmit = continueClarificationWithSlots;
 
   const shouldRenderWorkbench = useMemo(() => {
     if (!isWorkbenchOpen || !selectedResponse) {

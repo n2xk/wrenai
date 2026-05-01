@@ -9,6 +9,7 @@ import {
 } from './answerGeneration';
 import {
   hasSettledConversationAids,
+  isClarificationRequiredResponse,
   resolveConversationAidOwnerResponseId,
 } from '@/features/home/thread/conversationAidVisibility';
 
@@ -259,5 +260,54 @@ describe('AnswerResult answer auto-generation guard', () => {
         },
       } as any),
     ).toBe(true);
+  });
+
+  it('suppresses conversation aids while the latest ask is waiting for clarification', () => {
+    const clarificationResponse = {
+      id: 42,
+      threadId: 7,
+      question: '统计渠道990011首充用户',
+      responseKind: 'ANSWER',
+      resolvedIntent: {
+        conversationAidPlan: {
+          responseAids: [{ kind: 'TRIGGER_RECOMMEND_QUESTIONS' }],
+        },
+      },
+      askingTask: {
+        status: AskingTaskStatus.FINISHED,
+        diagnostics: {
+          clarificationState: {
+            status: 'needs_clarification',
+            clarificationSessionId: 'clarify-1',
+            pendingSlots: ['tenant_plat_id'],
+          },
+        },
+      },
+    } as any;
+
+    expect(isClarificationRequiredResponse(clarificationResponse)).toBe(true);
+    expect(hasSettledConversationAids(clarificationResponse)).toBe(false);
+    expect(
+      resolveConversationAidOwnerResponseId({
+        selectedResponseId: 42,
+        responses: [
+          {
+            id: 11,
+            threadId: 7,
+            question: '旧回答',
+            responseKind: 'ANSWER',
+            resolvedIntent: {
+              conversationAidPlan: {
+                responseAids: [{ kind: 'TRIGGER_RECOMMEND_QUESTIONS' }],
+              },
+            },
+            askingTask: {
+              status: AskingTaskStatus.FINISHED,
+            },
+          },
+          clarificationResponse,
+        ] as any,
+      }),
+    ).toBeNull();
   });
 });

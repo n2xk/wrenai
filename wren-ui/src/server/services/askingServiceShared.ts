@@ -101,6 +101,10 @@ export enum ThreadResponseAnswerStatus {
   INTERRUPTED = 'INTERRUPTED',
 }
 
+export const TEXT_TO_SQL_SQL_MISSING_ERROR_CODE = 'TEXT_TO_SQL_SQL_MISSING';
+export const TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE =
+  'SQL 生成失败，未能生成可执行查询。请尝试重新生成，或调整问题描述。';
+
 export interface AdjustmentReasoningInput {
   tables: string[];
   sqlGenerationReasoning: string;

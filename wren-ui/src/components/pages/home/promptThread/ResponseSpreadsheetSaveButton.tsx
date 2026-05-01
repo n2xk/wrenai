@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button } from 'antd';
+import { Button, Tooltip } from 'antd';
 import TableOutlined from '@ant-design/icons/TableOutlined';
 import type { ThreadResponse } from '@/types/home';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
@@ -10,9 +10,11 @@ import { appMessage } from '@/utils/antdAppBridge';
 
 export default function ResponseSpreadsheetSaveButton({
   disabled,
+  disabledReason,
   response,
 }: {
   disabled?: boolean;
+  disabledReason?: string;
   response: ThreadResponse;
 }) {
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
@@ -27,6 +29,11 @@ export default function ResponseSpreadsheetSaveButton({
   const [submitting, setSubmitting] = useState(false);
 
   const actionDisabled = disabled || !response.sql || submitting;
+  const actionDisabledReason = disabled
+    ? disabledReason || '当前结果不可保存为数据表。'
+    : !response.sql
+      ? '当前回答没有可保存的 SQL。'
+      : undefined;
 
   const onSave = async () => {
     if (actionDisabled) {
@@ -63,7 +70,7 @@ export default function ResponseSpreadsheetSaveButton({
     }
   };
 
-  return (
+  const button = (
     <Button
       size="small"
       icon={<TableOutlined />}
@@ -73,5 +80,13 @@ export default function ResponseSpreadsheetSaveButton({
     >
       保存为数据表
     </Button>
+  );
+
+  return actionDisabledReason ? (
+    <Tooltip title={actionDisabledReason}>
+      <span>{button}</span>
+    </Tooltip>
+  ) : (
+    button
   );
 }

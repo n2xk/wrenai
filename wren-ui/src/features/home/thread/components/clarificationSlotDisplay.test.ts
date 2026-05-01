@@ -1,5 +1,6 @@
 import {
   appendClarificationSlotSummary,
+  coerceClarificationSlotValuesFromText,
   formatClarificationSlotValues,
 } from './clarificationSlotDisplay';
 
@@ -29,5 +30,32 @@ describe('clarificationSlotDisplay', () => {
         slotValues: {},
       }),
     ).toBe('统计渠道990011首充表现');
+  });
+
+  it('coerces a direct single-slot reply into slot values', () => {
+    expect(
+      coerceClarificationSlotValuesFromText({
+        pendingSlots: ['tenant_plat_id'],
+        text: '990001',
+      }),
+    ).toEqual({ tenant_plat_id: '990001' });
+  });
+
+  it('extracts explicit slot values from a full sentence', () => {
+    expect(
+      coerceClarificationSlotValuesFromText({
+        pendingSlots: ['tenant_plat_id'],
+        text: '统计渠道990011首充用户，租户平台990001',
+      }),
+    ).toEqual({ tenant_plat_id: '990001' });
+  });
+
+  it('does not treat a new natural-language question as an id slot reply', () => {
+    expect(
+      coerceClarificationSlotValuesFromText({
+        pendingSlots: ['tenant_plat_id'],
+        text: '推荐几个问题给我',
+      }),
+    ).toBeNull();
   });
 });

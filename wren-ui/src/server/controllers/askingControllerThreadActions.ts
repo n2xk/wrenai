@@ -45,7 +45,7 @@ const resolveThreadInput = async (
   assertAskingTaskIsUnbound(askingTask);
 
   return {
-    question: askingTask.question,
+    question: data.question?.trim() || askingTask.question,
     trackedAskingResult: askingTask,
     knowledgeBaseIds: data.knowledgeBaseIds,
     selectedSkillIds: data.selectedSkillIds,
@@ -75,7 +75,7 @@ const resolveThreadResponseInput = async (
   assertAskingTaskIsUnbound(askingTask);
 
   return {
-    question: askingTask.question,
+    question: data.question?.trim() || askingTask.question,
     responseKind: data.responseKind,
     trackedAskingResult: askingTask,
     sourceResponseId: data.sourceResponseId,

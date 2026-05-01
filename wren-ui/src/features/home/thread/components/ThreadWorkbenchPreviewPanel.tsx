@@ -8,6 +8,7 @@ import type { ThreadResponse } from '@/types/home';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 import ResponseSpreadsheetSaveButton from '@/components/pages/home/promptThread/ResponseSpreadsheetSaveButton';
+import { hasExportablePreviewData } from '@/utils/exportTabularData';
 
 const { Text } = Typography;
 
@@ -45,6 +46,8 @@ export default function ThreadWorkbenchPreviewPanel(props: {
     responseId,
     responseRuntimeSelector,
   );
+  const previewData = previewDataResult.data?.previewData;
+  const hasPreviewRows = hasExportablePreviewData(previewData);
 
   useEffect(() => {
     if (responseId == null) {
@@ -56,11 +59,11 @@ export default function ThreadWorkbenchPreviewPanel(props: {
   return (
     <PreviewPanelShell>
       <PreviewPanelBody>
-        {previewDataResult.data?.previewData ? (
+        {previewData ? (
           <PreviewData
             error={previewDataResult.error}
             loading={previewDataResult.loading}
-            previewData={previewDataResult.data.previewData}
+            previewData={previewData}
             exportFileName={
               responseId == null
                 ? undefined
@@ -68,7 +71,11 @@ export default function ThreadWorkbenchPreviewPanel(props: {
             }
             extraActions={
               response ? (
-                <ResponseSpreadsheetSaveButton response={response} />
+                <ResponseSpreadsheetSaveButton
+                  disabled={!hasPreviewRows}
+                  disabledReason="当前查询没有返回数据，暂不能保存为数据表。"
+                  response={response}
+                />
               ) : null
             }
             locale={{
@@ -84,7 +91,7 @@ export default function ThreadWorkbenchPreviewPanel(props: {
           <PreviewData
             error={previewDataResult.error}
             loading={previewDataResult.loading}
-            previewData={previewDataResult.data?.previewData}
+            previewData={previewData}
             exportFileName={
               responseId == null
                 ? undefined
@@ -101,7 +108,7 @@ export default function ThreadWorkbenchPreviewPanel(props: {
           />
         )}
       </PreviewPanelBody>
-      {previewDataResult.data?.previewData ? (
+      {previewData && hasPreviewRows ? (
         <PreviewPanelHint>
           <Text className="text-base gray-6">
             {messages.preview.rowLimitHint}

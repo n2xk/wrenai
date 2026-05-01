@@ -173,7 +173,12 @@ export default function PreviewData(props: Props) {
     );
   }
 
-  const shouldRenderExportActions = showExport && hasExportableData;
+  const hasPreviewPayload = Boolean(previewData);
+  const exportActionsDisabled = loading || !hasExportableData;
+  const exportDisabledTooltip = hasExportableData
+    ? undefined
+    : '当前查询没有返回数据，暂不能导出。';
+  const shouldRenderExportActions = showExport && hasPreviewPayload;
   const shouldRenderToolbar =
     Boolean(extraActions) || shouldRenderExportActions;
 
@@ -184,31 +189,46 @@ export default function PreviewData(props: Props) {
           {extraActions ? <Space size={6}>{extraActions}</Space> : null}
           {shouldRenderExportActions ? (
             <Space size={6}>
-              <Tooltip title="导出当前已加载的预览结果，可用 Excel 打开">
-                <Button
-                  size="small"
-                  icon={<DownloadOutlined />}
-                  disabled={loading}
-                  onClick={() =>
-                    previewData &&
-                    exportPreviewDataCsv(previewData, exportFileName)
-                  }
-                >
-                  导出 CSV
-                </Button>
+              <Tooltip
+                title={
+                  exportDisabledTooltip ||
+                  '导出当前已加载的预览结果，可用 Excel 打开'
+                }
+              >
+                <span>
+                  <Button
+                    size="small"
+                    icon={<DownloadOutlined />}
+                    disabled={exportActionsDisabled}
+                    onClick={() =>
+                      previewData &&
+                      hasExportableData &&
+                      exportPreviewDataCsv(previewData, exportFileName)
+                    }
+                  >
+                    导出 CSV
+                  </Button>
+                </span>
               </Tooltip>
-              <Tooltip title="导出为 Excel 可打开的表格文件">
-                <Button
-                  size="small"
-                  icon={<FileExcelOutlined />}
-                  disabled={loading}
-                  onClick={() =>
-                    previewData &&
-                    exportPreviewDataExcel(previewData, exportFileName)
-                  }
-                >
-                  导出 Excel
-                </Button>
+              <Tooltip
+                title={
+                  exportDisabledTooltip || '导出为 Excel 可打开的表格文件'
+                }
+              >
+                <span>
+                  <Button
+                    size="small"
+                    icon={<FileExcelOutlined />}
+                    disabled={exportActionsDisabled}
+                    onClick={() =>
+                      previewData &&
+                      hasExportableData &&
+                      exportPreviewDataExcel(previewData, exportFileName)
+                    }
+                  >
+                    导出 Excel
+                  </Button>
+                </span>
               </Tooltip>
             </Space>
           ) : null}

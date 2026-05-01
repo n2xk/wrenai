@@ -81,12 +81,35 @@ const policyManagerStyles = `
     color: #475467;
     font-size: 13px;
     font-weight: 600;
-    padding: 14px 16px;
+    line-height: 18px;
+    padding: 14px 18px;
+    white-space: nowrap;
   }
 
   .ask-policy-table.console-table .ant-table-tbody > tr > td {
-    padding: 16px;
-    vertical-align: top;
+    padding: 14px 18px;
+    vertical-align: middle;
+  }
+
+  .ask-policy-table.console-table .ant-table-cell {
+    overflow: hidden;
+  }
+
+  .ask-policy-table.console-table .ant-table-cell-fix-right,
+  .ask-policy-table.console-table .ant-table-cell-fix-right-first {
+    background: #ffffff;
+  }
+
+  .ask-policy-table.console-table .ant-table-thead .ant-table-cell-fix-right,
+  .ask-policy-table.console-table .ant-table-thead .ant-table-cell-fix-right-first {
+    background: #f7f9fc;
+  }
+
+  .ask-policy-main-cell {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .ask-policy-name-row,
@@ -98,7 +121,7 @@ const policyManagerStyles = `
   }
 
   .ask-policy-name {
-    max-width: 220px;
+    max-width: 260px;
     color: #1f2937;
     font-size: 14px;
     font-weight: 600;
@@ -107,7 +130,7 @@ const policyManagerStyles = `
 
   .ask-policy-reason {
     display: block;
-    max-width: 280px;
+    max-width: 300px;
     color: #98a2b3;
     font-size: 12px;
     line-height: 18px;
@@ -118,22 +141,27 @@ const policyManagerStyles = `
     flex-wrap: wrap;
     gap: 6px;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .ask-policy-chip-list--nowrap {
     flex-wrap: nowrap;
-    overflow: hidden;
   }
 
   .ask-policy-tag.ant-tag {
     display: inline-flex;
     align-items: center;
     max-width: 100%;
+    min-width: 0;
     margin-inline-end: 0;
     border-color: rgba(91, 75, 219, 0.12);
     background: rgba(91, 75, 219, 0.06);
     color: #5b4bdb;
     font-weight: 500;
+    line-height: 22px;
+    padding-inline: 10px;
+    flex: 0 1 auto;
   }
 
   .ask-policy-tag .ant-tag-content {
@@ -141,6 +169,13 @@ const policyManagerStyles = `
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .ask-policy-tag--counter.ant-tag {
+    flex: 0 0 auto;
+    border-color: rgba(15, 23, 42, 0.08);
+    background: rgba(15, 23, 42, 0.04);
+    color: #667085;
   }
 
   .ask-policy-status.ant-tag {
@@ -153,15 +188,18 @@ const policyManagerStyles = `
   .ask-policy-empty-value {
     color: #98a2b3;
     font-size: 13px;
+    line-height: 24px;
   }
 
   .ask-policy-updated-at {
     color: #667085;
     font-size: 13px;
+    line-height: 24px;
     white-space: nowrap;
   }
 
   .ask-policy-action-row {
+    justify-content: flex-end;
     gap: 4px;
   }
 
@@ -177,12 +215,18 @@ const toArray = (value?: string[] | null) =>
 const renderTagList = (
   values?: string[] | null,
   empty = '未配置',
-  options: { nowrap?: boolean } = {},
+  options: { maxVisible?: number; nowrap?: boolean } = {},
 ) => {
   const items = toArray(values);
   if (!items.length) {
     return <span className="ask-policy-empty-value">{empty}</span>;
   }
+
+  const visibleItems =
+    typeof options.maxVisible === 'number'
+      ? items.slice(0, options.maxVisible)
+      : items;
+  const hiddenItems = items.slice(visibleItems.length);
 
   return (
     <div
@@ -190,11 +234,19 @@ const renderTagList = (
         options.nowrap ? ' ask-policy-chip-list--nowrap' : ''
       }`}
     >
-      {items.map((item) => (
+      {visibleItems.map((item) => (
         <Tag className="ask-policy-tag" key={item} title={item}>
           {item}
         </Tag>
       ))}
+      {hiddenItems.length ? (
+        <Tag
+          className="ask-policy-tag ask-policy-tag--counter"
+          title={hiddenItems.join('，')}
+        >
+          +{hiddenItems.length}
+        </Tag>
+      ) : null}
     </div>
   );
 };
@@ -367,9 +419,9 @@ export default function AskPoliciesManager({
       title: '策略',
       dataIndex: 'name',
       key: 'name',
-      width: 330,
+      width: 200,
       render: (_value, record) => (
-        <Space orientation="vertical" size={4}>
+        <div className="ask-policy-main-cell">
           <div className="ask-policy-name-row">
             <Typography.Text
               className="ask-policy-name"
@@ -390,33 +442,38 @@ export default function AskPoliciesManager({
           >
             {record.reasonCode}
           </Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
       title: '触发词',
       dataIndex: 'queryContainsAny',
       key: 'queryContainsAny',
-      width: 180,
-      render: (values) => renderTagList(values, '未配置', { nowrap: true }),
+      width: 120,
+      render: (values) =>
+        renderTagList(values, '未配置', { maxVisible: 2, nowrap: true }),
     },
     {
       title: '禁用模板',
       dataIndex: 'forbiddenTemplates',
       key: 'forbiddenTemplates',
-      render: (values) => renderTagList(values, '不限制'),
+      width: 80,
+      render: (values) =>
+        renderTagList(values, '不限制', { maxVisible: 2, nowrap: true }),
     },
     {
       title: '必填槽位',
       dataIndex: 'requiredSlots',
       key: 'requiredSlots',
-      render: (values) => renderTagList(values, '不要求'),
+      width: 120,
+      render: (values) =>
+        renderTagList(values, '不要求', { maxVisible: 2, nowrap: true }),
     },
     {
       title: '更新时间',
       dataIndex: 'updatedAt',
       key: 'updatedAt',
-      width: 180,
+      width: 130,
       render: (value) => (
         <span className="ask-policy-updated-at">
           {value ? getAbsoluteTime(value) : '-'}
@@ -426,7 +483,9 @@ export default function AskPoliciesManager({
     {
       title: '操作',
       key: 'action',
-      width: 140,
+      align: 'right',
+      fixed: 'right',
+      width: 100,
       render: (_value, record) => {
         return (
           <div className="ask-policy-action-row">
@@ -499,6 +558,7 @@ export default function AskPoliciesManager({
           columns={columns}
           dataSource={items}
           tableLayout="fixed"
+          scroll={{ x: 1130 }}
           pagination={false}
           locale={{
             emptyText: hasRuntimeScope

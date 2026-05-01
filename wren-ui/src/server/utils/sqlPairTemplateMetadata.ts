@@ -261,7 +261,11 @@ export const finalizeSqlPairTemplateMetadata = ({
     ) {
       nextMetadata.sourceType = 'admin_marked';
     }
-    if (!nextMetadata.status) {
+    // `draft_sql` is a document/import preparation state. Once a governed
+    // template is finalized by a workspace owner/admin it must be active
+    // unless it is explicitly deprecated; otherwise AI runtime indexing keeps
+    // filtering it out and falls back to unrelated reference SQL pairs.
+    if (!nextMetadata.status || nextMetadata.status === 'draft') {
       nextMetadata.status = 'active';
     }
     if (!nextMetadata.approvedBy) {

@@ -5,7 +5,7 @@ import type {
   AdjustThreadResponseChartInput,
   ThreadResponse,
 } from '@/types/home';
-import { ThreadResponseKind } from '@/types/home';
+import { ChartTaskStatus, ThreadResponseKind } from '@/types/home';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import {
   createThreadResponse as createThreadResponseRequest,
@@ -25,6 +25,46 @@ type GenerateChartOptions = {
   question?: string;
   sourceResponseId?: number;
 };
+
+const buildOptimisticChartGeneratingResponse = (
+  response: ThreadResponse,
+): ThreadResponse => ({
+  ...response,
+  chartDetail: {
+    ...(response.chartDetail || {}),
+    diagnostics: {
+      ...(response.chartDetail?.diagnostics || {}),
+      submittedAt: new Date().toISOString(),
+      finalizedAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+    },
+    error: null,
+    fallbackReason: null,
+    fallbackUsed: false,
+    queryId: null,
+    status: ChartTaskStatus.GENERATING,
+    thinking: null,
+    validationErrors: [],
+  },
+});
+
+const buildOptimisticChartFailedResponse = (
+  response: ThreadResponse,
+): ThreadResponse => ({
+  ...response,
+  chartDetail: {
+    ...(response.chartDetail || {}),
+    diagnostics: {
+      ...(response.chartDetail?.diagnostics || {}),
+      finalizedAt: new Date().toISOString(),
+      lastErrorMessage: '生成图表失败，请稍后重试',
+    },
+    error: { message: '生成图表失败，请稍后重试' } as any,
+    status: ChartTaskStatus.FAILED,
+    thinking: null,
+  },
+});
 
 export function useThreadResponseMutationActions({
   currentResponses,
@@ -84,6 +124,7 @@ export function useThreadResponseMutationActions({
 
   const onGenerateThreadResponseChart = useCallback(
     async (responseId: number, options?: GenerateChartOptions) => {
+      let optimisticTargetResponse: ThreadResponse | null = null;
       try {
         const currentResponse = currentResponses.find(
           (response) => response.id === responseId,
@@ -124,6 +165,10 @@ export function useThreadResponseMutationActions({
           }
         }
 
+        optimisticTargetResponse =
+          buildOptimisticChartGeneratingResponse(targetResponse);
+        upsertThreadResponse(optimisticTargetResponse);
+
         onSelectResponse?.(targetResponse.id, {
           artifact: 'chart',
           openWorkbench: false,
@@ -136,6 +181,11 @@ export function useThreadResponseMutationActions({
         upsertThreadResponse(nextResponse);
         startThreadResponsePolling(nextResponse.id);
       } catch (error) {
+        if (optimisticTargetResponse) {
+          upsertThreadResponse(
+            buildOptimisticChartFailedResponse(optimisticTargetResponse),
+          );
+        }
         reportThreadError(error, '生成图表失败，请稍后重试');
       }
     },

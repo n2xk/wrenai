@@ -171,6 +171,76 @@ describe('threadPayloadSerializers thinking contract', () => {
     });
   });
 
+  it('prefers server ask thinking over the legacy one-step sql-pair shortcut', async () => {
+    const payload = await serializeThreadResponsePayload({
+      response: {
+        id: 12,
+        threadId: 7,
+        question: '统计首存趋势',
+        sql: 'select * from first_deposit',
+        askingTaskId: 22,
+        answerDetail: null,
+      } as any,
+      runtimeIdentity,
+      services: {
+        askingService: {
+          getAskingTaskById: jest.fn().mockResolvedValue({
+            queryId: 'ask-2',
+            type: AskResultType.TEXT_TO_SQL,
+            status: AskResultStatus.FINISHED,
+            error: null,
+            response: [
+              {
+                type: 'SQL_PAIR',
+                sql: 'select * from first_deposit',
+                sqlpairId: 16,
+              },
+            ],
+            retrievedTables: ['first_deposit'],
+            thinking: {
+              currentStepKey: null,
+              steps: [
+                {
+                  key: 'ask.template_decision',
+                  messageKey: 'ask.template_decision',
+                  status: 'finished',
+                },
+                {
+                  detail: '当前 SQL 由已校验模板直接生成，无需额外组织 LLM 分析思路。',
+                  key: 'ask.sql_reasoned',
+                  messageKey: 'ask.sql_reasoned',
+                  status: 'skipped',
+                },
+              ],
+            },
+          }),
+          getAdjustmentTaskById: jest.fn().mockResolvedValue(null),
+        },
+        sqlPairService: {
+          getSqlPair: jest.fn().mockResolvedValue({
+            id: 16,
+            question: '统计首存趋势',
+            sql: 'select 1',
+          }),
+        },
+      },
+    });
+
+    expect(payload.askingTask?.thinking?.steps.map((step) => step.key)).toEqual(
+      [
+        'ask.template_decision',
+        'ask.sql_reasoned',
+        'ask.data_fetched',
+        'ask.answer_instructions_retrieved',
+        'ask.answer_generated',
+      ],
+    );
+    expect(payload.askingTask?.thinking?.steps[1]).toMatchObject({
+      key: 'ask.sql_reasoned',
+      status: 'skipped',
+    });
+  });
+
   it('adds server-side chart thinking metadata to serialized responses', async () => {
     const payload = await serializeThreadResponsePayload({
       response: {

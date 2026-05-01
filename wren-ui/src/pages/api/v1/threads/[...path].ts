@@ -16,6 +16,7 @@ import {
 } from '@server/authz';
 import { serializeThreadResponsePayload } from '@/server/api/threadPayloadSerializers';
 import { assertAskingTaskIsUnbound } from '@/server/services/askingTaskBindingGuard';
+import threadByIdHandler from './[id]';
 
 const logger = getLogger('API_THREAD_RESPONSE_COLLECTION');
 logger.level = 'debug';
@@ -126,7 +127,7 @@ const buildCreateThreadResponseInput = async ({
     assertAskingTaskIsUnbound(askingTask);
 
     return {
-      question: askingTask.question,
+      question: payload.question?.trim() || askingTask.question,
       responseKind: payload.responseKind,
       trackedAskingResult: askingTask,
       sourceResponseId: payload.sourceResponseId,
@@ -149,6 +150,12 @@ export default async function handler(
   let runtimeScope;
 
   try {
+    if (Array.isArray(req.query.path) && req.query.path.length === 1) {
+      req.query.id = req.query.path[0];
+      await threadByIdHandler(req, res);
+      return;
+    }
+
     if (req.method !== 'POST') {
       throw new ApiError('Method not allowed', 405);
     }

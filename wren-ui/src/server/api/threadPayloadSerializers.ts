@@ -361,15 +361,6 @@ const buildAskThinking = ({
     ]);
   }
 
-  if (askingTask.response?.[0]?.sqlpairId) {
-    return buildThinkingTrace([
-      buildThinkingStep({
-        key: 'ask.sql_pair_reused',
-        status: 'finished',
-      }),
-    ]);
-  }
-
   if (response.sql && askingTask.invalidSql) {
     return buildThinkingTrace([
       buildThinkingStep({
@@ -463,6 +454,15 @@ const buildAskThinking = ({
     );
 
     return buildThinkingTrace([...askingTask.thinking.steps, ...answerTail]);
+  }
+
+  if (askingTask.response?.[0]?.sqlpairId) {
+    return buildThinkingTrace([
+      buildThinkingStep({
+        key: 'ask.sql_pair_reused',
+        status: 'finished',
+      }),
+    ]);
   }
 
   const isProcessingReasoning = askingTask.status === AskResultStatus.PLANNING;

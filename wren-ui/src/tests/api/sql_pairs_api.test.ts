@@ -373,6 +373,71 @@ describe('pages/api/v1/knowledge/sql_pairs routes', () => {
     );
   });
 
+  it('activates governed business-import templates even when import documents say draft_sql', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select * from cohort_daily',
+        question: '统计首存 cohort 日龄趋势',
+        assetKind: 'sql_template',
+        templateLevel: 'L2',
+        templateMode: 'anchored_template',
+        sourceType: 'business_import',
+        status: 'draft',
+        skipSqlValidation: true,
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 16, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      expect.objectContaining({
+        sql: req.body.sql,
+        question: req.body.question,
+        assetKind: 'sql_template',
+        templateLevel: 'L2',
+        templateMode: 'anchored_template',
+        sourceType: 'business_import',
+        approvedBy: 'user-1',
+        approvedAt: expect.any(String),
+        status: 'active',
+      }),
+    );
+  });
+
+  it('preserves explicit deprecated status for governed templates', async () => {
+    const handler = (await import('../../pages/api/v1/knowledge/sql_pairs'))
+      .default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        sql: 'select * from retired_template',
+        question: '已下线模板',
+        assetKind: 'sql_template',
+        templateMode: 'anchored_template',
+        sourceType: 'business_import',
+        status: 'deprecated',
+        skipSqlValidation: true,
+      },
+    });
+    const res = createRes();
+    mockCreateSqlPair.mockResolvedValue({ id: 17, sql: req.body.sql });
+
+    await handler(req, res);
+
+    expect(mockCreateSqlPair).toHaveBeenCalledWith(
+      executionContext.runtimeIdentity,
+      expect.objectContaining({
+        status: 'deprecated',
+      }),
+    );
+  });
+
   it('updates sql pairs with derived runtime execution context when runtimeScope.project is absent', async () => {
     const handler = (
       await import('../../pages/api/v1/knowledge/sql_pairs/[id]')

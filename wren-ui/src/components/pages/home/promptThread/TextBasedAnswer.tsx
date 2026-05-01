@@ -18,6 +18,7 @@ import { getAnswerIsFinished } from './answerGeneration';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
 import { resolveThreadResponseRuntimeSelector } from '@/features/home/thread/threadResponseRuntime';
 import ResponseSpreadsheetSaveButton from './ResponseSpreadsheetSaveButton';
+import { hasExportablePreviewData } from '@/utils/exportTabularData';
 
 const { Text } = Typography;
 
@@ -164,7 +165,9 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   const previewDataResult = useResponsePreviewData(id, responseRuntimeSelector);
   const { ensureLoaded: ensurePreviewLoaded } = previewDataResult;
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
-  const hasPreviewData = !!previewDataResult.data?.previewData;
+  const previewData = previewDataResult.data?.previewData;
+  const hasPreviewData = !!previewData;
+  const hasPreviewRows = hasExportablePreviewData(previewData);
 
   const fetchPreviewData = async () => {
     await ensurePreviewLoaded();
@@ -289,7 +292,7 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
                 className="mt-2 mb-3"
                 data-guideid="text-answer-preview-data"
               >
-                {hasPreviewData && (
+                {hasPreviewRows && (
                   <Text type="secondary" className="text-sm">
                     受上下文窗口限制，系统最多会提取 500 行结果来生成本次回答。
                   </Text>
@@ -297,12 +300,14 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
                 <PreviewData
                   error={previewDataResult.error}
                   loading={previewDataResult.loading}
-                  previewData={previewDataResult?.data?.previewData}
+                  previewData={previewData}
                   exportFileName={`thread-response-${id}-result`}
                   extraActions={
                     hasPreviewData ? (
                       <>
                         <ResponseSpreadsheetSaveButton
+                          disabled={!hasPreviewRows}
+                          disabledReason="当前查询没有返回数据，暂不能保存为数据表。"
                           response={threadResponse}
                         />
                       </>

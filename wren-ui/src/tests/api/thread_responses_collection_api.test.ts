@@ -170,6 +170,51 @@ describe('pages/api/v1/threads/[...path] route', () => {
     );
   });
 
+  it('keeps a display question override when creating a response from an asking task', async () => {
+    const handler = (await import('../../pages/api/v1/threads/[...path]'))
+      .default;
+    const req = createReq({
+      body: {
+        taskId: 'ask-1',
+        question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+      },
+    });
+    const res = createRes();
+
+    mockGetAskingTask.mockResolvedValue({
+      queryId: 'ask-1',
+      question: '统计渠道990011首充用户',
+      taskId: 88,
+      response: [],
+    });
+    mockCreateThreadResponseScoped.mockResolvedValue({
+      id: 101,
+      threadId: 11,
+      askingTaskId: null,
+      viewId: null,
+      question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+      sql: 'select 1',
+      answerDetail: null,
+      breakdownDetail: null,
+      chartDetail: null,
+      adjustment: null,
+    });
+
+    await handler(req, res);
+
+    expect(mockCreateThreadResponseScoped).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+        trackedAskingResult: expect.objectContaining({
+          question: '统计渠道990011首充用户',
+          queryId: 'ask-1',
+        }),
+      }),
+      11,
+      expect.any(Object),
+    );
+  });
+
   it('rejects creating another response from an already bound asking task', async () => {
     const handler = (await import('../../pages/api/v1/threads/[...path]'))
       .default;

@@ -970,6 +970,7 @@ export default function AnswerResult(props: Props) {
           sqlText,
         );
   const shouldRenderConversationAids =
+    !clarificationPresentation &&
     conversationAidOwnerResponseId === id &&
     isResponseSettledForConversationAids &&
     conversationAids.length > 0;

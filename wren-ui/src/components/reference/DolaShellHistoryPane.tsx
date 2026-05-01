@@ -26,6 +26,12 @@ export const normalizeHistoryDisplayTitle = (title: string) => {
   return normalizedTitle.trimEnd() || title;
 };
 
+export const buildHistoryVirtualSpacerStyle = (height: number) => ({
+  flex: '0 0 auto',
+  height,
+  minHeight: height,
+});
+
 type Props = {
   collapsed: boolean;
   historyLoading: boolean;
@@ -428,7 +434,10 @@ export default function DolaShellHistoryPane({
           ) : (
             <>
               {shouldVirtualizeHistory && topSpacerHeight > 0 ? (
-                <div style={{ height: topSpacerHeight }} aria-hidden />
+                <div
+                  style={buildHistoryVirtualSpacerStyle(topSpacerHeight)}
+                  aria-hidden
+                />
               ) : null}
               {visibleHistoryItems.map((item) => {
                 const displayTitle = normalizeHistoryDisplayTitle(item.title);
@@ -490,7 +499,10 @@ export default function DolaShellHistoryPane({
                 );
               })}
               {shouldVirtualizeHistory && bottomSpacerHeight > 0 ? (
-                <div style={{ height: bottomSpacerHeight }} aria-hidden />
+                <div
+                  style={buildHistoryVirtualSpacerStyle(bottomSpacerHeight)}
+                  aria-hidden
+                />
               ) : null}
               {historyLoadingMore ? (
                 <Text

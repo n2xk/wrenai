@@ -98,6 +98,154 @@ describe('AskingService', () => {
         expect.objectContaining({ id: 202, threadId: 101, sql: 'select 1' }),
       ]);
     });
+
+    it('keeps a compatible source response with a scoped chart follow-up', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      };
+      service.assertThreadScope = jest.fn().mockResolvedValue({
+        id: 103,
+      });
+      service.threadResponseRepository = {
+        getResponsesWithThreadByScope: jest.fn().mockResolvedValue([
+          {
+            id: 115,
+            threadId: 103,
+            question: '生成一张图表给我',
+            responseKind: 'CHART_FOLLOWUP',
+            sourceResponseId: 113,
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          },
+        ]),
+        getResponsesWithThread: jest.fn().mockResolvedValue([
+          {
+            id: 113,
+            threadId: 103,
+            question: '源问题',
+            responseKind: 'ANSWER',
+            sourceResponseId: null,
+            sql: 'select 1',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: null,
+            kbSnapshotId: null,
+            deployHash: 'deploy-1',
+          },
+          {
+            id: 115,
+            threadId: 103,
+            question: '生成一张图表给我',
+            responseKind: 'CHART_FOLLOWUP',
+            sourceResponseId: 113,
+            sql: 'select 1',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-1',
+            kbSnapshotId: 'snapshot-1',
+            deployHash: 'deploy-1',
+          },
+          {
+            id: 116,
+            threadId: 103,
+            question: '另一个知识库的追问',
+            responseKind: 'CHART_FOLLOWUP',
+            sourceResponseId: 113,
+            sql: 'select 2',
+            projectId: null,
+            workspaceId: 'workspace-1',
+            knowledgeBaseId: 'kb-2',
+            kbSnapshotId: 'snapshot-2',
+            deployHash: 'deploy-1',
+          },
+        ]),
+      };
+      service.getResponsesWithThread =
+        AskingService.prototype['getResponsesWithThread'].bind(service);
+
+      const responses = await service.getResponsesWithThreadScoped(
+        103,
+        runtimeIdentity,
+      );
+
+      expect(responses.map((response: any) => response.id)).toEqual([113, 115]);
+    });
+  });
+
+  describe('createThreadResponse', () => {
+    it('inherits source response runtime scope for chart follow-ups', async () => {
+      const service = Object.create(AskingService.prototype) as any;
+      const runtimeIdentity = {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      };
+      service.threadRepository = {
+        findOneBy: jest.fn().mockResolvedValue({
+          id: 103,
+          projectId: null,
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-1',
+          actorUserId: 'user-1',
+        }),
+      };
+      service.getResponse = jest.fn().mockResolvedValue({
+        id: 113,
+        threadId: 103,
+        sql: 'select 1',
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-1',
+        actorUserId: 'user-1',
+      });
+      service.threadResponseRepository = {
+        createOne: jest.fn().mockImplementation(async (data) => ({
+          id: 115,
+          ...data,
+        })),
+        findOneBy: jest.fn().mockResolvedValue(null),
+      };
+      service.createThreadResponse =
+        AskingService.prototype['createThreadResponse'].bind(service);
+
+      await service.createThreadResponse(
+        {
+          question: '生成一张图表给我',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 113,
+        },
+        103,
+        runtimeIdentity,
+      );
+
+      expect(service.threadResponseRepository.createOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: null,
+          kbSnapshotId: null,
+          deployHash: 'deploy-1',
+          sql: 'select 1',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 113,
+        }),
+      );
+    });
   });
 
   describe('instant recommended questions scope tracking', () => {

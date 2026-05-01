@@ -380,16 +380,19 @@ export default function useAskPrompt(
         return;
       }
 
-      submitInFlightRef.current = true;
-      setSubmitting(true);
-      askingStreamTaskResult.reset();
-      setOriginalQuestion(normalizedQuestion);
-
-      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       const resolvedSubmitDefaults = {
         ...submitDefaults,
         ...submitOverrides,
       };
+      const displayQuestion =
+        resolvedSubmitDefaults?.displayQuestion?.trim() || normalizedQuestion;
+
+      submitInFlightRef.current = true;
+      setSubmitting(true);
+      askingStreamTaskResult.reset();
+      setOriginalQuestion(displayQuestion);
+
+      const selector = resolveRuntimeScopeSelector(runtimeScopeSelector);
       try {
         const task = await createAskingTaskRest(selector, {
           question: normalizedQuestion,
@@ -406,9 +409,6 @@ export default function useAskPrompt(
           message.error('提交问题失败，请稍后重试');
           return null;
         }
-
-        const displayQuestion =
-          resolvedSubmitDefaults?.displayQuestion?.trim() || normalizedQuestion;
 
         void fetchAskingTaskWithGuard(askingTaskId)
           .then((nextTask) => {
@@ -440,6 +440,7 @@ export default function useAskPrompt(
       submitDefaults?.knowledgeBaseIds,
       submitDefaults?.clarificationState,
       submitDefaults?.clarificationSessionId,
+      submitDefaults?.displayQuestion,
       submitDefaults?.selectedSkillIds,
       submitDefaults?.slotValues,
       threadId,

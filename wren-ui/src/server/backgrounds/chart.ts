@@ -214,12 +214,23 @@ abstract class BaseChartBackgroundTracker {
               return;
             }
 
+            const hasReturnedChartSchema = Boolean(
+              result?.response?.chartSchema,
+            );
             const {
               canonicalChartSchema,
               canonicalizationVersion,
               renderHints,
               validationErrors,
-            } = canonicalizeChartSchema(result?.response?.chartSchema);
+            } = hasReturnedChartSchema
+              ? canonicalizeChartSchema(result?.response?.chartSchema)
+              : {
+                  canonicalChartSchema: null,
+                  canonicalizationVersion:
+                    trackedChartDetail.canonicalizationVersion,
+                  renderHints: undefined,
+                  validationErrors: [],
+                };
             const hasInvalidSchema =
               result.status === ChartStatus.FINISHED &&
               !!result?.response?.chartSchema &&

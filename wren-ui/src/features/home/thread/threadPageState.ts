@@ -24,6 +24,12 @@ export const getThreadResponseIsFinished = (
   const hasRecommendationTask = Boolean(
     recommendationDetail?.queryId || recommendationDetail?.status,
   );
+  const isAnswerResponse =
+    !threadResponse?.responseKind ||
+    threadResponse.responseKind === ThreadResponseKind.ANSWER;
+  const isTextToSqlAnswerResponse =
+    isAnswerResponse &&
+    threadResponse?.askingTask?.type === AskingTaskType.TEXT_TO_SQL;
   const isRecommendationFollowUp =
     threadResponse?.responseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP;
 
@@ -36,7 +42,12 @@ export const getThreadResponseIsFinished = (
     );
   }
 
-  if (hasSqlResult && !hasAnswerTask && !hasChartTask) {
+  if (
+    hasSqlResult &&
+    !hasAnswerTask &&
+    !hasChartTask &&
+    !isTextToSqlAnswerResponse
+  ) {
     return true;
   }
 

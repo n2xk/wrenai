@@ -11,6 +11,16 @@ import {
 const hasConversationAidCandidates = (response?: ThreadResponse | null) =>
   Boolean(response?.resolvedIntent?.conversationAidPlan?.responseAids?.length);
 
+export const isClarificationRequiredResponse = (
+  response?: ThreadResponse | null,
+) => {
+  const diagnostics = response?.askingTask?.diagnostics;
+  return Boolean(
+    diagnostics?.clarificationState?.status === 'needs_clarification' ||
+    diagnostics?.semanticPlan?.decision?.route === 'clarification_required',
+  );
+};
+
 const isEligibleConversationAidOwner = (response?: ThreadResponse | null) =>
   Boolean(
     response &&
@@ -25,6 +35,10 @@ export const hasSettledConversationAids = (
     !response ||
     response.responseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP
   ) {
+    return false;
+  }
+
+  if (isClarificationRequiredResponse(response)) {
     return false;
   }
 
@@ -64,6 +78,13 @@ export const resolveConversationAidOwnerResponseId = ({
   responses: ThreadResponse[];
   selectedResponseId?: number | null;
 }) => {
+  const latestAskingResponse =
+    [...(responses || [])].reverse().find((response) => response.askingTask) ||
+    null;
+  if (isClarificationRequiredResponse(latestAskingResponse)) {
+    return null;
+  }
+
   const latestEligibleResponse =
     [...(responses || [])].reverse().find((response) => {
       return isEligibleConversationAidOwner(response);

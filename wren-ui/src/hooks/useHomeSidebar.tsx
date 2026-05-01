@@ -111,10 +111,15 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   );
   const [loadingMore, setLoadingMore] = useState(false);
   const loadingMoreRef = useRef(false);
+  const threadsRef = useRef<SidebarThread[]>(threads);
   const [initialized, setInitialized] = useState(
     () => getCachedHomeSidebarThreads(sidebarCacheKey).length > 0,
   );
   const requestCacheModeRef = useRef<RequestCache>('default');
+
+  useEffect(() => {
+    threadsRef.current = threads;
+  }, [threads]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -204,13 +209,19 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
   const syncThreadsPage = useCallback(
     (payload: HomeSidebarThreadsPagePayload, append = false) => {
       const normalizedThreads = normalizeSidebarThreads(payload.threads);
+      const cachedThreads = getCachedHomeSidebarThreads(sidebarCacheKey);
+      const baseThreads = append
+        ? threadsRef.current.length > 0
+          ? threadsRef.current
+          : cachedThreads
+        : EMPTY_SIDEBAR_THREADS;
       const nextThreads = append
         ? Array.from(
             new Map(
-              [
-                ...getCachedHomeSidebarThreads(sidebarCacheKey),
-                ...normalizedThreads,
-              ].map((thread) => [thread.id, thread]),
+              [...baseThreads, ...normalizedThreads].map((thread) => [
+                thread.id,
+                thread,
+              ]),
             ).values(),
           )
         : normalizedThreads;
@@ -221,11 +232,10 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
 
       cacheHomeSidebarThreads(sidebarCacheKey, nextThreads);
       cacheHomeSidebarPageInfo(sidebarCacheKey, nextPageInfo);
-      const cachedNormalizedThreads =
-        getCachedHomeSidebarThreads(sidebarCacheKey);
-      setThreads(cachedNormalizedThreads);
+      threadsRef.current = nextThreads;
+      setThreads(nextThreads);
       setPageInfo(nextPageInfo);
-      return cachedNormalizedThreads;
+      return nextThreads;
     },
     [normalizeSidebarThreads, sidebarCacheKey],
   );
@@ -237,6 +247,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
 
   useEffect(() => {
     if (disabled) {
+      threadsRef.current = EMPTY_SIDEBAR_THREADS;
       setThreads(EMPTY_SIDEBAR_THREADS);
       setPageInfo({
         nextCursor: null,
@@ -246,6 +257,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       return;
     }
 
+    threadsRef.current = cachedThreads;
     setThreads(cachedThreads);
     setPageInfo(cachedPageInfo);
     setInitialized(cachedThreads.length > 0);
@@ -300,6 +312,7 @@ export default function useHomeSidebar(options?: UseHomeSidebarOptions) {
       networkOnly?: boolean;
     } = {}) => {
       if (disabled || !hasRuntimeScope) {
+        threadsRef.current = EMPTY_SIDEBAR_THREADS;
         setThreads(EMPTY_SIDEBAR_THREADS);
         setPageInfo({
           nextCursor: null,

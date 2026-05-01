@@ -209,6 +209,72 @@ describe('ChartBackgroundTracker', () => {
     expect(telemetry.sendEvent).toHaveBeenCalled();
     expect((tracker as any).getTasks()).toEqual({});
   });
+
+  it('does not surface missing schema as a validation failure while chart generation is still running', async () => {
+    let intervalHandler: (() => Promise<void>) | undefined;
+    jest.spyOn(global, 'setInterval').mockImplementation(((
+      handler: TimerHandler,
+    ) => {
+      intervalHandler = handler as () => Promise<void>;
+      return 1 as any;
+    }) as any);
+
+    const updateOneByIdWithRuntimeScope = jest.fn().mockResolvedValue({
+      id: 9,
+      question: 'generate chart',
+      projectId: 42,
+      chartDetail: {
+        queryId: 'chart-9',
+        status: ChartStatus.GENERATING,
+      },
+    });
+    const tracker = new ChartBackgroundTracker({
+      telemetry: { sendEvent: jest.fn() } as any,
+      wrenAIAdaptor: {
+        getChartResult: jest.fn().mockResolvedValue({
+          status: ChartStatus.GENERATING,
+          instructionCount: 1,
+        }),
+      } as any,
+      threadResponseRepository: {
+        updateOneByIdWithRuntimeScope,
+      } as any,
+    });
+
+    tracker.addTask({
+      id: 9,
+      question: 'generate chart',
+      projectId: 42,
+      chartDetail: {
+        queryId: 'chart-9',
+        status: ChartStatus.FETCHING,
+        diagnostics: {
+          previewColumnCount: 2,
+          previewRowCount: 30,
+        },
+      },
+    } as any);
+
+    if (!intervalHandler) {
+      throw new Error('Interval handler was not registered');
+    }
+    await intervalHandler();
+    await flushBackgroundJobs();
+
+    const updatePayload =
+      updateOneByIdWithRuntimeScope.mock.calls[0][2].chartDetail;
+    expect(updatePayload).toEqual(
+      expect.objectContaining({
+        status: ChartStatus.GENERATING,
+        validationErrors: [],
+        fallbackUsed: false,
+        fallbackReason: null,
+      }),
+    );
+    expect(JSON.stringify(updatePayload)).not.toContain(
+      'Chart schema is empty or invalid',
+    );
+  });
 });
 
 describe('ChartAdjustmentBackgroundTracker', () => {

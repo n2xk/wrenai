@@ -64,7 +64,7 @@ describe('resolvePreparationTimelineModel', () => {
     ]);
     expect(model?.steps[1]).toMatchObject({
       status: 'finished',
-      title: '已匹配 2 个候选模型',
+      title: '已匹配 2 个候选数据模型',
     });
     expect(model?.steps[4]).toMatchObject({
       status: 'finished',
@@ -130,7 +130,7 @@ describe('resolvePreparationTimelineModel', () => {
     });
     expect(model?.steps[1]).toMatchObject({
       key: 'ask.candidate_models_selected',
-      title: '已匹配 2 个候选模型',
+      title: '已匹配 2 个候选数据模型',
       tags: ['orders', 'customers'],
     });
   });
@@ -211,6 +211,74 @@ describe('resolvePreparationTimelineModel', () => {
     });
     expect(model?.steps[0].description).toContain('模板：首存用户日龄趋势');
     expect(model?.steps[0].description).toContain('缺少参数：start_date');
+  });
+
+  it('renders direct template sql reasoning as skipped instead of a running reasoning step', () => {
+    const model = resolvePreparationTimelineModel({
+      data: buildThreadResponse({
+        answerDetail: {
+          content: '好的',
+          numRowsUsedInLLM: 9,
+          queryId: 'answer-1',
+          status: ThreadResponseAnswerStatus.FINISHED,
+        },
+        sql: 'select * from orders',
+      }),
+      preparedTask: buildPreparedTask({
+        thinking: {
+          steps: [
+            {
+              detail: '当前 SQL 由已校验模板直接生成，无需额外组织 LLM 分析思路。',
+              key: 'ask.sql_reasoned',
+              messageKey: 'ask.sql_reasoned',
+              status: 'skipped',
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(model?.steps[0]).toMatchObject({
+      key: 'ask.sql_reasoned',
+      status: 'finished',
+      title: '已跳过额外分析思路组织',
+    });
+    expect(model?.steps[0].description).toContain('已校验模板直接生成');
+  });
+
+  it('normalizes legacy direct-template traces whose reasoning step was stored as finished without detail', () => {
+    const model = resolvePreparationTimelineModel({
+      data: buildThreadResponse({
+        sql: 'select * from orders',
+      }),
+      preparedTask: buildPreparedTask({
+        thinking: {
+          steps: [
+            {
+              key: 'ask.template_decision',
+              messageKey: 'ask.template_decision',
+              messageParams: {
+                mode: 'anchored_template',
+                sqlSource: 'anchored_template',
+                templateTitle: '首存趋势',
+              },
+              status: 'finished',
+            },
+            {
+              key: 'ask.sql_reasoned',
+              messageKey: 'ask.sql_reasoned',
+              status: 'finished',
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(model?.steps[1]).toMatchObject({
+      key: 'ask.sql_reasoned',
+      status: 'finished',
+      title: '已跳过额外分析思路组织',
+    });
   });
 
   it('builds chart follow-up thinking steps from chart diagnostics', () => {

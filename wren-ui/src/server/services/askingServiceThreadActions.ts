@@ -44,6 +44,84 @@ interface AskingServiceThreadLike {
   getResponse(responseId: number): Promise<ThreadResponse | null>;
 }
 
+const toNormalizedPersistedRuntimeIdentity = (
+  source: Parameters<typeof toPersistedRuntimeIdentityFromSource>[0],
+  fallback?: PersistedRuntimeIdentity | null,
+) => {
+  const runtimeIdentity = toPersistedRuntimeIdentityFromSource(source, fallback);
+  return normalizeRuntimeScope(runtimeIdentity) ?? runtimeIdentity;
+};
+
+const isResponseRuntimeCompatible = (
+  response: ThreadResponse,
+  runtimeIdentity: PersistedRuntimeIdentity,
+) => {
+  try {
+    return isPersistedRuntimeIdentityCompatible(
+      runtimeIdentity,
+      toNormalizedPersistedRuntimeIdentity(response),
+    );
+  } catch (_error) {
+    return false;
+  }
+};
+
+const collectMissingSourceResponseIds = (
+  responses: ThreadResponse[],
+  knownResponseIds: Set<number>,
+) => {
+  const missingSourceResponseIds = new Set<number>();
+
+  responses.forEach((response) => {
+    if (
+      typeof response.sourceResponseId === 'number' &&
+      !knownResponseIds.has(response.sourceResponseId)
+    ) {
+      missingSourceResponseIds.add(response.sourceResponseId);
+    }
+  });
+
+  return missingSourceResponseIds;
+};
+
+const sortResponsesChronologically = (responses: ThreadResponse[]) =>
+  [...responses].sort(
+    (left, right) =>
+      (left.id ?? Number.MIN_SAFE_INTEGER) -
+      (right.id ?? Number.MIN_SAFE_INTEGER),
+  );
+
+const resolveFollowUpRuntimeIdentity = ({
+  runtimeIdentity,
+  sourceResponse,
+  thread,
+}: {
+  runtimeIdentity: PersistedRuntimeIdentity;
+  sourceResponse?: ThreadResponse | null;
+  thread: Thread;
+}) => {
+  const threadRuntimeIdentity = toNormalizedPersistedRuntimeIdentity(
+    thread,
+    runtimeIdentity,
+  );
+
+  if (!sourceResponse) {
+    return threadRuntimeIdentity;
+  }
+
+  try {
+    const sourceRuntimeIdentity =
+      toNormalizedPersistedRuntimeIdentity(sourceResponse);
+    return {
+      ...sourceRuntimeIdentity,
+      actorUserId:
+        sourceRuntimeIdentity.actorUserId ?? threadRuntimeIdentity.actorUserId,
+    };
+  } catch (_error) {
+    return threadRuntimeIdentity;
+  }
+};
+
 export const createThreadAction = async (
   service: AskingServiceThreadLike,
   input: AskingDetailTaskInput,
@@ -339,18 +417,18 @@ export const createThreadResponseAction = async (
     throw new Error(`Thread ${threadId} not found`);
   }
 
-  let sql = input.sql;
-  if (
-    !sql &&
-    input.sourceResponseId &&
-    input.responseKind !== 'RECOMMENDATION_FOLLOWUP'
-  ) {
-    const sourceResponse = await service.getResponse(input.sourceResponseId);
+  let sourceResponse: ThreadResponse | null = null;
+  if (input.sourceResponseId) {
+    sourceResponse = await service.getResponse(input.sourceResponseId);
     if (!sourceResponse) {
       throw new Error(
         `Source thread response ${input.sourceResponseId} not found`,
       );
     }
+  }
+
+  let sql = input.sql;
+  if (!sql && sourceResponse && input.responseKind !== 'RECOMMENDATION_FOLLOWUP') {
     sql = sourceResponse.sql;
   }
 
@@ -363,7 +441,11 @@ export const createThreadResponseAction = async (
   });
 
   const threadResponse = await service.threadResponseRepository.createOne({
-    ...toPersistedRuntimeIdentityFromSource(thread, runtimeIdentity),
+    ...resolveFollowUpRuntimeIdentity({
+      runtimeIdentity,
+      sourceResponse,
+      thread,
+    }),
     threadId: thread.id,
     question: input.question,
     responseKind: input.responseKind || 'ANSWER',
@@ -425,20 +507,65 @@ export const getResponsesWithThreadAction = (
   return service.threadResponseRepository
     .getResponsesWithThreadByScope(threadId, scopedRuntimeIdentity)
     .then(async (responses) => {
-      if (responses.length > 0) {
+      const knownResponseIds = new Set(
+        responses
+          .map((response) => response.id)
+          .filter((id): id is number => typeof id === 'number'),
+      );
+      const missingSourceResponseIds = collectMissingSourceResponseIds(
+        responses,
+        knownResponseIds,
+      );
+
+      if (responses.length > 0 && missingSourceResponseIds.size === 0) {
         return responses;
       }
 
       const persistedResponses =
         await service.threadResponseRepository.getResponsesWithThread(threadId);
-      return persistedResponses.filter((response) =>
-        isPersistedRuntimeIdentityCompatible(
-          scopedRuntimeIdentity,
-          normalizeRuntimeScope(
-            toPersistedRuntimeIdentityFromSource(response),
-          ) ?? toPersistedRuntimeIdentityFromSource(response),
-        ),
+      const compatibleResponses = persistedResponses.filter((response) =>
+        isResponseRuntimeCompatible(response, scopedRuntimeIdentity),
       );
+
+      if (responses.length === 0) {
+        return compatibleResponses;
+      }
+
+      const compatibleResponsesById = new Map(
+        compatibleResponses
+          .filter((response) => typeof response.id === 'number')
+          .map((response) => [response.id as number, response]),
+      );
+      const responsesById = new Map(
+        responses
+          .filter((response) => typeof response.id === 'number')
+          .map((response) => [response.id as number, response]),
+      );
+
+      let nextMissingSourceResponseIds = missingSourceResponseIds;
+      while (nextMissingSourceResponseIds.size > 0) {
+        let addedResponse = false;
+        nextMissingSourceResponseIds.forEach((sourceResponseId) => {
+          const sourceResponse = compatibleResponsesById.get(sourceResponseId);
+          if (!sourceResponse || responsesById.has(sourceResponseId)) {
+            return;
+          }
+
+          responsesById.set(sourceResponseId, sourceResponse);
+          addedResponse = true;
+        });
+
+        if (!addedResponse) {
+          break;
+        }
+
+        nextMissingSourceResponseIds = collectMissingSourceResponseIds(
+          Array.from(responsesById.values()),
+          new Set(responsesById.keys()),
+        );
+      }
+
+      return sortResponsesChronologically(Array.from(responsesById.values()));
     });
 };
 

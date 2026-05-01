@@ -260,32 +260,34 @@ const upsertSpreadsheetListItem = (
   selector: ClientRuntimeScopeSelector,
   spreadsheet: SpreadsheetListItem,
 ) => {
-  const requestUrl = buildSpreadsheetListUrl(selector);
-  const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
-  if (!cached) {
-    return;
-  }
+  buildSpreadsheetListCacheUrls(selector, spreadsheet).forEach((requestUrl) => {
+    const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
+    if (!cached) {
+      return;
+    }
 
-  const exists = cached.some((item) => item.id === spreadsheet.id);
-  const nextPayload = exists
-    ? cached.map((item) => (item.id === spreadsheet.id ? spreadsheet : item))
-    : [spreadsheet, ...cached];
-  primeSpreadsheetListPayload({ requestUrl, payload: nextPayload });
+    const exists = cached.some((item) => item.id === spreadsheet.id);
+    const nextPayload = exists
+      ? cached.map((item) => (item.id === spreadsheet.id ? spreadsheet : item))
+      : [spreadsheet, ...cached];
+    primeSpreadsheetListPayload({ requestUrl, payload: nextPayload });
+  });
 };
 
 const removeSpreadsheetListItem = (
   selector: ClientRuntimeScopeSelector,
   spreadsheetId: number,
 ) => {
-  const requestUrl = buildSpreadsheetListUrl(selector);
-  const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
-  if (!cached) {
-    return;
-  }
+  buildSpreadsheetListCacheUrls(selector).forEach((requestUrl) => {
+    const cached = getFreshCachedValue(spreadsheetListCache, requestUrl);
+    if (!cached) {
+      return;
+    }
 
-  primeSpreadsheetListPayload({
-    requestUrl,
-    payload: cached.filter((item) => item.id !== spreadsheetId),
+    primeSpreadsheetListPayload({
+      requestUrl,
+      payload: cached.filter((item) => item.id !== spreadsheetId),
+    });
   });
 };
 
@@ -301,6 +303,43 @@ export const resolveSpreadsheetRuntimeSelector = (
     : {}),
   ...(spreadsheet?.deployHash ? { deployHash: spreadsheet.deployHash } : {}),
 });
+
+const resolveSpreadsheetWorkspaceListSelector = (
+  selector: ClientRuntimeScopeSelector,
+  spreadsheet?: Partial<SpreadsheetListItem> | null,
+): ClientRuntimeScopeSelector => {
+  if (selector.runtimeScopeId) {
+    return { runtimeScopeId: selector.runtimeScopeId };
+  }
+
+  const workspaceId = selector.workspaceId || spreadsheet?.workspaceId || '';
+  if (workspaceId) {
+    return { workspaceId };
+  }
+
+  return {};
+};
+
+const buildSpreadsheetListCacheUrls = (
+  selector: ClientRuntimeScopeSelector,
+  spreadsheet?: Partial<SpreadsheetListItem> | null,
+) => {
+  const hasSelectorValue = (candidate: ClientRuntimeScopeSelector) =>
+    Object.values(candidate).some(Boolean);
+  const spreadsheetSelector = resolveSpreadsheetRuntimeSelector(spreadsheet);
+  const workspaceSelector = resolveSpreadsheetWorkspaceListSelector(
+    selector,
+    spreadsheet,
+  );
+  const selectors = [
+    selector,
+    ...(hasSelectorValue(spreadsheetSelector) ? [spreadsheetSelector] : []),
+    ...(hasSelectorValue(workspaceSelector) ? [workspaceSelector] : []),
+  ];
+  const urls = selectors.map((candidate) => buildSpreadsheetListUrl(candidate));
+
+  return Array.from(new Set(urls));
+};
 
 export const loadSpreadsheetListPayload = async ({
   selector,

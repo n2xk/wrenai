@@ -99,6 +99,7 @@ const toPreparationStepFromThinking = (
   step: ThinkingStep,
 ): PreparationTimelineStep => {
   const normalizedStatus = normalizePreparationStatus(step.status);
+  const isSkipped = step.status === 'skipped';
   const rows = getMessageParamNumber(step, 'rows');
   const count = getMessageParamNumber(step, 'count');
   const columns = getMessageParamNumber(step, 'columns');
@@ -233,10 +234,10 @@ const toPreparationStepFromThinking = (
         key: step.key,
         title:
           normalizedStatus === 'running'
-            ? '正在匹配候选模型'
+            ? '正在匹配候选数据模型'
             : normalizedStatus === 'failed'
-              ? '候选模型匹配失败'
-              : `已匹配 ${count || 0} 个候选模型`,
+              ? '候选数据模型匹配失败'
+              : `已匹配 ${count || 0} 个候选数据模型`,
         description: step.tags?.length
           ? '优先使用最相关的数据模型回答当前问题'
           : null,
@@ -244,6 +245,14 @@ const toPreparationStepFromThinking = (
         tags: step.tags || undefined,
       });
     case 'ask.sql_reasoned':
+      if (isSkipped) {
+        return buildStep({
+          key: step.key,
+          title: '已跳过额外分析思路组织',
+          description: step.detail || '当前 SQL 由已校验模板直接生成',
+          status: 'finished',
+        });
+      }
       return buildStep({
         key: step.key,
         title:
@@ -475,10 +484,47 @@ const toPreparationStepFromThinking = (
   }
 };
 
+const isDirectTemplateThinkingTrace = (thinking?: ThinkingTrace | null) =>
+  Boolean(
+    thinking?.steps?.some((step) => {
+      if (step.key !== 'ask.template_decision') {
+        return false;
+      }
+      const sqlSource = getMessageParamString(step, 'sqlSource');
+      const missingParameters = getMessageParamString(
+        step,
+        'missingParameters',
+      );
+      return (
+        (sqlSource === 'anchored_template' ||
+          sqlSource === 'rendered_template') &&
+        !missingParameters
+      );
+    }),
+  );
+
 const resolveStepsFromThinkingTrace = (
   thinking?: ThinkingTrace | null,
-): PreparationTimelineStep[] =>
-  thinking?.steps?.map(toPreparationStepFromThinking) || [];
+): PreparationTimelineStep[] => {
+  const isDirectTemplateTrace = isDirectTemplateThinkingTrace(thinking);
+
+  return (
+    thinking?.steps?.map((step) =>
+      toPreparationStepFromThinking(
+        isDirectTemplateTrace &&
+          step.key === 'ask.sql_reasoned' &&
+          step.status === 'finished' &&
+          !step.detail
+          ? {
+              ...step,
+              detail: '当前 SQL 由已校验模板直接生成，无需额外组织 LLM 分析思路。',
+              status: 'skipped',
+            }
+          : step,
+      ),
+    ) || []
+  );
+};
 
 const resolveAskLifecycle = ({
   answerStatus,
@@ -726,10 +772,10 @@ const resolveAskDetailedSteps = ({
       key: 'models',
       title:
         modelStatus === 'running'
-          ? '正在匹配候选模型'
+          ? '正在匹配候选数据模型'
           : modelStatus === 'failed'
-            ? '候选模型匹配失败'
-            : `已匹配 ${tables.length || 0} 个候选模型`,
+            ? '候选数据模型匹配失败'
+            : `已匹配 ${tables.length || 0} 个候选数据模型`,
       description:
         tables.length > 0 ? `优先使用最相关的数据模型回答当前问题` : null,
       status: modelStatus,

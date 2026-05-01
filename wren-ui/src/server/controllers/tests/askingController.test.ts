@@ -344,6 +344,33 @@ describe('AskingController', () => {
     );
   });
 
+  it('preserves a display question override when creating a thread from an asking task', async () => {
+    const resolver = new AskingController();
+    const ctx = createContext();
+
+    await resolver.createThread(
+      null,
+      {
+        data: {
+          taskId: 'task-1',
+          question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+        },
+      },
+      ctx,
+    );
+
+    expect(ctx.askingService.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+        trackedAskingResult: expect.objectContaining({
+          question: 'What happened?',
+          queryId: 'task-1',
+        }),
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('creates asking task with the active runtime identity', async () => {
     const resolver = new AskingController();
     const ctx = createContext();
@@ -602,6 +629,35 @@ describe('AskingController', () => {
       },
       12,
       runtimeIdentity,
+    );
+  });
+
+  it('preserves a display question override when creating a follow-up response from an asking task', async () => {
+    const resolver = new AskingController();
+    const ctx = createContext();
+
+    await resolver.createThreadResponse(
+      null,
+      {
+        threadId: 12,
+        data: {
+          taskId: 'task-1',
+          question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+        },
+      },
+      ctx,
+    );
+
+    expect(ctx.askingService.createThreadResponseScoped).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: '统计渠道990011首充用户（已补充：租户平台=990001）',
+        trackedAskingResult: expect.objectContaining({
+          question: 'What happened?',
+          queryId: 'task-1',
+        }),
+      }),
+      12,
+      expect.any(Object),
     );
   });
 

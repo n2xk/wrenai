@@ -19,7 +19,7 @@ import {
 import useDolaShellSidebarPrefetch from './useDolaShellSidebarPrefetch';
 
 const HISTORY_VIRTUALIZATION_THRESHOLD = 60;
-const HISTORY_ITEM_ESTIMATED_HEIGHT = 48;
+const HISTORY_ITEM_ESTIMATED_HEIGHT = 29;
 const HISTORY_VIRTUAL_OVERSCAN = 6;
 
 export type UseDolaAppShellSidebarStateArgs = {

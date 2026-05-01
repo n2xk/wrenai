@@ -34,7 +34,7 @@ export interface AskPromptSubmitDefaults {
 export type NullableAskingTask = AskingTask | null | undefined;
 
 export const ASKING_TASK_POLL_INTERVAL_MS = 1500;
-export const ASKING_TASK_POLL_TIMEOUT_MS = 45_000;
+export const ASKING_TASK_POLL_TIMEOUT_MS = 5 * 60_000;
 export const INSTANT_RECOMMEND_POLL_INTERVAL_MS = 1500;
 export const INSTANT_RECOMMEND_POLL_TIMEOUT_MS = 20_000;
 
@@ -175,6 +175,26 @@ const buildTextAnswerFallbackFromAskingTask = ({
   };
 };
 
+const resolveGeneratedSqlFromAskingTask = (askingTask: NullableAskingTask) => {
+  if (
+    askingTask?.status !== AskingTaskStatus.FINISHED ||
+    askingTask?.type !== AskingTaskType.TEXT_TO_SQL
+  ) {
+    return null;
+  }
+
+  const candidate = askingTask.candidates?.find(
+    (item) => item?.sql?.trim() || item?.view?.statement?.trim(),
+  );
+  const sql = candidate?.sql?.trim() || candidate?.view?.statement?.trim();
+  return sql
+    ? {
+        sql,
+        view: candidate?.view || null,
+      }
+    : null;
+};
+
 export const buildRecommendedQuestionHistory = (
   threadQuestions: string[],
   originalQuestion: string,
@@ -207,9 +227,12 @@ export const handleUpdateThreadCache = (
               askingTask,
               existingAnswerDetail: response.answerDetail,
             });
+            const generatedSql = resolveGeneratedSqlFromAskingTask(askingTask);
             return {
               ...response,
               askingTask: cloneDeep(askingTask),
+              sql: response.sql || generatedSql?.sql || response.sql,
+              view: response.view || generatedSql?.view || response.view,
               answerDetail,
             };
           }

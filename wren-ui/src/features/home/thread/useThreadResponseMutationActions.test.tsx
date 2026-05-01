@@ -257,4 +257,70 @@ describe('useThreadResponseMutationActions', () => {
     );
     expect(startThreadResponsePolling).toHaveBeenCalledWith(31);
   });
+
+  it('clears stale chart validation failure while regenerating an existing chart follow-up', async () => {
+    mockTriggerThreadResponseChart.mockResolvedValue({
+      id: 31,
+      question: '生成图表',
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 30,
+      sql: 'select 1',
+      chartDetail: {
+        status: 'FETCHING',
+      },
+    });
+
+    const { hook, upsertThreadResponse } = renderHarness({
+      currentResponses: [
+        { id: 30, question: '原始回答', sql: 'select 1' },
+        {
+          id: 31,
+          question: '生成图表',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 30,
+          sql: 'select 1',
+          chartDetail: {
+            status: 'FAILED',
+            error: { message: '图表校验失败' },
+            validationErrors: ['图表校验失败'],
+            fallbackUsed: true,
+            thinking: {
+              currentStepKey: 'chart.chart_validated',
+              steps: [
+                {
+                  key: 'chart.chart_validated',
+                  messageKey: 'chart.chart_validated',
+                  status: 'failed',
+                },
+              ],
+            },
+          },
+        },
+      ],
+      currentThreadId: 19,
+    });
+
+    await hook.onGenerateThreadResponseChart(30, {
+      question: '生成一张图表给我',
+      sourceResponseId: 30,
+    });
+
+    expect(upsertThreadResponse).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: 31,
+        chartDetail: expect.objectContaining({
+          status: 'GENERATING',
+          error: null,
+          fallbackUsed: false,
+          thinking: null,
+          validationErrors: [],
+        }),
+      }),
+    );
+    expect(mockTriggerThreadResponseChart).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+      31,
+    );
+  });
 });

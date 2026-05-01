@@ -59,6 +59,12 @@ export default async function handler(
         if (!response?.sql) {
           throw new ApiError('SQL not found in thread response', 400);
         }
+        if (response.answerDetail?.numRowsUsedInLLM === 0) {
+          throw new ApiError(
+            '当前查询没有返回数据，暂不能保存为数据表。',
+            400,
+          );
+        }
 
         const sqlMode = await resolveThreadResponseSqlMode({
           askingService: ctx.askingService,

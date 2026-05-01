@@ -15,6 +15,8 @@ import {
   IProjectService,
   IDeployService,
   IQueryService,
+  TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
   ThreadResponseAnswerStatus,
   PreviewDataResponse,
 } from '../services';
@@ -69,8 +71,10 @@ const resolveErrorPayload = (error: unknown): Record<string, unknown> => {
   };
 };
 
-const buildMissingSqlError = (threadResponseId: number) =>
-  new Error(`SQL is missing for response ${threadResponseId}`);
+const buildMissingSqlErrorPayload = () => ({
+  code: TEXT_TO_SQL_SQL_MISSING_ERROR_CODE,
+  message: TEXT_TO_SQL_SQL_MISSING_USER_MESSAGE,
+});
 
 const ANSWER_RESULT_RETRYABLE_ERROR_PATTERNS = [
   /(?:read\s+)?ECONNRESET/i,
@@ -210,10 +214,10 @@ export class TextBasedAnswerBackgroundTracker {
             const mdl = runtimeDeployment.manifest;
             const responseSql = threadResponse.sql;
             if (!responseSql) {
-              await this.failTask(
-                threadResponse,
-                buildMissingSqlError(threadResponse.id),
+              logger.warn(
+                `Cannot generate text answer because SQL is missing for response ${threadResponse.id}`,
               );
+              await this.failTask(threadResponse, buildMissingSqlErrorPayload());
               return;
             }
             let data: PreviewDataResponse;
