@@ -7,7 +7,6 @@
 - `wren-ai-service`: the AI service.
 - `postgres`: the relational database and pgvector-backed vector store used by ai service.
 - `wren-ui`: the UI service.
-- `bootstrap`: put required files to volume for engine service.
 
 ## Volume
 
@@ -16,9 +15,9 @@ Shared data using `data` volume.
 Path structure as following:
 
 - `/mdl`
-  - `*.json` (will put `sample.json` during bootstrap)
+  - `*.json` (`sample.json` is initialized by `wren-engine` when missing)
 - `accounts`
-- `config.properties`
+- `config.properties` (initialized by `wren-engine` when missing)
 
 ## Network
 
@@ -56,13 +55,13 @@ If you want to run one service from source, still use the same
 ### Run `wren-ui` from source
 
 ```sh
-docker compose --env-file .env up --build -d bootstrap postgres wren-engine ibis-server trino wren-ai-service
+docker compose --env-file .env up --build -d postgres wren-engine ibis-server trino wren-ai-service
 ```
 
 ### Run `wren-ai-service` from source
 
 ```sh
-docker compose --env-file .env up --build -d bootstrap postgres wren-engine ibis-server trino wren-ui
+docker compose --env-file .env up --build -d postgres wren-engine ibis-server trino wren-ui
 ```
 
 ## Prebuild engine images for local Kubernetes / CI

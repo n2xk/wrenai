@@ -27,8 +27,6 @@ helmCharts:
 
 images:
   # for the latest versions, please check here: https://github.com/Canner/WrenAI/blob/main/docker/.env.example#L23
-  - name: ghcr.io/canner/wren-bootstrap
-    newTag: 0.1.5 # WREN_BOOTSTRAP_VERSION
   - name: wren-engine
     newName: wren-engine
     newTag: local

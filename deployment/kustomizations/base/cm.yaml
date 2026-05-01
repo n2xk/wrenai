@@ -27,9 +27,6 @@ data:
   WREN_AI_ENDPOINT: "http://wren-ai-service-svc:5555"
   #WREN_AI_ENDPOINT: "http://wren-ai-service-svc.ai-system.svc.cluster.local:5555"
 
-  #For bootstrap
-  WREN_ENGINE_DATA_PATH: "/app/data"
-
   ### provide PG_URL in the *Secret* manifest file
   ### (deployment/kustomizations/examples/secret-wren_example.yaml)
   ### to connect wren-ui to PostgreSQL
