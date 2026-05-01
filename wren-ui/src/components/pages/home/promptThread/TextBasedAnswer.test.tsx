@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import TextBasedAnswer, {
   resolveTextAnswerErrorPresentation,
 } from './TextBasedAnswer';
-import { ThreadResponseAnswerStatus } from '@/types/home';
+import {
+  AskingTaskStatus,
+  AskingTaskType,
+  ThreadResponseAnswerStatus,
+} from '@/types/home';
 
 const mockUseTextBasedAnswerStreamTask = jest.fn();
 const mockOnGenerateTextBasedAnswer = jest.fn();
@@ -163,6 +167,45 @@ describe('TextBasedAnswer', () => {
     expect(markup).toContain('重新生成 SQL');
     expect(markup).not.toContain('文字解读生成失败');
     expect(markup).not.toContain('重新生成解读');
+  });
+
+  it('hides stale SQL failure while the same response is rerunning text-to-sql', () => {
+    const markup = renderToStaticMarkup(
+      <TextBasedAnswer
+        motion={false}
+        mode="timeline"
+        isLastThreadResponse={false}
+        isOpeningQuestion={false}
+        onInitPreviewDone={() => undefined}
+        shouldAutoPreview={false}
+        threadResponse={
+          {
+            id: 24,
+            threadId: 9,
+            question: '统计首存 cohort 累计收入',
+            workspaceId: 'ws-response',
+            knowledgeBaseId: 'kb-response',
+            sql: null,
+            askingTask: {
+              status: AskingTaskStatus.SEARCHING,
+              type: AskingTaskType.TEXT_TO_SQL,
+              candidates: [],
+            },
+            answerDetail: {
+              status: ThreadResponseAnswerStatus.FAILED,
+              error: {
+                code: 'TEXT_TO_SQL_SQL_MISSING',
+                message:
+                  'SQL 生成失败，未能生成可执行查询。请尝试重新生成，或调整问题描述。',
+              },
+            },
+          } as any
+        }
+      />,
+    );
+
+    expect(markup).not.toContain('SQL 生成失败');
+    expect(markup).not.toContain('重新生成 SQL');
   });
 
   it('keeps non-transient text answer errors specific', () => {

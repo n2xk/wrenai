@@ -13,7 +13,11 @@ import useTextBasedAnswerStreamTask from '@/hooks/useTextBasedAnswerStreamTask';
 import { Props as AnswerResultProps } from '@/components/pages/home/promptThread/AnswerResult';
 import MarkdownBlock from '@/components/editor/MarkdownBlock';
 import PreviewData from '@/components/dataPreview/PreviewData';
-import { ThreadResponseAnswerStatus } from '@/types/home';
+import {
+  AskingTaskStatus,
+  AskingTaskType,
+  ThreadResponseAnswerStatus,
+} from '@/types/home';
 
 import useResponsePreviewData from '@/hooks/useResponsePreviewData';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
@@ -69,6 +73,14 @@ const SQL_GENERATION_ERROR_PATTERN =
   /(SQL\s*生成失败|未能生成可执行查询|has no SQL|no SQL)/i;
 const SQL_GENERATION_FALLBACK_DESCRIPTION =
   '未能生成可执行查询。请尝试重新生成 SQL，或调整问题描述。';
+
+const ACTIVE_ASKING_TASK_STATUSES = new Set<AskingTaskStatus>([
+  AskingTaskStatus.CORRECTING,
+  AskingTaskStatus.GENERATING,
+  AskingTaskStatus.PLANNING,
+  AskingTaskStatus.SEARCHING,
+  AskingTaskStatus.UNDERSTANDING,
+]);
 
 const resolveSqlGenerationErrorDescription = (message: string) => {
   const normalized = message
@@ -273,8 +285,12 @@ export default function TextBasedAnswer(props: AnswerResultProps) {
   };
 
   const answerErrorPresentation = resolveTextAnswerErrorPresentation(error);
+  const isActiveTextToSqlRerun =
+    answerErrorPresentation?.retryTarget === 'asking_task' &&
+    threadResponse.askingTask?.type === AskingTaskType.TEXT_TO_SQL &&
+    ACTIVE_ASKING_TASK_STATUSES.has(threadResponse.askingTask.status);
 
-  if (error && answerErrorPresentation) {
+  if (error && answerErrorPresentation && !isActiveTextToSqlRerun) {
     return (
       <>
         <div className="pt-0 pb-2">
