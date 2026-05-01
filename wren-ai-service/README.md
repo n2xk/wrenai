@@ -115,6 +115,3 @@ For a comprehensive understanding of how to evaluate the pipelines, please refer
     - .html: test report in html format, showing tables and charts
     - .log: test log
 
-## Contributing
-
-Thank you for investing your time in contributing to our project! Please [read this for more information](CONTRIBUTING.md)!

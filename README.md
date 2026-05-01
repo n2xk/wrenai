@@ -1,150 +1,187 @@
-
 <p align="center" id="top">
-  <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
-    <picture>
-      <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
-      <img src="./misc/wrenai_logo_white.png" width="300px">
-    </picture>
-    <h1 align="center">Wren AI - Open-Source GenBI Agent</h1>
-  </a>
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
+    <img src="./misc/wrenai_logo_white.png" width="300px" alt="Wren AI logo">
+  </picture>
 </p>
 
-<p align="center">
-  <a aria-label="Follow us on X" href="https://x.com/getwrenai">
-    <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
-  </a>
-  <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
-    <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
-  </a>
-  <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
-    <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge">
-  </a>
-  <a href="https://docs.getwren.ai">
-    <img src="https://img.shields.io/badge/docs-online-brightgreen?style=for-the-badge" alt="Docs">
-  </a>
-  <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
-    <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
-  </a>
-  <a aria-label="Canner" href="https://cannerdata.com/?utm_source=github&utm_medium=badge&utm_campaign=readme">
-    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
-  </a>
-</p>
+# Wren AI
 
-<p align="center">
-  <a href="https://trendshift.io/repositories/9263" target="_blank"><img src="https://trendshift.io/api/badge/repositories/9263" alt="Canner%2FWrenAI | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-</p>
+Wren AI 是一个 GenBI（Generative BI）系统，用自然语言完成问数、SQL 生成、结果查询、图表生成和数据看板/数据表沉淀。
 
-> ⚡ GenBI (Generative BI) queries any database in natural language, generates accurate SQL (Text-to-SQL), charts (Text-to-Chart), and AI-powered business intelligence in seconds. ️
+本仓库是 Wren AI 的本地开发主仓库，当前重点是围绕语义层、问数流程、数据连接器、看板和数据表能力进行迭代。
 
-<p align="center">
-  <img width="1920" height="1080" alt="1" src="https://github.com/user-attachments/assets/bba9d37a-33e3-49ab-b7cb-32fd6dddc8d1" />
-</p>
- 
-## 😍 Demos
+## 这套系统解决什么问题
 
-https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
+用户可以用自然语言提问，例如：
 
-[Watch GenBI Demo](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b)
+- 查询某个时间范围内的业务指标
+- 对明细数据做筛选、聚合、排序
+- 生成图表并固定到数据看板
+- 将查询结果保存为数据表
+- 基于业务字典、分析规则和问数策略约束 SQL 生成
 
-## 🤖 Features
+系统会结合语义层和知识库内容，把问题转换成可执行 SQL，再返回查询结果、解释过程和可视化结果。
 
-|                    | What you get | Why it matters |
-|--------------------|--------------|----------------|
-| **Talk to Your Data** | Ask in any language → precise SQL & answers | Slash the SQL learning curve﻿ |
-| **GenBI Insights** | AI-written summaries, charts & reports | Decision-ready context in one click﻿ |
-| **Semantic Layer** | MDL models encode schema, metrics, joins | Keeps LLM outputs accurate & governed﻿ |
-| **Embed via API**  | Generate queries & charts inside your apps ([API Docs](https://wrenai.readme.io/reference/cloud-getting-started)) | Build custom agents, SaaS features, chatbots﻿ ([Streamlit Live Demo](https://huggingface.co/spaces/getWrenAI/wrenai-cloud-api-demo)) |
+## 核心能力
 
-🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
+| 能力 | 说明 |
+| --- | --- |
+| 自然语言问数 | 将用户问题转换为 SQL，并返回结构化结果 |
+| 语义层 | 使用 MDL 描述模型、字段、关系、指标和计算逻辑 |
+| 知识治理 | 通过业务字典、分析规则、外部数据依赖、问数策略提高问数稳定性 |
+| 图表生成 | 基于查询结果生成图表，并支持固定到数据看板 |
+| 数据表沉淀 | 将有价值的查询结果保存成数据表，便于后续复用 |
+| 数据连接器 | 支持接入多种数据库或查询引擎 |
+| 诊断与回归 | 通过诊断信息和业务回归测试计划持续验证问数质量 |
 
-## 🚀 Getting Started
+## 仓库结构
 
-Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
+| 目录 | 作用 |
+| --- | --- |
+| `wren-ui/` | Next.js 前端，以及内嵌 Apollo GraphQL 后端 |
+| `wren-ai-service/` | Python FastAPI AI 服务，负责 RAG、LLM 调用、SQL / 图表生成 |
+| `wren-engine/` | SQL 引擎子模块，负责 SQL 校验、执行和数据源适配 |
+| `wren-mdl/` | MDL JSON Schema 定义 |
+| `docker/` | 本地 Docker Compose 配置 |
+| `deployment/` | Kubernetes / Kustomize 部署配置 |
+| `docs/` | 本地需求、测试方案、架构和验收文档 |
+| `misc/` | 项目辅助资源和脚本 |
 
-<p align="center">
-  <img width="1920" height="1080" alt="2" src="https://github.com/user-attachments/assets/6555f539-9ef2-485d-9135-0071741fda96" />
-</p>
+## 服务关系
 
-- Visit our [Install in your local environment](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
-- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview?utm_source=github&utm_medium=content&utm_campaign=readme) to learn more about how to use Wren AI.
-- Or just start with [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) our Managed Cloud Service. ([OSS vs. Commercial Plans](https://docs.getwren.ai/oss/overview/cloud_vs_self_host)).
+```text
+用户
+  ↓
+Wren UI / Apollo Server
+  ↓
+Wren AI Service
+  ↓
+Wren Engine / Ibis Server / Trino
+  ↓
+外部数据库或本地测试数据源
+```
 
-## 🏗️ Architecture
+主要调用链：
 
-<p align="center">
-  <img width="1011" height="682" alt="wrenai-architecture" src="https://github.com/user-attachments/assets/e99b999f-9912-4fa7-921a-9c86b6b83354" />
-</p>
+1. 用户在 UI 中输入自然语言问题。
+2. UI 通过 Apollo Server 创建问数任务。
+3. Apollo Server 调用 AI Service。
+4. AI Service 结合 MDL、知识库和问数策略生成 SQL。
+5. Engine / Ibis Server 校验并执行 SQL。
+6. UI 展示结果、诊断信息、图表，并支持保存到看板或数据表。
 
-👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
+## 本地开发启动方式
 
+当前开发环境推荐使用：
 
+- Docker 启动基础依赖和部分后端依赖服务。
+- background terminal 启动 UI 和 AI Service，便于实时调试。
 
-## 🔌 Data Sources
+### 启动 UI
 
-If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
-- Athena (Trino)
-- Redshift
-- BigQuery
-- DuckDB
-- Databricks
+```bash
+cd wren-ui
+PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn dev
+```
+
+### 启动 AI Service
+
+```bash
+cd wren-ai-service
+poetry run python -m src.__main__
+```
+
+### Docker 依赖服务
+
+```bash
+cd docker
+cp .env.example .env.local
+cp config.example.yaml config.yaml
+docker compose --env-file .env.local up -d
+```
+
+具体启动组合以当前开发任务为准。如果只调试 UI 或 AI Service，可以只保留必要的依赖服务在 Docker 中运行。
+
+## 常用命令
+
+### Wren UI
+
+```bash
+cd wren-ui
+yarn install
+yarn dev
+yarn build
+yarn lint
+yarn check-types
+yarn test
+yarn test:e2e
+yarn migrate
+yarn rollback
+yarn generate-gql
+```
+
+### Wren AI Service
+
+```bash
+cd wren-ai-service
+poetry install
+just init
+just up
+just start
+just test
+just test-usecases
+just down
+```
+
+## 数据源支持范围
+
+系统当前面向数据库类数据源为主，常见数据源包括：
+
 - PostgreSQL
 - MySQL
 - Microsoft SQL Server
 - ClickHouse
 - Oracle
 - Trino
+- DuckDB
+- BigQuery
 - Snowflake
+- Redshift
+- Athena
+- Databricks
 
-## 🤖 LLM Models
+本地真实连接验证以 `docs/` 下的数据源测试方案为准。部分云厂商数据源无法用纯 Docker 完整模拟，需要使用真实账号或替代验证方式。
 
-Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
-- OpenAI Models
-- Azure OpenAI Models
-- DeepSeek Models
-- Google AI Studio – Gemini Models
-- Vertex AI Models (Gemini + Anthropic)
-- Bedrock Models
-- Anthropic API Models
-- Groq Models
-- Ollama Models
-- Databricks Models
+## LLM 配置
 
-Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)!
+AI Service 支持通过配置文件接入不同 LLM Provider。配置入口主要在：
 
-> [!CAUTION]
-> The performance of Wren AI depends significantly on the capabilities of the LLM you choose. We strongly recommend using the most powerful model available for optimal results. Using less capable models may lead to reduced performance, slower response times, or inaccurate outputs.
+- `wren-ai-service/config.yaml`
+- `wren-ai-service/.env.dev`
+- `wren-ai-service/docs/config_examples/`
 
-## 📚 Documentation
+当前问数质量高度依赖模型能力、限流策略、Provider 稳定性和业务知识配置。测试时应遵守回归测试文档中的节流和重试规则，避免因 429 限流误判业务能力。
 
-Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
+## 关键本地文档
 
-For this local worktree, additional repo-specific notes are available here:
-- [Local source quickstart](./docs/local-source-quickstart.md)
-- [Local source acceptance guide](./docs/local-source-acceptance.md)
+| 文档 | 说明 |
+| --- | --- |
+| `docs/local-source-quickstart.md` | 本地源码启动说明 |
+| `docs/local-source-acceptance.md` | 本地验收说明 |
+| `docs/业务需求/问数回归测试计划.md` | 问数回归测试主计划 |
+| `docs/业务需求/问数语义计划与知识治理方案-2026-04-30.md` | 问数语义计划和知识治理方案 |
+| `docs/真实外部数据源连接验证测试方案-2026-04-29.md` | 真实外部数据源连接验证方案 |
+| `docs/多知识库联合查询方案-2026-04-30.md` | 多知识库联合查询方案 |
 
-## 📪 Keep Posted?
+## 开发约定
 
-[Subscribe our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Follow our LinkedIn](https://www.linkedin.com/company/wrenai)
-
-## 🛠️ Contribution
-
-1.	Star ⭐ the repo to show support (it really helps).
-2.	Open an issue for bugs, ideas, or discussions.
-3.	Read [Contribution Guidelines](https://github.com/Canner/WrenAI/blob/main/CONTRIBUTING.md) for setup & PR guidelines.
-
-## ⭐️ Community
-
-- Join 1.3k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
-- If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
-- Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
-
-Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
-
-## 🎉 Our Contributors
-<a href="https://github.com/canner/wrenAI/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Canner/WrenAI" />
-</a>
+- 优先保持小步提交和可回滚改动。
+- 修改问数、图表、看板、数据表相关流程时，需要同步考虑回归测试计划。
+- 修改数据源、MDL、语义策略时，需要确认 UI、AI Service、Engine 三侧契约是否一致。
+- 涉及 LLM 调用的测试需要控制请求频率，避免 Provider 限流影响判断。
+- UI 和 AI Service 的本地启动方式以本 README 和项目记忆中的当前方式为准。
 
 <p align="right">
-  <a href="#top">⬆️ Back to Top</a>
+  <a href="#top">回到顶部</a>
 </p>

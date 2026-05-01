@@ -32,16 +32,6 @@ jobs:
           git config --global user.name "wren-ai[bot]"
           git config --global user.email "dev@cannerdata.com"
 
-      - name: Update docker.go
-        run: |
-          FILE_PATH="wren-launcher/utils/docker.go"
-
-          # Replace the WREN_PRODUCT_VERSION value with the new release version
-          sed -i "s/WREN_PRODUCT_VERSION\s*string = \"[^\"]*\"/WREN_PRODUCT_VERSION\tstring = \"${{ github.event.inputs.release_version }}\"/" $FILE_PATH
-
-          # Verify the changes
-          grep "WREN_PRODUCT_VERSION" $FILE_PATH
-
       - name: Update .env.example
         run: |
           FILE_PATH="docker/.env.example"

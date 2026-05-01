@@ -95,9 +95,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# wren-launcher
-wren-launcher/dist
-wren-launcher/main
 
 ## temporary files
 .tmp

@@ -8,7 +8,6 @@ This is a monorepo with three main services:
 
 - **wren-ui/** — Next.js 14 frontend + Apollo GraphQL backend (TypeScript, Yarn 4.5.3)
 - **wren-ai-service/** — AI/LLM service (Python 3.12, FastAPI, Poetry, Just command runner)
-- **wren-launcher/** — CLI deployment tool (Go 1.18+, Make)
 - **docker/** — Docker Compose configs for running all services together
 - **deployment/** — Kubernetes/Kustomize manifests
 - **wren-engine/** — SQL engine (git submodule, not developed here)
@@ -53,15 +52,6 @@ Configuration is via `config.yaml` (multi-document YAML with sections for LLM, e
 
 Pre-commit hooks: `poetry run pre-commit install` then `poetry run pre-commit run --all-files`
 
-### wren-launcher (Go)
-
-```bash
-cd wren-launcher
-make build              # Cross-compile for macOS/Linux/Windows
-make test               # go test ./...
-make check              # fmt + vet + lint (golangci-lint)
-make lint-fix           # Auto-fix lint issues
-```
 
 ## Architecture
 
@@ -139,7 +129,7 @@ For developing a single service while others run in Docker, use `docker-compose-
 ## Commit Convention
 
 Follows conventional commits: `type(scope): description`
-- Scopes: `wren-ui`, `wren-ai-service`, `wren-launcher`
+- Scopes: `wren-ui`, `wren-ai-service`
 - Types: `feat`, `fix`, `chore`, `refactor`
 - Examples: `feat(wren-ui): add dashboard widget`, `fix(wren-ai-service): handle empty MDL`
 

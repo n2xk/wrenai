@@ -93,7 +93,7 @@ project_domain_matches="$(rg -n -S \
 
 external_matches="$(rg -n -S \
   "GCP project id|big query project id|TEST_BIG_QUERY_PROJECT_ID|project_id cannot be empty|name=\"projectId\"|json:\"project_id\"|Field\\(description=\"GCP project id\"" \
-  wren-ui wren-engine wren-launcher wren-ai-service \
+  wren-ui wren-engine wren-ai-service \
   -g '!node_modules' -g '!**/tests/**' -g '!**/*.test.*' || true)"
 
 print_section "compatibility bridge / legacy selectors" "shrink-after-cutover" "$bridge_matches"

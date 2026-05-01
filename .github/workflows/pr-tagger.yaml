@@ -6,7 +6,6 @@ on:
     paths:
       - "wren-ui/src/**"
       - "deployment/**"
-      - "wren-launcher/**"
       - "wren-ai-service/**"
       - "docker/**"
 
@@ -37,7 +36,6 @@ jobs:
             // Define label colors
             const labelColors = {
               'wren-ui': 'f29513',        // Orange
-              'launcher': 'f29513',       // Orange (same as wren-ui)
               'wren-ai-service': 'f29513', // Orange (same as wren-ui)
               'deployment': '0075ca',     // Blue
               'ai-env-changed': 'd73a4a',  // Red
@@ -51,8 +49,6 @@ jobs:
                 labels.add('wren-ui');
               } else if (file.startsWith('deployment/')) {
                 labels.add('deployment');
-              } else if (file.startsWith('wren-launcher/')) {
-                labels.add('launcher');
               } else if (file.startsWith('wren-ai-service/')) {
                 labels.add('wren-ai-service');
               } 
