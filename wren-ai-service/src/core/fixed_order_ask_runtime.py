@@ -185,6 +185,11 @@ TEMPLATE_FEATURE_PATTERNS: dict[str, tuple[str, ...]] = {
         r"TOPN",
         r"非\s*TOP",
         r"NON[_\s-]?TOPN",
+        r"前\s*\d+\s*(?:名|个)?(?:大户|用户|玩家)?",
+        r"大户",
+        r"头部用户",
+        r"高流水用户",
+        r"投注流水最高",
         r"分层",
         r"区间汇总",
         r"全部用户",
@@ -218,6 +223,54 @@ MISSING_SOURCE_PROMPTS = {
     "pv": "访问PV",
     "spend_amount": "投放金额",
     "uv": "访问UV",
+}
+
+EXTERNAL_DEPENDENCY_EXCLUSION_CUES = (
+    "不用",
+    "不使用",
+    "不依赖",
+    "无需",
+    "不需要",
+    "排除",
+    "去掉",
+    "剔除",
+    "不看",
+    "不展示",
+    "不输出",
+    "不计算",
+    "不要",
+    "暂不",
+    "暂时不用",
+)
+
+INTERNAL_ONLY_QUERY_PATTERNS = (
+    r"(?:只用|仅用|只展示|仅展示|只输出|仅输出|暂时只用|暂时仅用).{0,24}(?:内部数据|内部指标|系统内|可查询|原始指标)",
+    r"(?:不用|不使用|不依赖|无需|不需要|排除|去掉|剔除|不看|不展示|不输出|不计算|不要|暂不|暂时不用).{0,24}(?:外部数据|外部指标|外部数据源)",
+)
+
+EXTERNAL_DEPENDENCY_EXCLUSION_ALIASES = {
+    "ad_spend": (
+        "投放金额",
+        "投放成本",
+        "买量成本",
+        "广告费",
+        "广告成本",
+        "ROI",
+        "投放回收",
+        "回本",
+        "回本率",
+        "首存成本",
+        "首充成本",
+    ),
+    "access_pv": ("PV", "访问PV", "访问量", "流量PV", "UV注册率"),
+    "access_uv": (
+        "UV",
+        "访问UV",
+        "独立访客",
+        "UV下载率",
+        "UV注册率",
+    ),
+    "download_click_uv": ("下载点击UV", "下载点击", "下载点击人数", "UV下载率"),
 }
 
 
@@ -296,6 +349,52 @@ def _query_matches_any_text(query: str, texts: Sequence[Any]) -> bool:
             return True
         if re.search(re.escape(text), query, flags=re.IGNORECASE):
             return True
+    return False
+
+
+def _query_requests_internal_only(query: str) -> bool:
+    return any(
+        re.search(pattern, query, flags=re.IGNORECASE)
+        for pattern in INTERNAL_ONLY_QUERY_PATTERNS
+    )
+
+
+def _external_dependency_exclusion_texts(dependency: dict[str, Any]) -> list[str]:
+    dependency_id = _normalize_dependency_id(dependency.get("id"))
+    texts = [
+        dependency_id,
+        dependency.get("name"),
+        *(_normalize_string_list(dependency.get("aliases"))),
+        *EXTERNAL_DEPENDENCY_EXCLUSION_ALIASES.get(dependency_id, ()),
+    ]
+    return list(dict.fromkeys(_normalize_string_list(texts)))
+
+
+def _query_excludes_external_dependency(
+    query: str,
+    dependency: dict[str, Any],
+) -> bool:
+    if _query_requests_internal_only(query):
+        return True
+
+    exclusion_cue = "|".join(re.escape(cue) for cue in EXTERNAL_DEPENDENCY_EXCLUSION_CUES)
+    for text in _external_dependency_exclusion_texts(dependency):
+        if not text:
+            continue
+        escaped_text = re.escape(text)
+        if re.search(
+            rf"(?:{exclusion_cue}).{{0,80}}{escaped_text}",
+            query,
+            flags=re.IGNORECASE,
+        ):
+            return True
+        if re.search(
+            rf"{escaped_text}.{{0,40}}(?:{exclusion_cue})",
+            query,
+            flags=re.IGNORECASE,
+        ):
+            return True
+
     return False
 
 
@@ -569,6 +668,9 @@ def _match_configured_external_dependencies(
 ) -> list[dict[str, Any]]:
     configured_matches: list[dict[str, Any]] = []
     for dependency in configured_dependencies:
+        if _query_excludes_external_dependency(query, dependency):
+            continue
+
         match_texts = [
             dependency.get("name"),
             dependency.get("id"),
@@ -1409,7 +1511,16 @@ SEMANTIC_DIMENSION_PATTERNS: dict[str, tuple[str, ...]] = {
     "first_deposit_date": (r"首存日期", r"首充日期", r"cohort"),
     "game_type": (r"游戏类型", r"game[_\s-]?type"),
     "player_id": (r"玩家", r"用户", r"player[_\s-]?id", r"名单", r"明细"),
-    "segment": (r"TOP\s*\d+", r"非\s*TOP", r"分层", r"大户"),
+    "segment": (
+        r"TOP\s*\d+",
+        r"非\s*TOP",
+        r"前\s*\d+\s*(?:名|个)?(?:大户|用户|玩家)?",
+        r"分层",
+        r"大户",
+        r"头部用户",
+        r"高流水用户",
+        r"投注流水最高",
+    ),
     "tenant_plat_id": (r"租户平台", r"tenant[_\s-]?plat[_\s-]?id"),
 }
 
@@ -2378,6 +2489,40 @@ def _normalize_document_identity_value(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip().lower()
 
 
+def _query_requests_topn_user_segment(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    return bool(
+        re.search(
+            (
+                r"TOP\s*\d+|TOPN|"
+                r"前\s*\d+\s*(?:名|个)?(?:大户|用户|玩家)?|"
+                r"大户|头部用户|高流水用户|投注流水最高"
+            ),
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _query_requests_non_topn_user_segment(query: Optional[str]) -> bool:
+    if not query:
+        return False
+
+    if re.search(r"非\s*TOP\s*\d*|NON[_\s-]?TOPN", query, flags=re.IGNORECASE):
+        return True
+
+    return bool(
+        _query_requests_topn_user_segment(query)
+        and re.search(
+            r"其他用户|其余用户|剩余用户|非头部用户|非大户",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _build_document_identity(document: Any) -> tuple[str, str]:
     for key in (
         "id",
@@ -2525,6 +2670,9 @@ def _extract_template_parameters_from_query(
             if len(explicit_period_days) > 1 and not has_period_range:
                 parameters[key] = sorted(set(explicit_period_days))
                 continue
+            if len(explicit_period_days) == 1 and not has_period_range:
+                parameters[key] = explicit_period_days[0]
+                continue
             value = _first_match(
                 [
                     r"D\s*1\s*(?:~|-|到|至)\s*D?\s*(\d+)",
@@ -2542,14 +2690,14 @@ def _extract_template_parameters_from_query(
             requested_segments.append("ALL")
 
         query_without_non_top = re.sub(
-            r"非\s*TOP\s*\d*|NON[_\s-]?TOPN",
+            r"非\s*TOP\s*\d*|NON[_\s-]?TOPN|非大户|非头部用户",
             "",
             query,
             flags=re.IGNORECASE,
         )
-        if re.search(r"TOP\s*\d+|TOPN", query_without_non_top, flags=re.IGNORECASE):
+        if _query_requests_topn_user_segment(query_without_non_top):
             requested_segments.append("TOPN")
-        if re.search(r"非\s*TOP\s*\d*|NON[_\s-]?TOPN", query, flags=re.IGNORECASE):
+        if _query_requests_non_topn_user_segment(query):
             requested_segments.append("NON_TOPN")
         if requested_segments:
             parameters["user_segment"] = (
@@ -3147,10 +3295,27 @@ def detect_missing_external_source_requirement(
     if configured_matches:
         return None
 
+    if _query_requests_internal_only(query):
+        return None
+
     required_metrics: list[str] = []
     normalized_query = query.upper()
 
-    def append_metric(metric_key: str) -> None:
+    def append_metric(metric_key: str, dependency_id: Optional[str] = None) -> None:
+        dependency_id = dependency_id or {
+            "download_click_uv": "download_click_uv",
+            "pv": "access_pv",
+            "spend_amount": "ad_spend",
+            "uv": "access_uv",
+        }.get(metric_key)
+        if dependency_id and _query_excludes_external_dependency(
+            query,
+            {
+                "id": dependency_id,
+                "name": MISSING_SOURCE_PROMPTS.get(metric_key, dependency_id),
+            },
+        ):
+            return
         metric = MISSING_SOURCE_PROMPTS[metric_key]
         if metric not in required_metrics:
             required_metrics.append(metric)

@@ -60,6 +60,8 @@ const aiEnv = {
   PG_CONN_STR: 'postgresql://postgres:postgres@127.0.0.1:9432/wrenai',
   PYTHONUNBUFFERED: '1',
   ...testEnv,
+  WREN_AI_SERVICE_RELOAD: 'false',
+  WREN_SEMANTICS_PREPARATION_PIPELINE_TIMEOUT_SECONDS: '180',
   CONFIG_PATH: aiConfigPath,
 };
 

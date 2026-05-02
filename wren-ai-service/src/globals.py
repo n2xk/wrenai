@@ -117,6 +117,7 @@ def create_service_container(
                     **pipe_components["project_meta_indexing"],
                 ),
             },
+            pipeline_timeout_seconds=settings.semantics_preparation_pipeline_timeout_seconds,
             **query_cache,
         ),
         ask_service=services.AskService(

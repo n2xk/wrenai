@@ -30,7 +30,7 @@ import * as Errors from '@server/utils/error';
 import { logger } from './askingServiceShared';
 import { evaluateChartability } from './chartability';
 import { deriveChartThinkingTrace } from './chartThinking';
-import { getPreviewSqlModeForTemplateCarrier } from '@server/utils/templateSqlExecution';
+import { resolvePreviewSqlMode } from '@server/utils/templateSqlExecution';
 
 const toErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -174,8 +174,11 @@ export const generateThreadResponseChartAction = async (
     threadResponse.askingTaskId && service.getAskingTaskById
       ? await service.getAskingTaskById(threadResponse.askingTaskId)
       : null;
-  const previewSqlMode = getPreviewSqlModeForTemplateCarrier(
-    currentAskingTask || sourceAskingTask,
+  const previewSqlMode = resolvePreviewSqlMode(
+    threadResponse,
+    sourceResponse,
+    currentAskingTask,
+    sourceAskingTask,
   );
   const sourceThinking = sourceAskingTask?.thinking || null;
   const sqlPairsCount = getThinkingCount(sourceThinking, [
@@ -408,8 +411,11 @@ export const previewDataAction = async (
     response.askingTaskId && service.getAskingTaskById
       ? await service.getAskingTaskById(response.askingTaskId)
       : null;
-  const previewSqlMode = getPreviewSqlModeForTemplateCarrier(
-    askingTask || sourceAskingTask,
+  const previewSqlMode = resolvePreviewSqlMode(
+    response,
+    sourceResponse,
+    askingTask,
+    sourceAskingTask,
   );
   const { project, manifest } =
     await service.getExecutionResources(runtimeIdentity);

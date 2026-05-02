@@ -267,4 +267,147 @@ describe('DiagramController', () => {
       views: [],
     });
   });
+
+  it('auto-heals a stale snapshot selector when diagram scoped models are empty but a newer executable deployment has artifacts', async () => {
+    const resolver = new DiagramController();
+    const staleRuntimeIdentity = {
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-stale',
+      actorUserId: 'user-1',
+    };
+    const healedRuntimeIdentity = {
+      ...staleRuntimeIdentity,
+      deployHash: 'deploy-latest',
+    };
+    const model = {
+      id: 7,
+      projectId: 42,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-latest',
+      displayName: 'Orders',
+      referenceName: 'orders',
+      sourceTableName: 'orders',
+      refSql: 'select * from orders',
+      cached: false,
+      refreshTime: null,
+      properties: JSON.stringify({ description: 'orders table' }),
+    };
+    const modelRepository = {
+      findAllByRuntimeIdentity: jest
+        .fn()
+        .mockImplementation(async (runtimeIdentity) =>
+          runtimeIdentity.deployHash === 'deploy-latest' ? [model] : [],
+        ),
+      findAllBy: jest.fn().mockResolvedValue([model]),
+      updateOne: jest.fn().mockResolvedValue(model),
+    };
+    const relationRepository = {
+      findRelationInfoBy: jest.fn().mockResolvedValue([]),
+      findAllBy: jest.fn().mockResolvedValue([]),
+      updateOne: jest.fn(),
+    };
+    const viewRepository = {
+      findAllByRuntimeIdentity: jest.fn().mockResolvedValue([]),
+      findAllBy: jest.fn().mockResolvedValue([]),
+      updateOne: jest.fn(),
+    };
+    const kbSnapshotRepository = {
+      findOneBy: jest.fn().mockResolvedValue({
+        id: 'snapshot-1',
+        knowledgeBaseId: 'kb-1',
+        snapshotKey: 'latest-executable-default',
+        deployHash: 'deploy-stale',
+      }),
+      createOne: jest.fn(),
+      updateOne: jest.fn().mockResolvedValue({
+        id: 'snapshot-1',
+        knowledgeBaseId: 'kb-1',
+        deployHash: 'deploy-latest',
+      }),
+    };
+    const deployRepository = {
+      updateOne: jest.fn(),
+    };
+    const ctx = {
+      runtimeScope: {
+        project: null,
+        deployment: { hash: 'deploy-stale', projectId: 42, manifest: {} },
+        workspace: { id: 'workspace-1' },
+        knowledgeBase: {
+          id: 'kb-1',
+          workspaceId: 'workspace-1',
+          name: '销售分析',
+          defaultKbSnapshotId: 'snapshot-1',
+        },
+        kbSnapshot: { id: 'snapshot-1' },
+        deployHash: 'deploy-stale',
+        userId: 'user-1',
+      },
+      authorizationActor: createAuthorizationActor(),
+      auditEventRepository: {
+        createOne: jest.fn(),
+      },
+      mdlService: {
+        makeCurrentModelMDLByRuntimeIdentity: jest
+          .fn()
+          .mockImplementation(async (runtimeIdentity) => ({
+            project: { id: 42, language: 'EN', type: 'POSTGRES' },
+            manifest:
+              runtimeIdentity.deployHash === 'deploy-latest'
+                ? { models: [{ name: 'orders', columns: [] }] }
+                : { models: [] },
+          })),
+      },
+      deployService: {
+        getLastDeploymentByRuntimeIdentity: jest.fn().mockResolvedValue({
+          id: 9,
+          projectId: 42,
+          hash: 'deploy-latest',
+          kbSnapshotId: 'snapshot-1',
+        }),
+      },
+      knowledgeBaseRepository: {
+        updateOne: jest.fn(),
+      },
+      kbSnapshotRepository,
+      deployRepository,
+      modelRepository,
+      modelColumnRepository: {
+        findColumnsByModelIds: jest.fn().mockResolvedValue([]),
+      },
+      modelNestedColumnRepository: {
+        findNestedColumnsByModelIds: jest.fn().mockResolvedValue([]),
+      },
+      relationRepository,
+      viewRepository,
+    } as any;
+
+    const result = await resolver.getDiagram({ ctx });
+
+    expect(ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity).toHaveBeenCalledWith(
+      staleRuntimeIdentity,
+    );
+    expect(ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity).toHaveBeenCalledWith(
+      healedRuntimeIdentity,
+    );
+    expect(modelRepository.findAllByRuntimeIdentity).toHaveBeenNthCalledWith(
+      1,
+      staleRuntimeIdentity,
+    );
+    expect(modelRepository.findAllByRuntimeIdentity).toHaveBeenNthCalledWith(
+      2,
+      healedRuntimeIdentity,
+    );
+    expect(kbSnapshotRepository.updateOne).toHaveBeenCalledWith(
+      'snapshot-1',
+      expect.objectContaining({ deployHash: 'deploy-latest' }),
+    );
+    expect(result.models).toHaveLength(1);
+    expect(result.models[0].referenceName).toBe('orders');
+  });
 });

@@ -12,12 +12,14 @@ export const buildThreadResponseIntentState = ({
   responseKind,
   sourceResponseId,
   sql,
+  sqlMode,
   threadId,
 }: {
   askingTaskType?: string | null;
   responseKind?: string | null;
   sourceResponseId?: number | null;
   sql?: string | null;
+  sqlMode?: 'wren' | 'dialect' | null;
   threadId: number;
 }): {
   artifactLineage: ResponseArtifactLineage | null;
@@ -55,9 +57,17 @@ export const buildThreadResponseIntentState = ({
     sourceResponseId,
     resolvedIntent: normalizedResolvedIntent,
   });
+  const normalizedArtifactLineage = sqlMode
+    ? {
+        ...(artifactLineage || {}),
+        sourceResponseId:
+          artifactLineage?.sourceResponseId ?? sourceResponseId ?? null,
+        sqlMode,
+      }
+    : artifactLineage;
 
   return {
-    artifactLineage,
+    artifactLineage: normalizedArtifactLineage,
     resolvedIntent: normalizedResolvedIntent,
   };
 };

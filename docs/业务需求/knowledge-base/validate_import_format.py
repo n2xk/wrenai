@@ -164,11 +164,28 @@ def build_parameter_schema(front_matter: dict[str, Any]) -> dict[str, Any] | Non
     required_slots = normalize_string_list(
         pick(front_matter, "required_slots", "requiredSlots")
     )
+    parameters = normalize_string_list(front_matter.get("parameters"))
     if not required_slots:
-        required_slots = normalize_string_list(front_matter.get("parameters"))
+        required_slots = parameters
+    if not parameters:
+        parameters = required_slots
     if not required_slots:
         return None
-    return {"type": "object", "required": required_slots}
+
+    schema: dict[str, Any] = {
+        "type": "object",
+        "required": required_slots,
+        "requiredSlots": required_slots,
+    }
+    if parameters:
+        schema["parameters"] = parameters
+    dialect = front_matter.get("dialect")
+    if isinstance(dialect, str) and dialect.strip():
+        schema["dialect"] = dialect.strip()
+    parameter_style = pick(front_matter, "parameter_style", "parameterStyle")
+    if isinstance(parameter_style, str) and parameter_style.strip():
+        schema["parameterStyle"] = parameter_style.strip()
+    return schema
 
 
 def build_business_signature(front_matter: dict[str, Any]) -> dict[str, Any] | None:

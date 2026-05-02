@@ -26,6 +26,7 @@ import {
   recordAuditEvent,
 } from '@server/authz';
 import { readModelRecommendationState } from '@server/utils/modelRecommendation';
+import { syncLatestExecutableKnowledgeBaseSnapshot } from '@server/utils/knowledgeBaseRuntime';
 
 const logger = getLogger('DiagramController');
 logger.level = 'debug';
@@ -112,7 +113,7 @@ export class DiagramController {
 
   public async getDiagram({ ctx }: { ctx: IContext }): Promise<Diagram> {
     await assertKnowledgeBaseReadAccess(ctx);
-    const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
+    let runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     let manifest: Manifest = {
       models: [],
       relationships: [],
@@ -129,8 +130,20 @@ export class DiagramController {
         throw error;
       }
     }
-    const models =
+    let models =
       await ctx.modelRepository.findAllByRuntimeIdentity(runtimeIdentity);
+
+    if (models.length === 0) {
+      const healed = await this.tryHealStaleRuntimeScopedArtifacts({
+        ctx,
+        runtimeIdentity,
+      });
+      if (healed) {
+        runtimeIdentity = healed.runtimeIdentity;
+        manifest = healed.manifest;
+        models = healed.models;
+      }
+    }
 
     const modelIds = models.map((model) => model.id);
     const modelColumns =
@@ -155,6 +168,100 @@ export class DiagramController {
     );
     await recordKnowledgeBaseReadAudit(ctx);
     return result;
+  }
+
+  private async tryHealStaleRuntimeScopedArtifacts({
+    ctx,
+    runtimeIdentity,
+  }: {
+    ctx: IContext;
+    runtimeIdentity: ReturnType<typeof getCurrentPersistedRuntimeIdentity>;
+  }): Promise<{
+    runtimeIdentity: ReturnType<typeof getCurrentPersistedRuntimeIdentity>;
+    manifest: Manifest;
+    models: Model[];
+  } | null> {
+    const knowledgeBase =
+      ctx.runtimeScope?.knowledgeBase ||
+      (runtimeIdentity.knowledgeBaseId
+        ? await ctx.knowledgeBaseRepository.findOneBy({
+            id: runtimeIdentity.knowledgeBaseId,
+          })
+        : null);
+
+    if (!knowledgeBase?.id || !knowledgeBase.workspaceId) {
+      return null;
+    }
+
+    try {
+      const latestSnapshot = await syncLatestExecutableKnowledgeBaseSnapshot({
+        knowledgeBase,
+        knowledgeBaseRepository: ctx.knowledgeBaseRepository,
+        kbSnapshotRepository: ctx.kbSnapshotRepository,
+        deployLogRepository: ctx.deployRepository,
+        deployService: ctx.deployService,
+        modelRepository: ctx.modelRepository,
+        relationRepository: ctx.relationRepository,
+        viewRepository: ctx.viewRepository,
+      });
+
+      if (!latestSnapshot?.id || !latestSnapshot.deployHash) {
+        return null;
+      }
+
+      const healedRuntimeIdentity = toPersistedRuntimeIdentityPatch({
+        ...runtimeIdentity,
+        workspaceId: knowledgeBase.workspaceId,
+        knowledgeBaseId: knowledgeBase.id,
+        kbSnapshotId: latestSnapshot.id,
+        deployHash: latestSnapshot.deployHash,
+      });
+      if (
+        healedRuntimeIdentity.kbSnapshotId === runtimeIdentity.kbSnapshotId &&
+        healedRuntimeIdentity.deployHash === runtimeIdentity.deployHash
+      ) {
+        return null;
+      }
+
+      const healedModels =
+        await ctx.modelRepository.findAllByRuntimeIdentity(
+          healedRuntimeIdentity,
+        );
+      if (healedModels.length === 0) {
+        return null;
+      }
+
+      let healedManifest: Manifest = {
+        models: [],
+        relationships: [],
+        views: [],
+      };
+      try {
+        const healedMdlResult =
+          await ctx.mdlService.makeCurrentModelMDLByRuntimeIdentity(
+            healedRuntimeIdentity,
+          );
+        healedManifest = healedMdlResult.manifest;
+      } catch (error) {
+        if (!isMissingRuntimeExecutionContextError(error)) {
+          throw error;
+        }
+      }
+
+      logger.warn(
+        `Healed stale diagram runtime scope from deployHash=${runtimeIdentity.deployHash || 'null'} to deployHash=${healedRuntimeIdentity.deployHash}`,
+      );
+      return {
+        runtimeIdentity: healedRuntimeIdentity,
+        manifest: healedManifest,
+        models: healedModels,
+      };
+    } catch (error: any) {
+      logger.warn(
+        `Skip stale diagram runtime scope healing: ${error?.message || error}`,
+      );
+      return null;
+    }
   }
 
   private buildDiagram(

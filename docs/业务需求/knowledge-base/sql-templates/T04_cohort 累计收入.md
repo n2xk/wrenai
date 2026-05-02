@@ -74,6 +74,7 @@ parameters:
 question_variants:
   - 计算首存 cohort 在 D1/D3/D7/D15/D30...D360 的累计渠道收入。
   - 统计某渠道首存 cohort 在指定回收周期内的累计渠道收入。
+  - 统计某渠道首存 cohort 的 D30 累计渠道收入。
 source_documents:
   - 第一期数据报表需求V1.xlsx
   - 数据报表API对应SQL&DSL语句整理.xlsx
@@ -90,6 +91,7 @@ source_documents:
 
 - 计算首存 cohort 在 D1/D3/D7/D15/D30...D360 的累计渠道收入。
 - 统计某渠道首存 cohort 在指定回收周期内的累计渠道收入。
+- 统计某渠道首存 cohort 的 D30 累计渠道收入。
 
 ## 核心表/模型
 
@@ -342,6 +344,6 @@ ORDER BY cs.first_deposit_date, s.relative_day_no;
 
 - 渠道收入口径：`输赢金额 - 洗码金额 - 任务彩金 - 营销金额 - 优惠加扣款`。
 - 这里的“营销金额”按 `dwd_order_activity + dwd_order_promote_activity` 处理；若后续确认还要纳入其他营销表，再补到模板中。
-- `period_days` 建议直接传最大回收天数（如 30 / 60 / 90 / 180 / 360），结果会返回 `D1 ~ Dn` 的每日值和累计值。
+- `period_days` 建议直接传最大回收天数（如 30 / 60 / 90 / 180 / 360），用户表达为“D30”“首存后 D30”“30 天回收周期”时都应映射为 `period_days=30`；结果会返回 `D1 ~ Dn` 的每日值和累计值。
 - SQL 按 TiDB / MySQL 8 风格编写；若运行环境不支持递归 CTE，可改成数字维表/日期维表实现。
 - 当前可视为 SQL 草案，校验通过后可转为 sql_pair。

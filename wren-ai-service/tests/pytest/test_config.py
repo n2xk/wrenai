@@ -27,6 +27,8 @@ def test_settings_default_values():
 
         assert settings.logging_level == "INFO"
         assert settings.development is False
+        assert settings.reload is None
+        assert settings.semantics_preparation_pipeline_timeout_seconds == 180
 
         assert settings.config_path == "config.yaml"
         assert settings.doc_endpoint is None
@@ -41,9 +43,13 @@ def test_settings_env_var_override():
         "ASK_RUNTIME_MODE": "deepagents",
         "ASK_SHADOW_COMPARE_ENABLED": "true",
         "WREN_SEMANTIC_PLAN_MODE": "shadow",
+        "WREN_AI_SERVICE_RELOAD": "false",
+        "WREN_SEMANTICS_PREPARATION_PIPELINE_TIMEOUT_SECONDS": "42",
     }
 
-    with patch("src.config.Settings.config_loader", return_value=[]), patch.dict(
+    with patch("src.config.Settings.config_loader", return_value=[]), patch(
+        "src.config.load_dotenv"
+    ), patch.dict(
         "os.environ", env_vars
     ):
         settings = Settings()
@@ -54,6 +60,8 @@ def test_settings_env_var_override():
         assert settings.ask_runtime_mode == env_vars["ASK_RUNTIME_MODE"]
         assert settings.ask_shadow_compare_enabled is True
         assert settings.semantic_plan_mode == "shadow"
+        assert settings.reload is False
+        assert settings.semantics_preparation_pipeline_timeout_seconds == 42
 
 
 def test_settings_legacy_semantic_plan_bool_enables_enhanced_mode():

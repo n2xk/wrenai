@@ -1167,6 +1167,36 @@ def test_build_template_decision_extracts_explicit_period_day_list():
     assert result["sql_source"] == "anchored_template"
 
 
+def test_build_template_decision_extracts_single_d_period_day():
+    result = build_template_decision(
+        [
+            {
+                "id": "template-04",
+                "question": "统计某渠道首存 cohort 在指定回收周期内的累计渠道收入",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date, :period_days"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "score": 0.95,
+                "status": "active",
+            }
+        ],
+        query=(
+            "统计租户平台990001下渠道990011首存日期在2026-04-01到"
+            "2026-04-07的首存 cohort D30 累计渠道收入"
+        ),
+    )
+
+    assert result["template_id"] == "template-04"
+    assert result["parameters"]["period_days"] == 30
+    assert result["missing_parameters"] == []
+    assert result["sql_source"] == "anchored_template"
+
+
 def test_build_template_decision_ignores_optional_is_null_placeholders():
     result = build_template_decision(
         [
@@ -1592,6 +1622,56 @@ def test_build_template_decision_backfills_top_n_from_related_template_candidate
     assert result["parameters"]["top_n"] == 3
 
 
+def test_build_template_decision_extracts_topn_big_player_aliases():
+    result = build_template_decision(
+        [
+            {
+                "id": "template-09",
+                "title": "所有用户区间汇总",
+                "question": (
+                    "统计某渠道 TOPN 与非TOPN 用户的存款、有效投注、输赢、"
+                    "投充比和杀率"
+                ),
+                "sql": (
+                    "SELECT :tenant_plat_id AS tenant_plat_id, "
+                    ":channel_id AS channel_id, :start_date AS start_date, "
+                    ":end_date AS end_date, :user_segment AS user_segment, "
+                    ":top_n AS top_n"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {
+                    "templateId": "T09",
+                    "features": ["segment", "financial_ratio"],
+                    "positiveCues": ["大户", "投注流水最高", "投充比", "杀率"],
+                    "resultGrain": "time_range + user_segment",
+                },
+                "score": 0.92,
+                "status": "active",
+            }
+        ],
+        query=(
+            "找出租户平台990001渠道990011在2026-04-01到2026-04-07"
+            "投注流水最高的前5个大户，和其他用户对比投充比与杀率"
+        ),
+    )
+
+    assert result["template_id"] == "template-09"
+    assert result["mode"] == "anchored_template"
+    assert result["sql_source"] == "anchored_template"
+    assert result["missing_parameters"] == []
+    assert result["parameters"] == {
+        "tenant_plat_id": 990001,
+        "channel_id": 990011,
+        "start_date": "2026-04-01",
+        "end_date": "2026-04-07",
+        "user_segment": ["TOPN", "NON_TOPN"],
+        "top_n": 5,
+    }
+
+
 def test_build_template_decision_does_not_guess_ambiguous_template_top_n():
     result = build_template_decision(
         [
@@ -1693,6 +1773,79 @@ def test_detect_missing_external_source_requirement_handles_roi_synonyms():
     assert result["instruction"]["required_metrics"] == ["投放金额"]
     assert "缺失指标：投放金额" in result["content"]
     assert "需要粒度：对应统计周期" in result["content"]
+
+
+def test_detect_missing_external_source_requirement_allows_internal_only_degraded_query():
+    result = detect_missing_external_source_requirement(
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-06的综合日报，"
+        "暂时不用外部数据，只展示系统内可查询的原始指标，"
+        "去掉投放金额、PV、UV、下载点击UV及其派生率和首存成本",
+        sql_samples=[
+            {
+                "id": "T01",
+                "question": "按天查看某渠道综合日报指标",
+                "business_signature": {
+                    "external_dependencies": [
+                        "ad_spend",
+                        "access_pv",
+                        "access_uv",
+                        "download_click_uv",
+                    ]
+                },
+            }
+        ],
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+            },
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "access_pv",
+                "name": "访问PV",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+            },
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "access_uv",
+                "name": "访问UV",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+            },
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "download_click_uv",
+                "name": "下载点击UV",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+            },
+        ],
+    )
+
+    assert result is None
+
+
+def test_detect_missing_external_source_requirement_allows_explicit_roi_degraded_query():
+    result = detect_missing_external_source_requirement(
+        "统计租户平台990001下渠道990011首存 cohort 的渠道累计收入，"
+        "暂时不用投放金额，不计算 ROI，只输出累计收入和可查询的首存 cohort 指标",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "metadata": {"trigger_when": ["ROI", "投放金额"]},
+            }
+        ],
+    )
+
+    assert result is None
 
 
 def test_detect_missing_external_source_requirement_uses_configured_grain():

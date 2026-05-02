@@ -33,6 +33,7 @@ trigger_when:
 not_trigger_when:
   - 只查询站内充值、投注、首存、续存、提现指标
   - 只查询 ROI、投放金额、首存成本且不涉及访问 PV
+  - 用户明确说明不用外部数据、去掉 PV / 访问PV，或只展示系统内可查询原始指标
 lifecycle: per_question
 input_modes:
   - single_value

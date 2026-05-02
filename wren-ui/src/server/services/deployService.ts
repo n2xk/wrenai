@@ -16,7 +16,6 @@ import {
   hasCanonicalRuntimeIdentity,
   requirePersistedProjectBridgeId,
   resolvePersistedProjectBridgeId,
-  resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback,
   toPersistedRuntimeIdentityPatch,
   PersistedRuntimeIdentitySource,
 } from '@server/utils/persistedRuntimeIdentity';
@@ -100,6 +99,30 @@ const toAdaptorRuntimeIdentity = (
   deployHash: runtimeIdentity.deployHash ?? null,
   actorUserId: runtimeIdentity.actorUserId ?? null,
 });
+
+const resolveStableDeploymentHashScopeKey = (
+  runtimeIdentity: RuntimeDeploymentLookupIdentity,
+  fallbackProjectBridgeId?: number | null,
+): string | null => {
+  if (runtimeIdentity.kbSnapshotId) {
+    return runtimeIdentity.kbSnapshotId;
+  }
+  if (runtimeIdentity.knowledgeBaseId) {
+    return runtimeIdentity.knowledgeBaseId;
+  }
+  if (runtimeIdentity.workspaceId) {
+    return runtimeIdentity.workspaceId;
+  }
+  if (runtimeIdentity.deployHash) {
+    return runtimeIdentity.deployHash;
+  }
+
+  const bridgeProjectId = resolvePersistedProjectBridgeId(
+    runtimeIdentity,
+    fallbackProjectBridgeId,
+  );
+  return bridgeProjectId != null ? bridgeProjectId.toString() : null;
+};
 
 export class DeployService implements IDeployService {
   private wrenAIAdaptor: IWrenAIAdaptor;
@@ -342,11 +365,10 @@ export class DeployService implements IDeployService {
     runtimeIdentity: RuntimeDeploymentLookupIdentity,
     fallbackProjectBridgeId?: number | null,
   ) {
-    const scopeKey =
-      resolveRuntimeScopeIdFromPersistedIdentityWithProjectBridgeFallback(
-        runtimeIdentity,
-        fallbackProjectBridgeId,
-      );
+    const scopeKey = resolveStableDeploymentHashScopeKey(
+      runtimeIdentity,
+      fallbackProjectBridgeId,
+    );
 
     if (scopeKey == null) {
       throw new Error('createMDLHashByRuntimeIdentity requires a scope key');

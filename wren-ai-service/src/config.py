@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     # debug config
     logging_level: str = Field(default="INFO")
     development: bool = Field(default=False)
+    reload: bool | None = Field(default=None, alias="WREN_AI_SERVICE_RELOAD")
+    semantics_preparation_pipeline_timeout_seconds: int = Field(
+        default=180,
+        alias="WREN_SEMANTICS_PREPARATION_PIPELINE_TIMEOUT_SECONDS",
+    )
 
     # this is used to store the config like type: llm, embedder, etc. and we will process them later
     config_path: str = Field(default="config.yaml", alias="CONFIG_PATH")

@@ -87,11 +87,14 @@ def health():
 
 
 if __name__ == "__main__":
+    reload_enabled = (
+        settings.reload if settings.reload is not None else settings.development
+    )
     uvicorn.run(
         "src.__main__:app",
         host=settings.host,
         port=settings.port,
-        reload=settings.development,
+        reload=reload_enabled,
         reload_includes=["src/**/*.py", ".env.dev", "config.yaml"],
         reload_excludes=["tests/**/*.py", "eval/**/*.py"],
         workers=1,

@@ -16,6 +16,7 @@ import {
 import { normalizeRuntimeScope } from './askingServiceRuntimeSupport';
 import { buildThreadResponseIntentState } from './threadResponseIntentState';
 import { assertAskingTaskIsUnbound } from './askingTaskBindingGuard';
+import { resolvePreviewSqlMode } from '@server/utils/templateSqlExecution';
 
 interface AskingServiceThreadLike {
   threadRepository: Pick<
@@ -157,6 +158,7 @@ export const createThreadAction = async (
     responseKind: input.responseKind || 'ANSWER',
     sourceResponseId: input.sourceResponseId ?? null,
     sql: input.sql,
+    sqlMode: resolvePreviewSqlMode(input.trackedAskingResult),
     threadId: thread.id,
   });
 
@@ -437,6 +439,7 @@ export const createThreadResponseAction = async (
     responseKind: input.responseKind || 'ANSWER',
     sourceResponseId: input.sourceResponseId ?? null,
     sql,
+    sqlMode: resolvePreviewSqlMode(input.trackedAskingResult, sourceResponse),
     threadId: thread.id,
   });
 

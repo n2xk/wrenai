@@ -12,8 +12,16 @@ type TemplateDecisionCarrier =
   | {
       detail?: any;
     }
+  | {
+      sqlMode?: 'wren' | 'dialect' | null;
+      artifactLineage?: {
+        sqlMode?: 'wren' | 'dialect' | null;
+      } | null;
+    }
   | null
   | undefined;
+
+export type PreviewSqlMode = 'wren' | 'dialect';
 
 export const getTemplateDecision = (
   carrier: TemplateDecisionCarrier,
@@ -43,9 +51,52 @@ export const shouldExecuteTemplateSqlAsDialect = (
     !(templateDecision.missingParameters || []).length,
   );
 
+export const getStoredPreviewSqlMode = (
+  carrier: TemplateDecisionCarrier,
+): PreviewSqlMode | undefined => {
+  if (!carrier || typeof carrier !== 'object') {
+    return undefined;
+  }
+
+  if ('sqlMode' in carrier && carrier.sqlMode) {
+    return carrier.sqlMode;
+  }
+
+  if (
+    'artifactLineage' in carrier &&
+    carrier.artifactLineage?.sqlMode
+  ) {
+    return carrier.artifactLineage.sqlMode;
+  }
+
+  if ('detail' in carrier && carrier.detail?.sqlMode) {
+    return carrier.detail.sqlMode;
+  }
+
+  return undefined;
+};
+
 export const getPreviewSqlModeForTemplateCarrier = (
   carrier: TemplateDecisionCarrier,
-) =>
-  shouldExecuteTemplateSqlAsDialect(getTemplateDecision(carrier))
+) => {
+  const storedSqlMode = getStoredPreviewSqlMode(carrier);
+  if (storedSqlMode) {
+    return storedSqlMode;
+  }
+
+  return shouldExecuteTemplateSqlAsDialect(getTemplateDecision(carrier))
     ? 'dialect'
     : undefined;
+};
+
+export const resolvePreviewSqlMode = (
+  ...carriers: TemplateDecisionCarrier[]
+): PreviewSqlMode | undefined => {
+  for (const carrier of carriers) {
+    const sqlMode = getPreviewSqlModeForTemplateCarrier(carrier);
+    if (sqlMode) {
+      return sqlMode;
+    }
+  }
+  return undefined;
+};

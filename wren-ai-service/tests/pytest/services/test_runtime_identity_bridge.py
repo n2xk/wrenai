@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -28,6 +29,15 @@ from src.web.v1.services.sql_pairs import SqlPairsService
 class PipelineStub(SimpleNamespace):
     def __init__(self, result=None):
         super().__init__(run=AsyncMock(return_value=result if result is not None else {}))
+
+
+class SlowPipelineStub(SimpleNamespace):
+    def __init__(self):
+        async def run(**_kwargs):
+            await asyncio.sleep(1)
+            return {}
+
+        super().__init__(run=AsyncMock(side_effect=run))
 
 
 class CleanablePipelineStub(SimpleNamespace):
@@ -442,6 +452,29 @@ async def test_prepare_semantics_skips_missing_optional_pipelines():
     assert status.status == "finished"
     for pipeline in service._pipelines.values():
         assert pipeline.run.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_prepare_semantics_fails_fast_when_pipeline_times_out():
+    service = SemanticsPreparationService(
+        {"db_schema": SlowPipelineStub()},
+        pipeline_timeout_seconds=0.01,
+    )
+    request = SemanticsPreparationRequest.model_validate(
+        {
+            "mdl": "{}",
+            "mdl_hash": "mdl-timeout",
+        }
+    )
+
+    result = await service.prepare_semantics(request)
+    status = service.get_prepare_semantics_status(
+        SemanticsPreparationStatusRequest(mdl_hash="mdl-timeout")
+    )
+
+    assert result["metadata"]["error_type"] == "INDEXING_FAILED"
+    assert status.status == "failed"
+    assert "db_schema" in status.error.message
 
 
 @pytest.mark.asyncio

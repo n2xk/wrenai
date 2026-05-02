@@ -140,6 +140,45 @@ describe('DeployService', () => {
         deployHash: 'deploy-1',
       }),
     );
+    expect(
+      deployService.createMDLHashByRuntimeIdentity(manifest, {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-newer',
+      }),
+    ).toEqual(
+      deployService.createMDLHashByRuntimeIdentity(manifest, {
+        projectId: null,
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: 'kb-1',
+        kbSnapshotId: 'snapshot-1',
+        deployHash: 'deploy-older',
+      }),
+    );
+  });
+
+  it('keeps deploy-hash-only runtime hashes scoped to the deploy hash', () => {
+    const manifest = { key: 'value' };
+
+    expect(
+      deployService.createMDLHashByRuntimeIdentity(manifest, {
+        projectId: null,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-a',
+      }),
+    ).not.toEqual(
+      deployService.createMDLHashByRuntimeIdentity(manifest, {
+        projectId: null,
+        workspaceId: null,
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: 'deploy-b',
+      }),
+    );
   });
 
   it('deploys when only deploy hash is available and project bridge is resolved from deployment history', async () => {

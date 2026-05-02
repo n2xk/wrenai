@@ -74,6 +74,7 @@ export type ResponseArtifactPlan = {
 export type ResponseArtifactLineage = {
   sourceResponseId?: number | null;
   inheritedWorkbenchArtifacts?: WorkbenchArtifactKind[] | null;
+  sqlMode?: 'wren' | 'dialect' | null;
 };
 
 export type HomeIntentEnvelope = {

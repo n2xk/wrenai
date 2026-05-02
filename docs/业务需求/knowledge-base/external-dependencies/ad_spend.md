@@ -23,6 +23,7 @@ trigger_when:
 not_trigger_when:
   - 只查询站内充值、提现、投注、登录、注册指标
   - 只查询首存名单、续存人数、玩家明细，不要求成本或 ROI
+  - 用户明确说明不用外部数据、去掉投放金额，或暂时不计算 ROI / 首存成本等投放派生指标
 lifecycle: per_question
 input_modes:
   - single_value
