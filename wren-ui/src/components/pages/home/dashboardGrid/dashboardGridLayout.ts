@@ -10,7 +10,7 @@ export const getLayoutToGrid = (item: DashboardGridItem) => ({
   x: item.layout.x,
   y: item.layout.y,
   w: item.layout.w,
-  h: item.layout.h,
+  h: Math.max(item.layout.h, resolveDashboardGridItemMinHeight(item)),
 });
 
 export const resolveDashboardGridWidth = (containerWidth: number) =>

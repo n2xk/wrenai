@@ -450,6 +450,7 @@ export type ThreadResponse = {
   askingTask?: AskingTask | null;
   breakdownDetail?: ThreadResponseBreakdownDetail | null;
   chartDetail?: ThreadResponseChartDetail | null;
+  createdAt?: string | null;
   id: number;
   deployHash?: string | null;
   kbSnapshotId?: string | null;
@@ -461,6 +462,7 @@ export type ThreadResponse = {
   sql?: string | null;
   sourceResponseId?: number | null;
   threadId: number;
+  updatedAt?: string | null;
   view?: ViewInfo | null;
   workspaceId?: string | null;
 };

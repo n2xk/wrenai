@@ -52,6 +52,7 @@ import { resolveConversationAidOwnerResponseId } from '@/features/home/thread/co
 import { useThreadWorkbenchMessages } from '@/features/home/thread/threadWorkbenchMessages';
 import { resolveTemplateDecisionPresentation } from '@/features/home/thread/templateDecisionPresentation';
 import { resolveThreadResponseSqlPreviewMode } from '@/features/home/thread/threadResponseSqlMode';
+import { formatThreadResponseReplyTime } from './answerResultTime';
 
 const adjustmentType = {
   [ThreadResponseAdjustmentType.APPLY_SQL]: '已应用手动 SQL',
@@ -294,7 +295,7 @@ const QuestionBubbleRow = styled.div`
 const QuestionBubble = styled.div<{ $selected?: boolean }>`
   width: fit-content;
   max-width: min(100%, 76%);
-  padding: 12px 15px;
+  padding: 10px 14px;
   border-radius: var(--nova-radius-panel) var(--nova-radius-panel)
     var(--nova-radius-control) var(--nova-radius-panel);
   border: 1px solid
@@ -309,9 +310,9 @@ const QuestionBubble = styled.div<{ $selected?: boolean }>`
 const QuestionBubbleText = styled.h4`
   margin: 0;
   color: #1f2937;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.55;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 `;
 
@@ -373,6 +374,7 @@ const AssistantIdentityRow = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 `;
 
 const AssistantIdentityName = styled.span`
@@ -391,6 +393,13 @@ const AssistantIdentityMeta = styled.span`
   background: rgba(15, 23, 42, 0.025);
   color: #98a2b3;
   font-size: 10.5px;
+  font-weight: 500;
+`;
+
+const AssistantReplyTime = styled.span`
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1.45;
   font-weight: 500;
 `;
 
@@ -505,6 +514,7 @@ export default function AnswerResult(props: Props) {
     sql,
     view,
     adjustment,
+    createdAt,
   } = threadResponse;
 
   const isAdjustment = !!adjustment;
@@ -658,6 +668,7 @@ export default function AnswerResult(props: Props) {
     : isAnswerPrepared;
   const fallbackArtifact =
     primaryArtifact || resolveFallbackWorkbenchArtifact(threadResponse);
+  const replyTime = formatThreadResponseReplyTime(createdAt);
 
   const selectCurrentResponse = () => {
     if (isRecommendationFollowUp || !fallbackArtifact) {
@@ -1260,6 +1271,9 @@ export default function AnswerResult(props: Props) {
                       ? messages.chart.badge
                       : messages.answer.badge}
                 </AssistantIdentityMeta>
+                {replyTime ? (
+                  <AssistantReplyTime>回复 {replyTime}</AssistantReplyTime>
+                ) : null}
               </AssistantIdentityRow>
 
               {isAdjustment ? (

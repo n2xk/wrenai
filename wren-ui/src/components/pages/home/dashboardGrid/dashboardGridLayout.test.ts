@@ -57,4 +57,29 @@ describe('dashboard grid layout helpers', () => {
       },
     ]);
   });
+
+  it('renders pinned chart cards at least two rows tall', () => {
+    expect(
+      resolveDashboardGridLayouts([
+        {
+          id: 9,
+          dashboardId: 75,
+          type: 'LINE',
+          displayName: '图表卡片 9',
+          layout: { x: 0, y: 0, w: 3, h: 1 },
+          detail: {
+            sql: 'select 1',
+          },
+        } as any,
+      ]),
+    ).toEqual([
+      {
+        i: '9',
+        x: 0,
+        y: 0,
+        w: 3,
+        h: 2,
+      },
+    ]);
+  });
 });

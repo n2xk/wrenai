@@ -123,6 +123,8 @@ export interface ThreadResponse {
   askingTaskId?: number;
   viewId?: number;
   threadId: number;
+  createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
   responseKind?: string | null;
   sourceResponseId?: number | null;
   resolvedIntent?: ResolvedHomeIntent | null;

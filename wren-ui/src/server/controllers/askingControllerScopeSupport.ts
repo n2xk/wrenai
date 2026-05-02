@@ -181,6 +181,8 @@ export const toDetailedThread = (
       id: response.id,
       viewId: response.viewId,
       threadId: response.threadId,
+      createdAt: response.createdAt ?? null,
+      updatedAt: response.updatedAt ?? null,
       question: response.question,
       sql: response.sql,
       askingTaskId: response.askingTaskId,

@@ -768,6 +768,8 @@ export const serializeThreadResponsePayload = async ({
   return {
     id: response.id,
     threadId: response.threadId,
+    createdAt: response.createdAt ?? null,
+    updatedAt: response.updatedAt ?? null,
     workspaceId: response.workspaceId ?? runtimeIdentity.workspaceId ?? null,
     knowledgeBaseId:
       response.knowledgeBaseId ?? runtimeIdentity.knowledgeBaseId ?? null,

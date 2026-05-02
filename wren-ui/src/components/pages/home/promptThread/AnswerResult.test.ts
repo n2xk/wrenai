@@ -7,6 +7,7 @@ import {
   scheduleAutoGenerateAnswer,
   shouldAutoGenerateAnswer,
 } from './answerGeneration';
+import { formatThreadResponseReplyTime } from './answerResultTime';
 import {
   hasSettledConversationAids,
   isClarificationRequiredResponse,
@@ -14,6 +15,14 @@ import {
 } from '@/features/home/thread/conversationAidVisibility';
 
 describe('AnswerResult answer auto-generation guard', () => {
+  it('formats reply time for the assistant header and ignores invalid values', () => {
+    expect(formatThreadResponseReplyTime(null)).toBeNull();
+    expect(formatThreadResponseReplyTime('not-a-date')).toBeNull();
+    expect(
+      formatThreadResponseReplyTime('2026-05-02T03:21:10.000Z'),
+    ).toMatch(/^\d{2}\/\d{2} \d{2}:\d{2}$/);
+  });
+
   it('becomes true when SQL arrives after the ask task already finished', () => {
     expect(
       shouldAutoGenerateAnswer({

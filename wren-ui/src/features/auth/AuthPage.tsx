@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { Alert, Form, Input, Spin, Switch } from 'antd';
 import {
   buildRuntimeScopeUrl,
   ClientRuntimeScopeSelector,
+  readPersistedRuntimeScopeSelector,
 } from '@/runtime/client/runtimeScope';
 import NovaBrandMark from '@/components/brand/NovaBrandMark';
 import {
@@ -57,14 +58,24 @@ const DEFAULT_LOGIN_VALUES: AuthFormValues = {
 export const resolveAuthRedirectPath = (
   session: AuthSessionPayload | null,
   redirectTo?: string | null,
+  preferredRuntimeSelector?: ClientRuntimeScopeSelector | null,
 ): string => {
   if (!session?.authenticated) {
     return Path.Auth;
   }
 
-  const runtimeSelector = session.runtimeSelector as
+  const sessionRuntimeSelector = session.runtimeSelector as
     | ClientRuntimeScopeSelector
     | undefined;
+  const persistedWorkspaceId = resolvePersistedLoginWorkspaceId(
+    preferredRuntimeSelector,
+  );
+  const runtimeSelector = persistedWorkspaceId
+    ? {
+        ...preferredRuntimeSelector,
+        workspaceId: persistedWorkspaceId,
+      }
+    : sessionRuntimeSelector;
 
   if (runtimeSelector?.workspaceId) {
     return resolvePostAuthRedirectPath({
@@ -105,6 +116,13 @@ export const resolveLoginSuccessRedirectPath = (
     redirectTo,
     fallbackPath: Path.Workspace,
   });
+};
+
+export const resolvePersistedLoginWorkspaceId = (
+  selector?: ClientRuntimeScopeSelector | null,
+): string | undefined => {
+  const workspaceId = selector?.workspaceId?.trim();
+  return workspaceId || undefined;
 };
 
 const extractErrorMessage = (error: unknown): string | undefined => {
@@ -164,8 +182,13 @@ export default function AuthPage() {
       ),
     [routerRedirectTo],
   );
-  const redirectPath = useMemo(
-    () => resolveAuthRedirectPath(authSession.data, redirectTo),
+  const resolveCurrentAuthRedirectPath = useCallback(
+    () =>
+      resolveAuthRedirectPath(
+        authSession.data,
+        redirectTo,
+        readPersistedRuntimeScopeSelector(),
+      ),
     [authSession.data, redirectTo],
   );
 
@@ -174,11 +197,11 @@ export default function AuthPage() {
       return;
     }
 
-    router.replace(redirectPath).catch(() => null);
+    router.replace(resolveCurrentAuthRedirectPath()).catch(() => null);
   }, [
     authSession.authenticated,
     authSession.loading,
-    redirectPath,
+    resolveCurrentAuthRedirectPath,
     router,
     router.isReady,
   ]);
@@ -211,6 +234,9 @@ export default function AuthPage() {
           email: values.email,
           password: values.password,
           autoBootstrap: true,
+          workspaceId: resolvePersistedLoginWorkspaceId(
+            readPersistedRuntimeScopeSelector(),
+          ),
         }),
       });
       const payload = (await response

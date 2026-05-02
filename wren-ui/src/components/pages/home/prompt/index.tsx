@@ -241,6 +241,7 @@ export default forwardRef<Attributes, Props>(function Prompt(props, ref) {
         buttonMode={buttonMode}
         layout={inputLayout}
         footerContent={footerContent}
+        compact={variant === 'embedded'}
         disabled={inputDisabled}
         onAtTrigger={onAtTrigger}
       />

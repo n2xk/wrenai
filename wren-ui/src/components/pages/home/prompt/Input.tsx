@@ -14,7 +14,10 @@ import ArrowUpOutlined from '@ant-design/icons/ArrowUpOutlined';
 import styled from 'styled-components';
 import { attachLoading } from '@/utils/helper';
 
-const InputShell = styled.div<{ $layout?: 'inline' | 'stacked' }>`
+const InputShell = styled.div<{
+  $compact?: boolean;
+  $layout?: 'inline' | 'stacked';
+}>`
   min-width: 0;
   display: flex;
   flex: 1;
@@ -41,8 +44,9 @@ const InputShell = styled.div<{ $layout?: 'inline' | 'stacked' }>`
     box-shadow: none !important;
     resize: none;
     padding: ${(props) => (props.$layout === 'stacked' ? '4px 0' : '2px 0')};
-    font-size: ${(props) => (props.$layout === 'stacked' ? '15px' : '16px')};
-    line-height: 1.7;
+    font-size: ${(props) =>
+      props.$compact ? '14px' : props.$layout === 'stacked' ? '15px' : '16px'};
+    line-height: ${(props) => (props.$compact ? 1.6 : 1.7)};
     background: transparent;
   }
 
@@ -117,6 +121,7 @@ interface Props {
   buttonMode?: 'text' | 'icon';
   layout?: 'inline' | 'stacked';
   footerContent?: ReactNode;
+  compact?: boolean;
   disabled?: boolean;
   onAtTrigger?: () => void;
 }
@@ -136,6 +141,7 @@ export default forwardRef<PromptInputHandle, Props>(
       buttonMode = 'text',
       layout = 'inline',
       footerContent,
+      compact = false,
       disabled = false,
       onAtTrigger,
     } = props;
@@ -225,7 +231,7 @@ export default forwardRef<PromptInputHandle, Props>(
 
     if (layout === 'stacked') {
       return (
-        <InputShell $layout={layout}>
+        <InputShell $layout={layout} $compact={compact}>
           {leadingIcon ? (
             <span className="prompt-leading-icon">{leadingIcon}</span>
           ) : null}
@@ -251,7 +257,7 @@ export default forwardRef<PromptInputHandle, Props>(
 
     return (
       <InlinePromptRow>
-        <InputShell $layout={layout}>
+        <InputShell $layout={layout} $compact={compact}>
           {leadingIcon ? (
             <span className="prompt-leading-icon">{leadingIcon}</span>
           ) : null}
