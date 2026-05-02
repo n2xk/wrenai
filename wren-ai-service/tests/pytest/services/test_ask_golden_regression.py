@@ -10,7 +10,9 @@ from src.web.v1.services.ask import AskRequest, AskResultRequest, AskService
 
 class RecordingPipeline(SimpleNamespace):
     def __init__(self, result=None):
-        super().__init__(run=AsyncMock(return_value=result if result is not None else {}))
+        super().__init__(
+            run=AsyncMock(return_value=result if result is not None else {})
+        )
 
 
 def _sql_generation_result(valid_sql=None, invalid_generation_result=None):
@@ -32,7 +34,11 @@ def _template_validation_result(valid_sql=None, invalid_generation_result=None):
 def build_ask_pipelines(scenario: dict) -> dict[str, RecordingPipeline]:
     pipelines = {
         "historical_question": RecordingPipeline(
-            {"formatted_output": {"documents": scenario.get("historical_documents", [])}}
+            {
+                "formatted_output": {
+                    "documents": scenario.get("historical_documents", [])
+                }
+            }
         ),
         "sql_pairs_retrieval": RecordingPipeline(
             {"formatted_output": {"documents": scenario.get("sql_pairs_documents", [])}}
@@ -58,9 +64,7 @@ def build_ask_pipelines(scenario: dict) -> dict[str, RecordingPipeline]:
             {
                 "construct_retrieval_results": {
                     "retrieval_results": scenario.get("schema_documents", []),
-                    "has_calculated_field": scenario.get(
-                        "has_calculated_field", False
-                    ),
+                    "has_calculated_field": scenario.get("has_calculated_field", False),
                     "has_metric": scenario.get("has_metric", False),
                     "has_json_field": scenario.get("has_json_field", False),
                 }
@@ -459,9 +463,7 @@ async def test_ask_clarifies_missing_template_period_days_before_sql_generation(
     assert ask_result.template_decision is not None
     assert ask_result.template_decision.fallback_reason == "missing_required_slot"
     assert ask_result.template_decision.missing_parameters == ["period_days"]
-    assert result["metadata"]["clarification_state"]["pending_slots"] == [
-        "period_days"
-    ]
+    assert result["metadata"]["clarification_state"]["pending_slots"] == ["period_days"]
     assert pipelines["sql_generation"].run.await_count == 0
     assert pipelines["sql_correction"].run.await_count == 0
 
@@ -502,12 +504,12 @@ async def test_ask_renders_generic_segment_breakdown_from_template_context_top_n
                         "有效投注、输赢、投充比、杀率"
                     ),
                     "sql": template_sql,
-                        "asset_kind": "sql_template",
-                        "template_level": "L2",
-                        "template_mode": "anchored_template",
-                        "source_type": "business_import",
-                        "score": 0.10,
-                        "business_signature": {
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "anchored_template",
+                    "source_type": "business_import",
+                    "score": 0.10,
+                    "business_signature": {
                         "templateId": "T09",
                         "questionVariants": [
                             "统计某渠道在指定区间内全部用户的投充比和杀率",
@@ -515,7 +517,7 @@ async def test_ask_renders_generic_segment_breakdown_from_template_context_top_n
                             "统计某渠道在指定区间内全部用户/分层用户的存款、充提差、有效投注、输赢、投充比、杀率",
                         ],
                     },
-                }
+                },
             ],
             "schema_documents": [
                 {
@@ -656,8 +658,7 @@ async def test_ask_validates_direct_template_when_schema_retrieval_is_empty():
     )
     case = {
         "query": (
-            "统计租户平台990001下渠道990011在2026-04-01到2026-04-07"
-            "的充值用户和金额"
+            "统计租户平台990001下渠道990011在2026-04-01到2026-04-07" "的充值用户和金额"
         ),
         "scenario": {
             "sql_pairs_documents": [
@@ -795,7 +796,7 @@ async def test_ask_rewrites_direct_template_with_inferred_workspace_prefix():
 
 
 @pytest.mark.asyncio
-async def test_ask_rejects_correction_that_changes_anchored_template_core():
+async def test_ask_retries_anchored_template_core_rejection_as_reference():
     template_sql = """
     WITH base AS (
       SELECT
@@ -834,9 +835,81 @@ async def test_ask_rejects_correction_that_changes_anchored_template_core():
                     "error": "syntax error",
                 }
             },
-            "sql_correction": {
-                "valid_sql": "SELECT COUNT(*) AS users FROM deposits"
+            "sql_correction": {"valid_sql": "SELECT COUNT(*) AS users FROM deposits"},
+        },
+    }
+    pipelines = build_ask_pipelines(case["scenario"])
+    service = AskService(pipelines=pipelines, ask_runtime_mode="deepagents")
+    request = make_request(case)
+
+    result = await service.ask(request)
+    ask_result = service.get_ask_result(AskResultRequest(query_id=request.query_id))
+
+    assert ask_result.status == "finished"
+    assert ask_result.response is not None
+    assert ask_result.response[0].sql == "SELECT COUNT(*) AS users FROM deposits"
+    assert ask_result.template_decision is not None
+    assert ask_result.template_decision.mode == "reference"
+    assert ask_result.template_decision.fallback_reason == (
+        "template_core_protection_reference_retry"
+    )
+    assert pipelines["sql_generation"].run.await_count == 2
+    assert (
+        pipelines["sql_generation"].run.await_args_list[1].kwargs["sql_samples"] == []
+    )
+    assert not any(
+        instruction.get("source") == "template_decision"
+        for instruction in pipelines["sql_generation"]
+        .run.await_args_list[1]
+        .kwargs["instructions"]
+        if isinstance(instruction, dict)
+    )
+    assert result["metadata"]["template_decision"]["fallback_reason"] == (
+        "template_core_protection_reference_retry"
+    )
+
+
+@pytest.mark.asyncio
+async def test_ask_rejects_correction_that_changes_executable_template_core():
+    template_sql = """
+    WITH base AS (
+      SELECT
+        CASE WHEN amount < 100 THEN 'low' ELSE 'high' END AS bucket
+      FROM deposits
+      WHERE dt >= :start_date
+    )
+    SELECT bucket, COUNT(*) AS users
+    FROM base
+    GROUP BY bucket
+    """
+    case = {
+        "query": "首存金额分桶",
+        "scenario": {
+            "sql_pairs_documents": [
+                {
+                    "id": "template-13",
+                    "question": "首存金额分桶",
+                    "sql": template_sql,
+                    "asset_kind": "sql_template",
+                    "template_level": "L2",
+                    "template_mode": "executable_template",
+                }
+            ],
+            "schema_documents": [
+                {
+                    "table_name": "deposits",
+                    "table_ddl": "CREATE TABLE deposits(amount int, dt date);",
+                }
+            ],
+            "sql_generation": {
+                "invalid_generation_result": {
+                    "type": "EXECUTION_ERROR",
+                    "original_sql": template_sql,
+                    "sql": template_sql,
+                    "error": "syntax error",
+                }
             },
+            "sql_correction": {"valid_sql": "SELECT COUNT(*) AS users FROM deposits"},
         },
     }
     pipelines = build_ask_pipelines(case["scenario"])
@@ -848,9 +921,11 @@ async def test_ask_rejects_correction_that_changes_anchored_template_core():
 
     assert ask_result.status == "failed"
     assert ask_result.template_decision is not None
+    assert ask_result.template_decision.template_mode == "executable_template"
     assert ask_result.template_decision.fallback_reason == (
         "template_core_protection_rejected_correction"
     )
+    assert pipelines["sql_generation"].run.await_count == 1
     assert result["metadata"]["template_decision"]["fallback_reason"] == (
         "template_core_protection_rejected_correction"
     )
@@ -1012,8 +1087,7 @@ async def test_ask_falls_back_when_direct_template_sql_fails_validation():
     assert ask_result.template_decision.dry_run_compatible is False
     assert ask_result.template_decision.dialect_compatible is False
     assert (
-        ask_result.template_decision.validation_error
-        == "Unknown column bucket_label"
+        ask_result.template_decision.validation_error == "Unknown column bucket_label"
     )
     assert result["metadata"]["template_decision"]["fallback_reason"] == (
         "template_dry_run_failed"

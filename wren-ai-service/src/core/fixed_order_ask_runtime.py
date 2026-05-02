@@ -377,7 +377,9 @@ def _query_excludes_external_dependency(
     if _query_requests_internal_only(query):
         return True
 
-    exclusion_cue = "|".join(re.escape(cue) for cue in EXTERNAL_DEPENDENCY_EXCLUSION_CUES)
+    exclusion_cue = "|".join(
+        re.escape(cue) for cue in EXTERNAL_DEPENDENCY_EXCLUSION_CUES
+    )
     for text in _external_dependency_exclusion_texts(dependency):
         if not text:
             continue
@@ -465,24 +467,25 @@ def _extract_configured_external_dependencies(
             )
 
     for instruction in instructions or []:
-        asset_type = _get_sample_value(instruction, "knowledge_asset_type") or _get_sample_value(
-            instruction, "knowledgeAssetType"
-        )
+        asset_type = _get_sample_value(
+            instruction, "knowledge_asset_type"
+        ) or _get_sample_value(instruction, "knowledgeAssetType")
         if asset_type != "external_dependency":
             continue
 
-        dependency_id = (
-            _get_sample_value(instruction, "external_dependency_id")
-            or _get_sample_value(instruction, "externalDependencyId")
-        )
+        dependency_id = _get_sample_value(
+            instruction, "external_dependency_id"
+        ) or _get_sample_value(instruction, "externalDependencyId")
         metadata = _get_sample_value(instruction, "metadata") or {}
         if not isinstance(metadata, dict):
             metadata = {}
         upsert_dependency(
             dependency_id,
-            name=_canonical_dependency_name(_normalize_dependency_id(dependency_id))
-            if not _get_sample_value(instruction, "name")
-            else _get_sample_value(instruction, "name"),
+            name=(
+                _canonical_dependency_name(_normalize_dependency_id(dependency_id))
+                if not _get_sample_value(instruction, "name")
+                else _get_sample_value(instruction, "name")
+            ),
             aliases=_get_sample_value(instruction, "aliases") or [],
             source_status=_get_sample_value(instruction, "source_status")
             or _get_sample_value(instruction, "sourceStatus")
@@ -508,9 +511,7 @@ def _extract_configured_external_dependencies(
             not_trigger_when=metadata.get("not_trigger_when")
             or metadata.get("notTriggerWhen")
             or [],
-            input_modes=metadata.get("input_modes")
-            or metadata.get("inputModes")
-            or [],
+            input_modes=metadata.get("input_modes") or metadata.get("inputModes") or [],
             lifecycle=metadata.get("lifecycle") or "per_question",
             validation=metadata.get("validation") or {},
             matched_by_instruction=True,
@@ -750,7 +751,9 @@ def detect_supplied_external_dependency_coverage(
         }
         for dependency in missing_dependencies
     ]
-    if not evaluations or not all(evaluation["satisfied"] for evaluation in evaluations):
+    if not evaluations or not all(
+        evaluation["satisfied"] for evaluation in evaluations
+    ):
         return None
 
     return {
@@ -808,9 +811,9 @@ def _collect_template_context_texts(value: Any) -> list[str]:
 
 
 def _get_business_signature(sample: Any) -> dict[str, Any]:
-    business_signature = _get_sample_value(sample, "business_signature") or _get_sample_value(
-        sample, "businessSignature"
-    )
+    business_signature = _get_sample_value(
+        sample, "business_signature"
+    ) or _get_sample_value(sample, "businessSignature")
     return business_signature if isinstance(business_signature, dict) else {}
 
 
@@ -1060,7 +1063,10 @@ def _resolve_history_channel_ids(histories: Sequence[Any] | None) -> list[int]:
 
 
 def _history_has_date_context(histories: Sequence[Any] | None) -> bool:
-    return any(_extract_date_range_from_text(question) for question in _iter_history_questions(histories))
+    return any(
+        _extract_date_range_from_text(question)
+        for question in _iter_history_questions(histories)
+    )
 
 
 def detect_missing_tenant_plat_id_requirement(
@@ -1113,7 +1119,10 @@ def _query_is_ambiguous_channel_performance_question(query: Optional[str]) -> bo
         r"帮我看看.*渠道.*最近",
         r"看一下.*渠道.*最近",
     ]
-    if not any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in vague_performance_cues):
+    if not any(
+        re.search(pattern, text, flags=re.IGNORECASE)
+        for pattern in vague_performance_cues
+    ):
         return False
 
     # If the user already named a concrete metric, let the normal slot/external
@@ -1278,22 +1287,27 @@ def detect_missing_required_slot_requirement(
     histories: Sequence[Any] | None = None,
     resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
-    return detect_missing_tenant_plat_id_requirement(
-        query,
-        histories=histories,
-        resolved_slots=resolved_slots,
-    ) or detect_missing_ambiguous_channel_requirement(
-        query,
-        histories=histories,
-        resolved_slots=resolved_slots,
-    ) or detect_missing_financial_ratio_scope_requirement(
-        query,
-        histories=histories,
-        resolved_slots=resolved_slots,
-    ) or detect_missing_distribution_scope_requirement(
-        query,
-        histories=histories,
-        resolved_slots=resolved_slots,
+    return (
+        detect_missing_tenant_plat_id_requirement(
+            query,
+            histories=histories,
+            resolved_slots=resolved_slots,
+        )
+        or detect_missing_ambiguous_channel_requirement(
+            query,
+            histories=histories,
+            resolved_slots=resolved_slots,
+        )
+        or detect_missing_financial_ratio_scope_requirement(
+            query,
+            histories=histories,
+            resolved_slots=resolved_slots,
+        )
+        or detect_missing_distribution_scope_requirement(
+            query,
+            histories=histories,
+            resolved_slots=resolved_slots,
+        )
     )
 
 
@@ -1412,7 +1426,9 @@ def _extract_slot_value_ids(slot_values: dict[str, Any] | None, slot: str) -> li
     if isinstance(value, int):
         return [value]
     if isinstance(value, str):
-        return _extract_integer_values([r"((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)"], value)
+        return _extract_integer_values(
+            [r"((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)"], value
+        )
     if isinstance(value, (list, tuple, set)):
         ids: list[int] = []
         for item in value:
@@ -1538,7 +1554,9 @@ def _extract_pattern_keys(
     ]
 
 
-def _infer_semantic_subject(query: Optional[str], features: Sequence[str]) -> Optional[str]:
+def _infer_semantic_subject(
+    query: Optional[str], features: Sequence[str]
+) -> Optional[str]:
     text = query or ""
     if "cohort" in features or re.search(r"首存|首充", text, flags=re.IGNORECASE):
         return "cohort"
@@ -1721,9 +1739,9 @@ def _build_policy_clarification_prompt(slots: Sequence[str]) -> str:
 def _build_policy_clarification_request(slots: Sequence[str]) -> dict[str, Any]:
     missing_slots = list(slots)
     return {
-        "slot": missing_slots[0]
-        if len(missing_slots) == 1
-        else "ask_policy_required_slots",
+        "slot": (
+            missing_slots[0] if len(missing_slots) == 1 else "ask_policy_required_slots"
+        ),
         "prompt": _build_policy_clarification_prompt(missing_slots),
         "hint_values": [],
         "blocking": True,
@@ -1848,13 +1866,15 @@ def build_minimal_semantic_plan(
     if tenant_ids:
         resolved_slots["tenant_plat_id"] = _build_resolved_slot(
             value=_collapse_single_or_list(tenant_ids),
-            source="explicit_user_input"
-            if explicit_tenant_ids
-            else "clarification_reply"
-            if slot_tenant_ids
-            else "history_context"
-            if history_tenant_ids
-            else "unknown",
+            source=(
+                "explicit_user_input"
+                if explicit_tenant_ids
+                else (
+                    "clarification_reply"
+                    if slot_tenant_ids
+                    else "history_context" if history_tenant_ids else "unknown"
+                )
+            ),
         )
     if channel_ids:
         resolved_slots["channel_id"] = _build_resolved_slot(
@@ -1864,9 +1884,11 @@ def build_minimal_semantic_plan(
     for key, value in date_range.items():
         resolved_slots[key] = _build_resolved_slot(
             value=value,
-            source="explicit_user_input"
-            if _extract_date_range_from_text(query)
-            else "clarification_reply",
+            source=(
+                "explicit_user_input"
+                if _extract_date_range_from_text(query)
+                else "clarification_reply"
+            ),
         )
     if _slot_value_is_present(resolved_slot_values, "metric_focus"):
         resolved_slots["metric_focus"] = _build_resolved_slot(
@@ -2037,7 +2059,9 @@ def _resolve_sample_result_grain(sample: Any) -> str:
     if result_grain:
         return str(result_grain).strip().lower()
 
-    fallback_result_grain = _get_sample_value(sample, "result_grain") or _get_sample_value(
+    fallback_result_grain = _get_sample_value(
+        sample, "result_grain"
+    ) or _get_sample_value(
         sample,
         "resultGrain",
     )
@@ -2118,7 +2142,9 @@ def _query_requests_channel_period_recharge_summary(query: Optional[str]) -> boo
     asks_daily_grain = bool(
         re.search(r"每日|每天|按天|逐日|日级|日报|日期", query, flags=re.IGNORECASE)
     )
-    return has_channel_comparison and has_recharge_summary_metric and not asks_daily_grain
+    return (
+        has_channel_comparison and has_recharge_summary_metric and not asks_daily_grain
+    )
 
 
 def _sample_has_daily_grain(sample: Any) -> bool:
@@ -2128,7 +2154,9 @@ def _sample_has_daily_grain(sample: Any) -> bool:
 
     sample_text = _collect_sample_signature_text(sample)
     return bool(
-        re.search(r"日报|每日|每天|按天|逐日|日级|日期", sample_text, flags=re.IGNORECASE)
+        re.search(
+            r"日报|每日|每天|按天|逐日|日级|日期", sample_text, flags=re.IGNORECASE
+        )
     )
 
 
@@ -2214,17 +2242,19 @@ def _resolve_template_route_guard_failure(
         return "template_guard_plain_sql_requested"
 
     if _query_requests_channel_period_recharge_summary(query) and (
-        _sample_has_daily_grain(sample) or _sample_has_specialized_recharge_grain(sample)
+        _sample_has_daily_grain(sample)
+        or _sample_has_specialized_recharge_grain(sample)
     ):
         return "template_guard_channel_period_summary_mismatch"
 
-    if (
-        _query_requests_login_without_successful_deposit(query)
-        and not _sample_supports_login_without_successful_deposit(sample)
-    ):
+    if _query_requests_login_without_successful_deposit(
+        query
+    ) and not _sample_supports_login_without_successful_deposit(sample):
         return "template_guard_login_without_deposit_mismatch"
 
-    if _query_requests_retention_deposit(query) and not _sample_supports_retention_deposit(
+    if _query_requests_retention_deposit(
+        query
+    ) and not _sample_supports_retention_deposit(
         sample,
     ):
         return "template_guard_retention_mismatch"
@@ -2254,7 +2284,9 @@ def _normalize_relation_name_against(
     reference_relation_names: Iterable[str],
 ) -> str:
     lowered_relation_name = relation_name.lower()
-    lowered_references = [str(name).lower() for name in reference_relation_names if name]
+    lowered_references = [
+        str(name).lower() for name in reference_relation_names if name
+    ]
     if lowered_relation_name in lowered_references:
         return lowered_relation_name
 
@@ -2326,7 +2358,9 @@ def _matches_history_template_context(
     if not template_sql or not history_sql:
         return False
 
-    if is_template_core_preserved(template_sql, history_sql) or is_template_core_preserved(
+    if is_template_core_preserved(
+        template_sql, history_sql
+    ) or is_template_core_preserved(
         history_sql,
         template_sql,
     ):
@@ -2334,9 +2368,13 @@ def _matches_history_template_context(
 
     template_ctes = set(_extract_cte_names(template_sql))
     history_ctes = set(_extract_cte_names(history_sql))
-    if template_ctes and history_ctes and _relation_name_sets_overlap(
-        template_ctes,
-        history_ctes,
+    if (
+        template_ctes
+        and history_ctes
+        and _relation_name_sets_overlap(
+            template_ctes,
+            history_ctes,
+        )
     ):
         if _relation_name_set_is_subset(
             history_ctes,
@@ -2345,9 +2383,13 @@ def _matches_history_template_context(
             return True
 
     history_relations = _extract_relation_names(history_sql)
-    if template_ctes and history_relations and _relation_name_sets_overlap(
-        template_ctes,
-        history_relations,
+    if (
+        template_ctes
+        and history_relations
+        and _relation_name_sets_overlap(
+            template_ctes,
+            history_relations,
+        )
     ):
         return True
 
@@ -2798,14 +2840,12 @@ def _collect_related_template_context_samples(
         if candidate is sample:
             continue
 
-        candidate_sql = _normalize_sql_for_signature(_get_sample_value(candidate, "sql"))
+        candidate_sql = _normalize_sql_for_signature(
+            _get_sample_value(candidate, "sql")
+        )
         candidate_signature = _get_business_signature(candidate)
         candidate_template_id = str(candidate_signature.get("templateId") or "").strip()
-        if (
-            anchor_sql
-            and candidate_sql
-            and candidate_sql == anchor_sql
-        ) or (
+        if (anchor_sql and candidate_sql and candidate_sql == anchor_sql) or (
             anchor_template_id
             and candidate_template_id
             and candidate_template_id == anchor_template_id
@@ -3013,7 +3053,9 @@ def _resolve_margin_score(
     return max(0.0, min(1.0, (top_adjusted_score - second_adjusted_score) / baseline))
 
 
-def _has_min_retrieval_support(raw_score: Optional[float], adjusted_score: float) -> bool:
+def _has_min_retrieval_support(
+    raw_score: Optional[float], adjusted_score: float
+) -> bool:
     if raw_score is None:
         return adjusted_score > 0
     return (raw_score or 0.0) >= TEMPLATE_MIN_RETRIEVAL_SCORE or (
@@ -3137,10 +3179,9 @@ def detect_missing_external_source_requirement(
                 "partial",
                 "manual_input",
             }
-            should_block = (
-                str(dependency.get("missing_behavior") or "ask_user").lower()
-                in {"ask_user", "block_answer"}
-            )
+            should_block = str(
+                dependency.get("missing_behavior") or "ask_user"
+            ).lower() in {"ask_user", "block_answer"}
             if not is_missing or not should_block:
                 continue
 
@@ -3150,7 +3191,10 @@ def detect_missing_external_source_requirement(
             )
             if supplied_evaluation["satisfied"]:
                 continue
-            if supplied_dependencies and supplied_evaluation.get("missing_dependency") is None:
+            if (
+                supplied_dependencies
+                and supplied_evaluation.get("missing_dependency") is None
+            ):
                 invalid_supply_evaluations.append(
                     {
                         "dependency_id": dependency.get("id"),
@@ -3187,7 +3231,9 @@ def detect_missing_external_source_requirement(
         if granularity_hint is None:
             if required_grain_values:
                 required_grain_label = "、".join(required_grain_values)
-                granularity_hint = "请按以下统计粒度提供：" + "、".join(required_grain_values) + "。"
+                granularity_hint = (
+                    "请按以下统计粒度提供：" + "、".join(required_grain_values) + "。"
+                )
             elif re.search(r"cohort|ROI|回收|首存成本", query, flags=re.IGNORECASE):
                 required_grain_label = "对应统计周期"
                 granularity_hint = "请按对应统计周期提供这些外部指标。"
@@ -3385,6 +3431,7 @@ def detect_missing_external_source_requirement(
         granularity_hint=granularity_hint,
     )
 
+
 def _format_template_parameter(value: Any) -> str:
     if isinstance(value, bool):
         return "1" if value else "0"
@@ -3524,10 +3571,7 @@ def build_template_decision(
         1.0,
         (0.45 * _resolve_template_source_score(top_sample))
         + (0.20 * max(0.0, min(raw_score or 0.0, 1.0)))
-        + (
-            0.05
-            * _resolve_parameter_coverage_score(required_placeholders, parameters)
-        )
+        + (0.05 * _resolve_parameter_coverage_score(required_placeholders, parameters))
         + (0.15 * _resolve_margin_score(top_adjusted_score, second_adjusted_score))
         + (0.15 if _has_template_approval(top_sample) else 0.0),
     )
@@ -3551,7 +3595,9 @@ def build_template_decision(
             latest_history_sql,
         )
     )
-    has_min_retrieval_support = _has_min_retrieval_support(raw_score, top_adjusted_score)
+    has_min_retrieval_support = _has_min_retrieval_support(
+        raw_score, top_adjusted_score
+    )
     route_guard_failure = _resolve_template_route_guard_failure(query, top_sample)
 
     if route_guard_failure and _is_trusted_template_candidate(top_sample):
@@ -3568,7 +3614,10 @@ def build_template_decision(
         )
 
     if _is_anchored_template_candidate(top_sample):
-        if not has_min_retrieval_support or confidence < TEMPLATE_MIN_ANCHORED_CONFIDENCE:
+        if (
+            not has_min_retrieval_support
+            or confidence < TEMPLATE_MIN_ANCHORED_CONFIDENCE
+        ):
             fallback_reason = "template_confidence_below_threshold"
             if (
                 _is_trusted_template_candidate(top_sample)
@@ -3620,9 +3669,7 @@ def build_template_decision(
                 and confidence >= TEMPLATE_MIN_EXECUTABLE_CONFIDENCE
                 and not missing_parameters
             )
-            else "anchored_template"
-            if not missing_parameters
-            else "anchored_generated"
+            else "anchored_template" if not missing_parameters else "anchored_generated"
         )
         return _build_template_decision_payload(
             decision_reason="explicit_business_template_selected",
@@ -3712,6 +3759,53 @@ def build_template_instruction(template_decision: Optional[dict[str, Any]]) -> l
     ]
 
 
+def strip_template_decision_instructions(instructions: Sequence[Any]) -> list[Any]:
+    return [
+        instruction
+        for instruction in instructions
+        if not (
+            isinstance(instruction, dict)
+            and instruction.get("source") == "template_decision"
+        )
+    ]
+
+
+def _can_retry_template_core_rejection_as_reference(
+    template_decision: Optional[dict[str, Any]],
+    *,
+    retry_used: bool,
+) -> bool:
+    return bool(
+        not retry_used
+        and template_decision
+        and template_decision.get("mode") == "anchored_template"
+        and template_decision.get("template_mode") != "executable_template"
+    )
+
+
+def _mark_template_core_reference_retry(
+    template_decision: Optional[dict[str, Any]],
+) -> None:
+    if not template_decision:
+        return
+
+    template_decision["mode"] = "reference"
+    template_decision["sql_source"] = "generated"
+    template_decision["fallback_reason"] = "template_core_protection_reference_retry"
+    template_decision["decision_reason"] = (
+        template_decision.get("decision_reason") or "reference_sql_pair_selected"
+    )
+    template_decision["validation_error"] = (
+        "SQL correction changed the protected template core; retried as reference"
+    )
+
+
+def _reference_retry_sql_samples(sql_samples: Sequence[Any]) -> list[Any]:
+    return [
+        sample for sample in sql_samples if not _is_anchored_template_candidate(sample)
+    ]
+
+
 def can_reuse_template_sql(template_decision: Optional[dict[str, Any]]) -> bool:
     return bool(
         template_decision
@@ -3749,9 +3843,9 @@ def _extract_template_source_tables(selected_template: Any) -> list[str]:
     if not isinstance(business_signature, dict):
         business_signature = {}
 
-    raw_source_tables = business_signature.get("sourceTables") or business_signature.get(
-        "source_tables"
-    )
+    raw_source_tables = business_signature.get(
+        "sourceTables"
+    ) or business_signature.get("source_tables")
     if not isinstance(raw_source_tables, list):
         raw_source_tables = []
 
@@ -3759,7 +3853,7 @@ def _extract_template_source_tables(selected_template: Any) -> list[str]:
     for raw_table_name in raw_source_tables:
         if not isinstance(raw_table_name, str):
             continue
-        normalized_table_name = raw_table_name.strip().strip("`\"")
+        normalized_table_name = raw_table_name.strip().strip('`"')
         if normalized_table_name and normalized_table_name not in source_tables:
             source_tables.append(normalized_table_name)
 
@@ -3772,7 +3866,7 @@ def _extract_template_source_tables(selected_template: Any) -> list[str]:
         _get_sample_value(selected_template, "sql") or "",
         flags=re.IGNORECASE,
     ):
-        normalized_table_name = matched_table_name.strip().strip("`\"")
+        normalized_table_name = matched_table_name.strip().strip('`"')
         if normalized_table_name and normalized_table_name not in referenced_tables:
             referenced_tables.append(normalized_table_name)
 
@@ -3966,7 +4060,7 @@ def _extract_source_tables(sql: Optional[str]) -> list[str]:
         normalized,
         flags=re.IGNORECASE,
     ):
-        table_name = match.group(1).strip("`\"[]")
+        table_name = match.group(1).strip('`"[]')
         table_name = table_name.replace("`", "").replace('"', "").replace("[", "")
         table_name = table_name.replace("]", "")
         if table_name and table_name not in source_tables:
@@ -3987,10 +4081,24 @@ def _extract_aggregate_signature(sql: Optional[str]) -> dict[str, int]:
     return dict(sorted(aggregate_counts.items()))
 
 
+def _normalize_source_table_for_signature(table_name: str) -> str:
+    normalized = table_name.strip('`"[]').replace("`", "").replace('"', "")
+    normalized = normalized.replace("[", "").replace("]", "").lower()
+    normalized = normalized.split(".")[-1]
+    parts = [part for part in normalized.split("_") if part]
+    for index, part in enumerate(parts):
+        if part in {"ods", "dwd", "dws", "ads", "dim", "fact"}:
+            return "_".join(parts[index:])
+    return normalized
+
+
 def build_sql_core_signature(sql: Optional[str]) -> dict[str, Any]:
     return {
         "ctes": _extract_cte_names(sql),
-        "source_tables": _extract_source_tables(sql),
+        "source_tables": [
+            _normalize_source_table_for_signature(table_name)
+            for table_name in _extract_source_tables(sql)
+        ],
         "group_by": _extract_clause_expressions(sql, "group\\s+by"),
         "aggregates": _extract_aggregate_signature(sql),
         "join_count": _count_keyword(sql, r"\bjoin\b"),
@@ -4319,9 +4427,7 @@ class NL2SQLToolset:
         ) or self._pipelines.get("sql_generation")
         components = getattr(sql_generation_pipeline, "_components", {}) or {}
         post_processor = (
-            components.get("post_processor")
-            if isinstance(components, dict)
-            else None
+            components.get("post_processor") if isinstance(components, dict) else None
         )
         if post_processor is None:
             return {
@@ -4443,7 +4549,9 @@ class BaseFixedOrderAskRuntime:
             external_dependencies=external_dependencies,
         )
 
-    def _append_semantic_plan_reason(self, state: AskExecutionState, reason: str) -> None:
+    def _append_semantic_plan_reason(
+        self, state: AskExecutionState, reason: str
+    ) -> None:
         if state.semantic_plan is None:
             return
         decision = state.semantic_plan.setdefault("decision", {})
@@ -4503,9 +4611,7 @@ class BaseFixedOrderAskRuntime:
             "reason_codes": reason_codes,
             "missing_slots": merged["missing_slots"],
             "resolved_slots": merged["resolved_slots"],
-            "candidate_templates": deterministic_decision.get(
-                "candidate_templates"
-            )
+            "candidate_templates": deterministic_decision.get("candidate_templates")
             or llm_decision.get("candidate_templates")
             or [],
         }
@@ -4649,9 +4755,11 @@ class BaseFixedOrderAskRuntime:
             return None
 
         return {
-            "slot": missing_slots[0]
-            if len(missing_slots) == 1
-            else "ask_policy_required_slots",
+            "slot": (
+                missing_slots[0]
+                if len(missing_slots) == 1
+                else "ask_policy_required_slots"
+            ),
             "missing_parameters": missing_slots,
             "content": _build_policy_clarification_prompt(missing_slots),
             "reasoning": "问数策略要求补充必填业务槽位："
@@ -4844,9 +4952,7 @@ class BaseFixedOrderAskRuntime:
             use_dry_plan=ask_request.use_dry_plan,
             allow_dry_plan_fallback=ask_request.allow_dry_plan_fallback,
         )
-        valid_generation_result = (
-            validation_result.get("valid_generation_result") or {}
-        )
+        valid_generation_result = validation_result.get("valid_generation_result") or {}
         invalid_generation_result = (
             validation_result.get("invalid_generation_result") or {}
         )
@@ -4976,7 +5082,14 @@ class BaseFixedOrderAskRuntime:
             state.intent_reasoning
             or state.rephrased_question
             or status
-            in {"searching", "planning", "generating", "correcting", "finished", "failed"}
+            in {
+                "searching",
+                "planning",
+                "generating",
+                "correcting",
+                "finished",
+                "failed",
+            }
         )
 
         sql_pairs_status = (
@@ -4998,48 +5111,49 @@ class BaseFixedOrderAskRuntime:
         intent_status = (
             "running"
             if status == "understanding" and not state.intent_reasoning
-            else "finished"
-            if state.intent_reasoning
-            or status
-            in {"searching", "planning", "generating", "correcting", "finished"}
-            else "failed"
-            if status == "failed"
-            else "pending"
+            else (
+                "finished"
+                if state.intent_reasoning
+                or status
+                in {"searching", "planning", "generating", "correcting", "finished"}
+                else "failed" if status == "failed" else "pending"
+            )
         )
 
         candidate_models_status = (
             "running"
             if status == "searching" and not state.table_names
-            else "finished"
-            if state.table_names
-            or status in {"planning", "generating", "correcting", "finished"}
-            else "failed"
-            if status == "failed"
-            else "pending"
+            else (
+                "finished"
+                if state.table_names
+                or status in {"planning", "generating", "correcting", "finished"}
+                else "failed" if status == "failed" else "pending"
+            )
         )
 
         sql_reasoned_status = (
             "skipped"
             if is_direct_template_sql and (state.api_results or status == "finished")
-            else
-            "running"
-            if status == "planning" and not state.sql_generation_reasoning
-            else "finished"
-            if state.sql_generation_reasoning
-            or status in {"generating", "correcting", "finished"}
-            else "failed"
-            if status == "failed"
-            else "pending"
+            else (
+                "running"
+                if status == "planning" and not state.sql_generation_reasoning
+                else (
+                    "finished"
+                    if state.sql_generation_reasoning
+                    or status in {"generating", "correcting", "finished"}
+                    else "failed" if status == "failed" else "pending"
+                )
+            )
         )
 
         sql_generated_status = (
             "running"
             if status in {"generating", "correcting"}
-            else "finished"
-            if state.api_results or status == "finished"
-            else "failed"
-            if status == "failed"
-            else "pending"
+            else (
+                "finished"
+                if state.api_results or status == "finished"
+                else "failed" if status == "failed" else "pending"
+            )
         )
 
         steps = [
@@ -5259,14 +5373,18 @@ class BaseFixedOrderAskRuntime:
         results: dict[str, Any],
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
-        missing_slot_requirement = detect_missing_required_slot_requirement(
-            state.user_query,
-            histories=histories,
-            resolved_slots=state.slot_values,
-        ) or detect_missing_template_parameter_requirement(
-            state.user_query,
-            state.template_decision,
-        ) or self._build_policy_missing_slot_requirement(state)
+        missing_slot_requirement = (
+            detect_missing_required_slot_requirement(
+                state.user_query,
+                histories=histories,
+                resolved_slots=state.slot_values,
+            )
+            or detect_missing_template_parameter_requirement(
+                state.user_query,
+                state.template_decision,
+            )
+            or self._build_policy_missing_slot_requirement(state)
+        )
         if not missing_slot_requirement:
             return None
 
@@ -5560,7 +5678,9 @@ class BaseFixedOrderAskRuntime:
             )
 
             if not documents and not state.sql_samples:
-                logger.exception("ask pipeline - NO_RELEVANT_DATA: %s", state.user_query)
+                logger.exception(
+                    "ask pipeline - NO_RELEVANT_DATA: %s", state.user_query
+                )
                 if not is_stopped():
                     set_result(
                         **self._build_text_to_sql_result_payload(
@@ -5598,7 +5718,11 @@ class BaseFixedOrderAskRuntime:
                     state.user_query,
                 )
 
-        if not is_stopped() and not state.api_results and allow_sql_generation_reasoning:
+        if (
+            not is_stopped()
+            and not state.api_results
+            and allow_sql_generation_reasoning
+        ):
             set_result(
                 **self._build_text_to_sql_result_payload(
                     state=state,
@@ -5659,127 +5783,160 @@ class BaseFixedOrderAskRuntime:
             has_metric = state.retrieval_result.get("has_metric", False)
             has_json_field = state.retrieval_result.get("has_json_field", False)
 
-            text_to_sql_generation_results = await self._toolset.generate_sql(
-                query=state.user_query,
-                contexts=state.table_ddls,
-                sql_generation_reasoning=state.sql_generation_reasoning,
-                histories=histories,
-                runtime_scope_id=runtime_scope_id,
-                sql_samples=state.sql_samples,
-                instructions=state.effective_instructions,
-                has_calculated_field=has_calculated_field,
-                has_metric=has_metric,
-                has_json_field=has_json_field,
-                sql_functions=sql_functions,
-                use_dry_plan=use_dry_plan,
-                allow_dry_plan_fallback=allow_dry_plan_fallback,
-                sql_knowledge=sql_knowledge,
-            )
+            template_core_reference_retry_used = False
+            generation_sql_samples = list(state.sql_samples)
+            while not is_stopped() and not state.api_results:
+                retry_as_reference = False
+                text_to_sql_generation_results = await self._toolset.generate_sql(
+                    query=state.user_query,
+                    contexts=state.table_ddls,
+                    sql_generation_reasoning=state.sql_generation_reasoning,
+                    histories=histories,
+                    runtime_scope_id=runtime_scope_id,
+                    sql_samples=generation_sql_samples,
+                    instructions=state.effective_instructions,
+                    has_calculated_field=has_calculated_field,
+                    has_metric=has_metric,
+                    has_json_field=has_json_field,
+                    sql_functions=sql_functions,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    sql_knowledge=sql_knowledge,
+                )
 
-            if sql_valid_result := text_to_sql_generation_results["post_process"][
-                "valid_generation_result"
-            ]:
-                if (
-                    state.template_decision
-                    and state.template_decision.get("mode")
-                    in {"anchored_template", "executable_template"}
-                    and state.template_decision.get("sql_source") == "generated"
-                ):
-                    state.template_decision["sql_source"] = "anchored_generated"
-                state.api_results = [
-                    build_ask_result(
-                        **{
-                            "sql": sql_valid_result.get("sql"),
-                            "type": "llm",
-                        }
-                    )
-                ]
-            elif failed_dry_run_result := text_to_sql_generation_results[
-                "post_process"
-            ]["invalid_generation_result"]:
-                while state.current_sql_correction_retries < self._max_sql_correction_retries:
-                    if failed_dry_run_result["type"] == "TIME_OUT":
-                        break
-
-                    original_sql = failed_dry_run_result["original_sql"]
-                    state.invalid_sql = failed_dry_run_result["sql"]
-                    state.error_message = failed_dry_run_result["error"]
-                    state.current_sql_correction_retries += 1
-                    self._sync_template_decision_state_metrics(state)
-
-                    set_result(
-                        **self._build_text_to_sql_result_payload(
-                            state=state,
-                            status="correcting",
-                            rephrased_question=state.rephrased_question,
-                            intent_reasoning=state.intent_reasoning,
-                            retrieved_tables=state.table_names,
-                            sql_generation_reasoning=state.sql_generation_reasoning,
-                            trace_id=trace_id,
-                            is_followup=is_followup,
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                    "valid_generation_result"
+                ]:
+                    if (
+                        state.template_decision
+                        and state.template_decision.get("mode")
+                        in {"anchored_template", "executable_template"}
+                        and state.template_decision.get("sql_source") == "generated"
+                    ):
+                        state.template_decision["sql_source"] = "anchored_generated"
+                    state.api_results = [
+                        build_ask_result(
+                            **{
+                                "sql": sql_valid_result.get("sql"),
+                                "type": "llm",
+                            }
                         )
-                    )
-
-                    sql_diagnosis_reasoning = await self._toolset.diagnose_sql(
-                        contexts=state.table_ddls,
-                        original_sql=original_sql,
-                        invalid_sql=state.invalid_sql,
-                        error_message=state.error_message,
-                        language=ask_request.configurations.language,
-                    )
-
-                    sql_correction_results = await self._toolset.correct_sql(
-                        contexts=state.table_ddls,
-                        instructions=state.effective_instructions,
-                        invalid_generation_result={
-                            "sql": original_sql,
-                            "error": sql_diagnosis_reasoning
-                            or state.error_message,
-                        },
-                        runtime_scope_id=runtime_scope_id,
-                        use_dry_plan=use_dry_plan,
-                        allow_dry_plan_fallback=allow_dry_plan_fallback,
-                        sql_functions=sql_functions,
-                        sql_knowledge=sql_knowledge,
-                    )
-
-                    if valid_generation_result := sql_correction_results[
-                        "post_process"
-                    ]["valid_generation_result"]:
-                        corrected_sql = valid_generation_result.get("sql")
-                        if (
-                            state.template_decision
-                            and state.template_decision.get("mode")
-                            in {"anchored_template", "executable_template"}
-                            and state.sql_samples
-                            and not is_template_core_preserved(
-                                _get_sample_value(state.sql_samples[0], "sql"),
-                                corrected_sql,
-                            )
-                        ):
-                            state.template_decision["fallback_reason"] = (
-                                "template_core_protection_rejected_correction"
-                            )
-                            state.error_message = (
-                                "SQL correction changed the protected template core"
-                            )
+                    ]
+                    break
+                elif failed_dry_run_result := text_to_sql_generation_results[
+                    "post_process"
+                ]["invalid_generation_result"]:
+                    while (
+                        state.current_sql_correction_retries
+                        < self._max_sql_correction_retries
+                    ):
+                        if failed_dry_run_result["type"] == "TIME_OUT":
                             break
 
-                        if state.template_decision:
-                            state.template_decision["sql_source"] = "corrected"
-                        state.api_results = [
-                            build_ask_result(
-                                **{
-                                    "sql": corrected_sql,
-                                    "type": "llm",
-                                }
-                            )
-                        ]
-                        break
+                        original_sql = failed_dry_run_result["original_sql"]
+                        state.invalid_sql = failed_dry_run_result["sql"]
+                        state.error_message = failed_dry_run_result["error"]
+                        state.current_sql_correction_retries += 1
+                        self._sync_template_decision_state_metrics(state)
 
-                    failed_dry_run_result = sql_correction_results["post_process"][
-                        "invalid_generation_result"
-                    ]
+                        set_result(
+                            **self._build_text_to_sql_result_payload(
+                                state=state,
+                                status="correcting",
+                                rephrased_question=state.rephrased_question,
+                                intent_reasoning=state.intent_reasoning,
+                                retrieved_tables=state.table_names,
+                                sql_generation_reasoning=state.sql_generation_reasoning,
+                                trace_id=trace_id,
+                                is_followup=is_followup,
+                            )
+                        )
+
+                        sql_diagnosis_reasoning = await self._toolset.diagnose_sql(
+                            contexts=state.table_ddls,
+                            original_sql=original_sql,
+                            invalid_sql=state.invalid_sql,
+                            error_message=state.error_message,
+                            language=ask_request.configurations.language,
+                        )
+
+                        sql_correction_results = await self._toolset.correct_sql(
+                            contexts=state.table_ddls,
+                            instructions=state.effective_instructions,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning or state.error_message,
+                            },
+                            runtime_scope_id=runtime_scope_id,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_functions=sql_functions,
+                            sql_knowledge=sql_knowledge,
+                        )
+
+                        if valid_generation_result := sql_correction_results[
+                            "post_process"
+                        ]["valid_generation_result"]:
+                            corrected_sql = valid_generation_result.get("sql")
+                            if (
+                                state.template_decision
+                                and state.template_decision.get("mode")
+                                in {"anchored_template", "executable_template"}
+                                and generation_sql_samples
+                                and not is_template_core_preserved(
+                                    _get_sample_value(generation_sql_samples[0], "sql"),
+                                    corrected_sql,
+                                )
+                            ):
+                                if _can_retry_template_core_rejection_as_reference(
+                                    state.template_decision,
+                                    retry_used=template_core_reference_retry_used,
+                                ):
+                                    template_core_reference_retry_used = True
+                                    retry_as_reference = True
+                                    _mark_template_core_reference_retry(
+                                        state.template_decision
+                                    )
+                                    state.effective_instructions = (
+                                        strip_template_decision_instructions(
+                                            state.effective_instructions
+                                        )
+                                    )
+                                    generation_sql_samples = (
+                                        _reference_retry_sql_samples(
+                                            generation_sql_samples
+                                        )
+                                    )
+                                    state.error_message = None
+                                    break
+
+                                state.template_decision["fallback_reason"] = (
+                                    "template_core_protection_rejected_correction"
+                                )
+                                state.error_message = (
+                                    "SQL correction changed the protected template core"
+                                )
+                                break
+
+                            if state.template_decision:
+                                state.template_decision["sql_source"] = "corrected"
+                            state.api_results = [
+                                build_ask_result(
+                                    **{
+                                        "sql": corrected_sql,
+                                        "type": "llm",
+                                    }
+                                )
+                            ]
+                            break
+
+                        failed_dry_run_result = sql_correction_results["post_process"][
+                            "invalid_generation_result"
+                        ]
+
+                if retry_as_reference:
+                    continue
+                break
 
         if state.api_results:
             if not is_stopped():
@@ -5948,17 +6105,19 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         *extract_skill_instructions(ask_request.skills),
                     ]
 
-                    missing_source_result = await self._maybe_handle_missing_source_rule(
-                        state=state,
-                        ask_request=ask_request,
-                        histories=histories,
-                        trace_id=trace_id,
-                        is_followup=is_followup,
-                        is_stopped=is_stopped,
-                        set_result=set_result,
-                        build_ask_error=build_ask_error,
-                        results=results,
-                        orchestrator=orchestrator,
+                    missing_source_result = (
+                        await self._maybe_handle_missing_source_rule(
+                            state=state,
+                            ask_request=ask_request,
+                            histories=histories,
+                            trace_id=trace_id,
+                            is_followup=is_followup,
+                            is_stopped=is_stopped,
+                            set_result=set_result,
+                            build_ask_error=build_ask_error,
+                            results=results,
+                            orchestrator=orchestrator,
+                        )
                     )
                     if missing_source_result is not None:
                         return missing_source_result

@@ -457,7 +457,9 @@ def test_detect_missing_required_slot_requirement_clarifies_ratio_scope():
 
 
 def test_detect_missing_required_slot_requirement_clarifies_distribution_scope():
-    result = detect_missing_required_slot_requirement("查询游戏类型投注占比或首存金额桶占比")
+    result = detect_missing_required_slot_requirement(
+        "查询游戏类型投注占比或首存金额桶占比"
+    )
 
     assert result is not None
     assert result["slot"] == "distribution_scope"
@@ -755,9 +757,9 @@ async def test_maybe_enhance_semantic_plan_state_uses_optional_llm_plan():
     assert state.semantic_plan["grain"] == "biz_date + channel_id"
     assert state.semantic_plan["filters"]["tenant_plat_id"] == 990001
     assert state.semantic_plan["filters"]["channel_id"] == 990011
-    assert "llm_semantic_plan_applied" in state.semantic_plan["decision"][
-        "reason_codes"
-    ]
+    assert (
+        "llm_semantic_plan_applied" in state.semantic_plan["decision"]["reason_codes"]
+    )
     assert "llm_subject_match" in state.semantic_plan["decision"]["reason_codes"]
 
 
@@ -781,9 +783,9 @@ async def test_maybe_enhance_semantic_plan_state_can_shadow_llm_plan():
     assert state.semantic_plan["source"] == "deterministic"
     assert state.semantic_plan["semantic_plan_mode"] == "shadow"
     assert state.semantic_plan["llm_shadow_plan"]["subject"] == "channel"
-    assert "llm_semantic_plan_shadowed" in state.semantic_plan["decision"][
-        "reason_codes"
-    ]
+    assert (
+        "llm_semantic_plan_shadowed" in state.semantic_plan["decision"]["reason_codes"]
+    )
 
 
 @pytest.mark.asyncio
@@ -802,9 +804,7 @@ async def test_maybe_enhance_semantic_plan_state_falls_back_on_llm_failure():
     )
 
     assert state.semantic_plan["source"] == "deterministic"
-    assert "llm_semantic_plan_failed" in state.semantic_plan["decision"][
-        "reason_codes"
-    ]
+    assert "llm_semantic_plan_failed" in state.semantic_plan["decision"]["reason_codes"]
 
 
 def test_apply_policy_state_downgrades_forbidden_template():
@@ -835,9 +835,7 @@ def test_apply_policy_state_downgrades_forbidden_template():
     assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
     assert state.template_decision["policy_version"] == "test_policy_v1"
     assert state.semantic_plan["decision"]["route"] == "normal_text_to_sql"
-    assert "policy_forbid_t08" in state.semantic_plan["decision"][
-        "policy_reason_codes"
-    ]
+    assert "policy_forbid_t08" in state.semantic_plan["decision"]["policy_reason_codes"]
 
 
 def test_apply_policy_state_prefers_request_level_policy():
@@ -880,9 +878,10 @@ def test_apply_policy_state_prefers_request_level_policy():
     assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
     assert state.template_decision["policy_id"] == "workspace_policy"
     assert state.template_decision["policy_version"] == "workspace_policy_v2"
-    assert "request_policy_forbid_t08" in state.semantic_plan["decision"][
-        "policy_reason_codes"
-    ]
+    assert (
+        "request_policy_forbid_t08"
+        in state.semantic_plan["decision"]["policy_reason_codes"]
+    )
 
 
 def test_apply_policy_state_falls_back_to_file_policy_for_empty_request_rules():
@@ -913,9 +912,10 @@ def test_apply_policy_state_falls_back_to_file_policy_for_empty_request_rules():
 
     assert state.template_decision["fallback_reason"] == "policy_forbidden_template"
     assert state.template_decision["policy_version"] == "file_policy_v1"
-    assert "file_policy_forbid_t08" in state.semantic_plan["decision"][
-        "policy_reason_codes"
-    ]
+    assert (
+        "file_policy_forbid_t08"
+        in state.semantic_plan["decision"]["policy_reason_codes"]
+    )
 
 
 def test_apply_policy_state_marks_required_slots_as_clarification():
@@ -943,9 +943,10 @@ def test_apply_policy_state_marks_required_slots_as_clarification():
     assert state.semantic_plan["missing_slots"] == ["tenant_plat_id"]
     assert state.semantic_plan["clarification_request"]["slot"] == "tenant_plat_id"
     assert "租户平台" in state.semantic_plan["clarification_request"]["prompt"]
-    assert "policy_require_tenant" in state.semantic_plan["decision"][
-        "policy_reason_codes"
-    ]
+    assert (
+        "policy_require_tenant"
+        in state.semantic_plan["decision"]["policy_reason_codes"]
+    )
     assert "missing_required_slot" in state.semantic_plan["decision"]["reason_codes"]
 
 
@@ -2057,6 +2058,27 @@ def test_build_sql_core_signature_allows_alias_and_whitespace_changes():
 
     assert is_template_core_preserved(template_sql, candidate_sql) is True
     assert build_sql_core_signature(template_sql)["aggregates"] == {"sum": 1}
+
+
+def test_build_sql_core_signature_allows_physical_table_prefix_grounding():
+    template_sql = """
+    SELECT biz_date, channel_id, SUM(amount) AS amount
+    FROM dwd_order_deposit
+    GROUP BY biz_date, channel_id
+    """
+    candidate_sql = """
+    SELECT biz_date, channel_id, SUM(amount) AS amount
+    FROM tidb_business_demo_dwd_order_deposit
+    GROUP BY biz_date, channel_id
+    """
+
+    assert is_template_core_preserved(template_sql, candidate_sql) is True
+    assert build_sql_core_signature(template_sql)["source_tables"] == [
+        "dwd_order_deposit"
+    ]
+    assert build_sql_core_signature(candidate_sql)["source_tables"] == [
+        "dwd_order_deposit"
+    ]
 
 
 def test_is_template_core_preserved_rejects_structural_changes():
