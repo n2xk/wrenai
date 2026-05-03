@@ -41,6 +41,7 @@ import ClarificationSlotForm from '@/features/home/thread/components/Clarificati
 import {
   appendClarificationSlotSummary,
   coerceClarificationSlotValuesFromText,
+  mergeClarificationSlotValues,
 } from '@/features/home/thread/components/clarificationSlotDisplay';
 import ThreadPageOverlays from '@/features/home/thread/components/ThreadPageOverlays';
 import ThreadWorkbench from '@/features/home/thread/components/ThreadWorkbench';
@@ -916,9 +917,13 @@ export default function HomeThread() {
 
       const originalQuestion =
         latestPendingClarification.originalQuestion?.trim() || primaryQuestion;
+      const mergedSlotValues = mergeClarificationSlotValues(
+        latestPendingClarification.resolvedSlots,
+        slotValues,
+      );
       const displayQuestion = appendClarificationSlotSummary({
         question: originalQuestion,
-        slotValues,
+        slotValues: mergedSlotValues,
       });
       const askTask = await askPrompt.onSubmit(originalQuestion, {
         clarificationSessionId,
@@ -927,7 +932,7 @@ export default function HomeThread() {
           unknown
         >,
         displayQuestion,
-        slotValues,
+        slotValues: mergedSlotValues,
       });
       if (!askTask?.taskId) {
         return;

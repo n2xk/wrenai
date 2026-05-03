@@ -17,19 +17,13 @@ from src.pipelines.retrieval.sql_knowledge import SqlKnowledge
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
-MYSQL_DATE_ADD_INTERVAL_RE = re.compile(
-    r"DATE_ADD\(\s*(?P<expr>(?:'[^']*'|\"[^\"]*\"|[^,])+?)\s*,\s*"
-    r"INTERVAL\s+(?P<amount>\d+)\s+DAY\s*\)",
-    re.IGNORECASE,
-)
-MYSQL_DATE_SUB_INTERVAL_RE = re.compile(
-    r"DATE_SUB\(\s*(?P<expr>(?:'[^']*'|\"[^\"]*\"|[^,])+?)\s*,\s*"
-    r"INTERVAL\s+(?P<amount>\d+)\s+DAY\s*\)",
+MYSQL_INTERVAL_RE = re.compile(
+    r"^INTERVAL\s+(.+?)\s+(DAY|HOUR|MINUTE|SECOND|MONTH|YEAR)\s*$",
     re.IGNORECASE,
 )
 
 
-def _normalize_date_add_expression(expr: str) -> str:
+def _normalize_sql_date_operand(expr: str) -> str:
     normalized = expr.strip()
     literal_match = re.fullmatch(r"['\"](\d{4}-\d{2}-\d{2})['\"]", normalized)
     if literal_match:
@@ -37,26 +31,181 @@ def _normalize_date_add_expression(expr: str) -> str:
     return normalized
 
 
+def _find_top_level_comma(input_value: str) -> int:
+    depth = 0
+    quote: str | None = None
+    index = 0
+    while index < len(input_value):
+        char = input_value[index]
+        next_char = input_value[index + 1] if index + 1 < len(input_value) else ""
+
+        if quote:
+            if char == quote:
+                if next_char == quote:
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+
+        if char in {"'", '"'}:
+            quote = char
+            index += 1
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            return index
+        index += 1
+    return -1
+
+
+def _parse_function_call_arguments(
+    sql: str,
+    open_paren_index: int,
+) -> tuple[str, int] | None:
+    depth = 0
+    quote: str | None = None
+    index = open_paren_index
+    while index < len(sql):
+        char = sql[index]
+        next_char = sql[index + 1] if index + 1 < len(sql) else ""
+
+        if quote:
+            if char == quote:
+                if next_char == quote:
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+
+        if char in {"'", '"'}:
+            quote = char
+            index += 1
+            continue
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return sql[open_paren_index + 1 : index], index
+        index += 1
+    return None
+
+
+def _rewrite_function_calls(
+    sql: str,
+    function_name: str,
+    rewrite,
+) -> str:
+    pattern = re.compile(rf"{function_name}\s*\(", re.IGNORECASE)
+    result = ""
+    cursor = 0
+    search_start = 0
+
+    while match := pattern.search(sql, search_start):
+        open_paren_index = match.end() - 1
+        parsed = _parse_function_call_arguments(sql, open_paren_index)
+        if not parsed:
+            search_start = match.end()
+            continue
+
+        inner, end_index = parsed
+        rewritten = rewrite(inner)
+        if not rewritten:
+            search_start = match.end()
+            continue
+
+        result += sql[cursor : match.start()]
+        result += rewritten
+        cursor = end_index + 1
+        search_start = cursor
+
+    if cursor == 0:
+        return sql
+    return result + sql[cursor:]
+
+
+def _negate_sql_interval_value(value: str) -> str:
+    normalized = value.strip()
+    if re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+        return f"-{normalized}"
+    if normalized.startswith("-"):
+        return normalized[1:].strip()
+    return f"-({normalized})"
+
+
+def _rewrite_mysql_date_add_call(inner: str) -> str | None:
+    split_index = _find_top_level_comma(inner)
+    if split_index == -1:
+        return None
+
+    base_expression = inner[:split_index].strip()
+    interval_expression = inner[split_index + 1 :].strip()
+    interval_match = MYSQL_INTERVAL_RE.match(interval_expression)
+    if not interval_match:
+        return None
+
+    amount, unit = interval_match.groups()
+    return (
+        f"DATE_ADD('{unit.lower()}', {amount.strip()}, "
+        f"{_normalize_sql_date_operand(base_expression)})"
+    )
+
+
+def _rewrite_mysql_date_sub_call(inner: str) -> str | None:
+    split_index = _find_top_level_comma(inner)
+    if split_index == -1:
+        return None
+
+    base_expression = inner[:split_index].strip()
+    interval_expression = inner[split_index + 1 :].strip()
+    interval_match = MYSQL_INTERVAL_RE.match(interval_expression)
+    if not interval_match:
+        return None
+
+    amount, unit = interval_match.groups()
+    return (
+        f"DATE_ADD('{unit.lower()}', {_negate_sql_interval_value(amount)}, "
+        f"{_normalize_sql_date_operand(base_expression)})"
+    )
+
+
+def _rewrite_mysql_datediff_call(inner: str) -> str | None:
+    split_index = _find_top_level_comma(inner)
+    if split_index == -1:
+        return None
+
+    left_expression = inner[:split_index].strip()
+    right_expression = inner[split_index + 1 :].strip()
+    return (
+        "DATE_DIFF('day', "
+        f"{_normalize_sql_date_operand(right_expression)}, "
+        f"{_normalize_sql_date_operand(left_expression)})"
+    )
+
+
 def normalize_mysql_date_interval_functions(sql: str) -> str:
-    """Convert common MySQL DATE_ADD/SUB interval syntax for Wren engine parsing.
+    """Convert common MySQL/TiDB date functions for Wren engine parsing.
 
     The SQL generation prompt intentionally favors MySQL/TiDB syntax, but the
     current preview path still validates through a Trino-style parser. This
     deterministic retry keeps generated SQL from failing on otherwise valid
-    day-boundary filters such as DATE_ADD('2026-04-07', INTERVAL 1 DAY).
+    day-boundary filters such as DATE_ADD('2026-04-07', INTERVAL 1 DAY) or
+    DATEDIFF(event_date, cohort_date).
     """
 
-    def replace_add(match: re.Match[str]) -> str:
-        expr = _normalize_date_add_expression(match.group("expr"))
-        return f"DATE_ADD('day', {match.group('amount')}, {expr})"
-
-    def replace_sub(match: re.Match[str]) -> str:
-        expr = _normalize_date_add_expression(match.group("expr"))
-        return f"DATE_ADD('day', -{match.group('amount')}, {expr})"
-
-    return MYSQL_DATE_SUB_INTERVAL_RE.sub(
-        replace_sub,
-        MYSQL_DATE_ADD_INTERVAL_RE.sub(replace_add, sql),
+    return _rewrite_function_calls(
+        _rewrite_function_calls(
+            _rewrite_function_calls(sql, "DATE_ADD", _rewrite_mysql_date_add_call),
+            "DATE_SUB",
+            _rewrite_mysql_date_sub_call,
+        ),
+        "DATEDIFF",
+        _rewrite_mysql_datediff_call,
     )
 
 
@@ -184,8 +333,7 @@ class SQLGenPostProcessor:
                     retry_sql = normalize_mysql_date_interval_functions(
                         generation_result
                     )
-                    error_message = addition.get("error_message", "")
-                    if retry_sql != generation_result and "INTERVAL" in error_message:
+                    if retry_sql != generation_result:
                         success, _, addition = await self._engine.execute_sql(
                             retry_sql,
                             session,
@@ -228,8 +376,7 @@ class SQLGenPostProcessor:
                     retry_sql = normalize_mysql_date_interval_functions(
                         generation_result
                     )
-                    error_message = addition.get("error_message", "")
-                    if retry_sql != generation_result and "INTERVAL" in error_message:
+                    if retry_sql != generation_result:
                         has_data, _, addition = await self._engine.execute_sql(
                             retry_sql,
                             session,

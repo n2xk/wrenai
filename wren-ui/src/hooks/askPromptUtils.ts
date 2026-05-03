@@ -94,7 +94,7 @@ export const resolvePendingClarificationSubmitDefaults = (
   responses?: Array<{ askingTask?: AskingTask | null }> | null,
 ): Pick<
   AskPromptSubmitDefaults,
-  'clarificationSessionId' | 'clarificationState'
+  'clarificationSessionId' | 'clarificationState' | 'slotValues'
 > => {
   const latestPendingClarification =
     resolveLatestPendingClarificationState(responses);
@@ -107,6 +107,7 @@ export const resolvePendingClarificationSubmitDefaults = (
           string,
           unknown
         >,
+        slotValues: latestPendingClarification.resolvedSlots || null,
       }
     : {};
 };

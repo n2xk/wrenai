@@ -1362,15 +1362,23 @@ def detect_missing_template_parameter_requirement(
             "reasoning": "模板缺少多个关键上下文参数，需先澄清后再生成 SQL。",
         }
 
-    if "period_days" in missing_parameters:
+    missing_period_slot = next(
+        (
+            parameter
+            for parameter in ("period_days", "n_days")
+            if parameter in missing_parameters
+        ),
+        None,
+    )
+    if missing_period_slot:
         return {
-            "slot": "period_days",
-            "missing_parameters": ["period_days"],
+            "slot": missing_period_slot,
+            "missing_parameters": [missing_period_slot],
             "content": (
                 "这个问题命中了首存 cohort 模板，还需要补充回收周期。"
                 "请说明要累计到 D7、D30 还是其他天数，例如：首存后 D7。"
             ),
-            "reasoning": "模板缺少回收周期 period_days，需先澄清后再生成 SQL。",
+            "reasoning": f"模板缺少回收周期 {missing_period_slot}，需先澄清后再生成 SQL。",
         }
 
     return None
@@ -1539,6 +1547,51 @@ SEMANTIC_DIMENSION_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "tenant_plat_id": (r"租户平台", r"tenant[_\s-]?plat[_\s-]?id"),
 }
+
+
+DATA_QUERY_ACTION_PATTERN = re.compile(
+    r"查询|统计|输出|生成|列出|找出|查看|看一下|看看|计算|汇总|对比",
+    flags=re.IGNORECASE,
+)
+BUSINESS_RULE_ATTACHMENT_PATTERN = re.compile(
+    r"并?(?:说明|检查|解释|确认).{0,32}(?:是否|如何|怎么|规则|口径|计入|混入|分母|处理)",
+    flags=re.IGNORECASE,
+)
+PLAYER_ID_PATTERN = re.compile(
+    r"(?:玩家|用户|player[_\s-]?id)\s*[:：#]?\s*(\d{3,})",
+    flags=re.IGNORECASE,
+)
+
+
+def should_override_general_intent_to_text_to_sql(query: Optional[str]) -> bool:
+    """Recover data queries that include an attached business-rule explanation.
+
+    The intent classifier should keep pure rule-definition questions on the
+    GENERAL / data-assistance path, but regression cases such as “查询成功充值金额，
+    并说明失败充值是否计入” still need SQL first and rule explanation second.
+    This deterministic guard only overrides GENERAL when the query has a clear
+    data action, concrete business metrics, and executable filters.
+    """
+
+    if not query:
+        return False
+
+    text = str(query).strip()
+    if not text or is_metadata_explanation_query(text):
+        return False
+    if not DATA_QUERY_ACTION_PATTERN.search(text):
+        return False
+    if not _extract_pattern_keys(text, SEMANTIC_METRIC_PATTERNS):
+        return False
+    if not BUSINESS_RULE_ATTACHMENT_PATTERN.search(text):
+        return False
+
+    has_tenant = bool(_extract_tenant_plat_ids_from_text(text))
+    has_channel_or_player = bool(
+        _extract_channel_ids_from_text(text) or PLAYER_ID_PATTERN.search(text)
+    )
+    has_date = bool(_extract_date_range_from_text(text))
+    return has_tenant and has_channel_or_player and has_date
 
 
 def _extract_pattern_keys(
@@ -2693,12 +2746,26 @@ def _extract_template_parameters_from_query(
             value = _first_match(
                 [
                     r"D\s*1\s*(?:~|-|到|至)\s*D?\s*(\d+)",
+                    r"第\s*1\s*(?:日|天)\s*(?:~|-|到|至)\s*第?\s*(\d+)\s*(?:日|天)",
+                    r"首日\s*(?:~|-|到|至)\s*第?\s*(\d+)\s*(?:日|天)",
+                    r"(?:到|至|截至|截止|直到)\s*第\s*(\d+)\s*(?:日|天)",
                     r"(\d+)\s*天内",
                     r"前\s*(\d+)\s*天",
                     r"N\s*[=:：]\s*(\d+)",
                 ],
                 query,
             )
+            if not value:
+                explicit_days = [
+                    int(match)
+                    for match in (
+                        re.findall(r"D\s*(\d+)", query, flags=re.IGNORECASE)
+                        + re.findall(r"第\s*(\d+)\s*(?:日|天)", query)
+                    )
+                ]
+                if explicit_days:
+                    parameters[key] = max(explicit_days)
+                    continue
         else:
             explicit_period_days = [
                 int(value)
@@ -3345,7 +3412,16 @@ def detect_missing_external_source_requirement(
         return None
 
     required_metrics: list[str] = []
-    normalized_query = query.upper()
+    # “ROI回收表” can be a report/sheet name. Do not treat that label alone as
+    # a request for ad_spend; only block when the business metric itself asks
+    # for ROI/cost/ad-spend.
+    external_metric_query = re.sub(
+        r"ROI\s*回收表",
+        "回收表",
+        query,
+        flags=re.IGNORECASE,
+    )
+    normalized_query = external_metric_query.upper()
 
     def append_metric(metric_key: str, dependency_id: Optional[str] = None) -> None:
         dependency_id = dependency_id or {
@@ -3780,6 +3856,7 @@ def _can_retry_template_core_rejection_as_reference(
         and template_decision
         and template_decision.get("mode") == "anchored_template"
         and template_decision.get("template_mode") != "executable_template"
+        and not template_decision.get("missing_parameters")
     )
 
 
@@ -5408,7 +5485,7 @@ class BaseFixedOrderAskRuntime:
             "clarification_session_id": query_id,
             "original_question": state.user_query,
             "pending_slots": missing_parameters,
-            "resolved_slots": {},
+            "resolved_slots": dict(state.slot_values or {}),
             "expires_at": expires_at.isoformat(),
         }
         self._sync_semantic_plan_state(
@@ -5481,6 +5558,14 @@ class BaseFixedOrderAskRuntime:
 
         if state.rephrased_question:
             state.user_query = state.rephrased_question
+        if intent == "GENERAL" and should_override_general_intent_to_text_to_sql(
+            state.user_query,
+        ):
+            intent = "TEXT_TO_SQL"
+            state.intent_reasoning = (
+                f"{state.intent_reasoning or '业务规则附带数据查询'}；"
+                "已识别为带业务规则说明的完整数据查询，继续生成 SQL。"
+            )
         self._sync_semantic_plan_state(state, histories=histories, intent=intent)
 
         if intent == "MISLEADING_QUERY":

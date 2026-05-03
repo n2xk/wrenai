@@ -6,6 +6,8 @@ const slotLabels: Record<string, string> = {
   end_date: '结束日期',
   cohort_start_date: 'Cohort 开始日期',
   cohort_end_date: 'Cohort 结束日期',
+  n_days: '统计日龄',
+  period_days: '回收周期',
   metric_focus: '指标方向',
   channel_performance_context: '分析口径',
 };
@@ -18,6 +20,8 @@ export const slotPlaceholders: Record<string, string> = {
   end_date: '例如：2026-04-07',
   cohort_start_date: '例如：2026-04-01',
   cohort_end_date: '例如：2026-04-07',
+  n_days: '例如：7 或 D7',
+  period_days: '例如：7、30 或 D7',
   metric_focus: '例如：充值人数、充值金额、成功率',
   channel_performance_context: '例如：充值表现、注册转化、留存表现',
 };
@@ -25,9 +29,29 @@ export const slotPlaceholders: Record<string, string> = {
 export const normalizeClarificationSlotLabel = (slot: string) =>
   slotLabels[slot] || slot;
 
-const formatSlotValue = (value: unknown) => {
+const formatSlotValue = (value: unknown): string => {
   if (Array.isArray(value)) {
     return value.filter(Boolean).join('、');
+  }
+
+  if (value && typeof value === 'object') {
+    const slotValue = value as Record<string, unknown>;
+    const startDate = formatSlotValue(slotValue.start_date);
+    const endDate = formatSlotValue(slotValue.end_date);
+    const singleDate = formatSlotValue(slotValue.date);
+    if (startDate && endDate) {
+      return `${startDate} 到 ${endDate}`;
+    }
+    if (singleDate) {
+      return singleDate;
+    }
+    return Object.entries(slotValue)
+      .map(([key, nestedValue]) => {
+        const formattedNestedValue = formatSlotValue(nestedValue);
+        return formattedNestedValue ? `${key}=${formattedNestedValue}` : null;
+      })
+      .filter(Boolean)
+      .join('，');
   }
 
   if (value == null) {
@@ -62,6 +86,17 @@ export const appendClarificationSlotSummary = ({
     ? `${question}（已补充：${formattedSlotValues}）`
     : question;
 };
+
+export const mergeClarificationSlotValues = (
+  resolvedSlots?: Record<string, unknown> | null,
+  nextSlotValues?: Record<string, unknown> | null,
+) =>
+  Object.fromEntries(
+    Object.entries({
+      ...(resolvedSlots || {}),
+      ...(nextSlotValues || {}),
+    }).filter(([, value]) => formatSlotValue(value) !== ''),
+  );
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

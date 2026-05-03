@@ -296,6 +296,65 @@ async def test_ask_service_resumes_clarification_session_with_multiple_slot_valu
 
 
 @pytest.mark.asyncio
+async def test_ask_service_carries_resolved_slots_between_clarification_turns():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._clarification_sessions["clarify-carry"] = {
+        "status": "needs_clarification",
+        "clarification_session_id": "clarify-carry",
+        "original_question": "统计渠道首存 cohort 杀率趋势",
+        "pending_slots": ["n_days"],
+        "resolved_slots": {
+            "tenant_plat_id": "990001",
+            "channel_id": "990011",
+            "date_range": {
+                "start_date": "2026-04-01",
+                "end_date": "2026-04-07",
+            },
+        },
+        "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+    }
+    ask_service._ask_results["query-carry"] = AskResultResponse(
+        status="understanding"
+    )
+
+    ask_request = AskRequest(
+        query="D7",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-carry",
+        slot_values={"n_days": "7"},
+    )
+    ask_request.query_id = "query-carry"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert "租户平台990001" in routed_request.query
+    assert "渠道990011" in routed_request.query
+    assert "时间范围2026-04-01到2026-04-07" in routed_request.query
+    assert "n_days=7" in routed_request.query
+    assert routed_request.slot_values == {
+        "tenant_plat_id": "990001",
+        "channel_id": "990011",
+        "date_range": {
+            "start_date": "2026-04-01",
+            "end_date": "2026-04-07",
+        },
+        "n_days": "7",
+    }
+
+
+@pytest.mark.asyncio
 async def test_ask_service_does_not_resume_expired_clarification_session():
     tool_router = SimpleNamespace(
         run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})

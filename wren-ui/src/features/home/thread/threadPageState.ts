@@ -30,6 +30,10 @@ export const getThreadResponseIsFinished = (
   const isTextToSqlAnswerResponse =
     isAnswerResponse &&
     threadResponse?.askingTask?.type === AskingTaskType.TEXT_TO_SQL;
+  const isFailedTextToSqlWithoutSql =
+    isTextToSqlAnswerResponse &&
+    threadResponse?.askingTask?.status === AskingTaskStatus.FAILED &&
+    !hasSqlResult;
   const isRecommendationFollowUp =
     threadResponse?.responseKind === ThreadResponseKind.RECOMMENDATION_FOLLOWUP;
 
@@ -48,6 +52,10 @@ export const getThreadResponseIsFinished = (
     !hasChartTask &&
     !isTextToSqlAnswerResponse
   ) {
+    return true;
+  }
+
+  if (isFailedTextToSqlWithoutSql) {
     return true;
   }
 
@@ -77,6 +85,7 @@ export const hasReferenceRenderableResponse = (
 ) =>
   Boolean(
     threadResponse?.answerDetail?.content ||
+    threadResponse?.answerDetail?.error ||
     threadResponse?.chartDetail?.chartSchema ||
     threadResponse?.sql,
   );

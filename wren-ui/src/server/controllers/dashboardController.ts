@@ -53,6 +53,7 @@ import {
   resolveThreadResponseSqlMode,
 } from '@server/utils/dashboardItemSqlMode';
 import type { DashboardQueryControls } from '@/types/home';
+import { ApiError } from '@server/utils/apiResponseHelpers';
 
 const logger = getLogger('DashboardController');
 logger.level = 'debug';
@@ -263,6 +264,13 @@ export class DashboardController {
       throw new Error(
         `Dashboard item type not supported. responseId: ${responseId}`,
       );
+    }
+    if (
+      (isChartItem || isNumberItem) &&
+      response.chartDetail?.status &&
+      response.chartDetail.status !== 'FINISHED'
+    ) {
+      throw new ApiError('图表仍在生成中，请完成后再固定到看板。', 409);
     }
     if (isChartItem && !response.chartDetail?.chartSchema) {
       throw new Error(

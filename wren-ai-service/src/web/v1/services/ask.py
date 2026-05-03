@@ -372,9 +372,13 @@ class AskService:
         self,
         ask_request: AskRequest,
         pending_slots: list[str],
+        base_slot_values: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         query = ask_request.query or ""
-        slot_values = dict(ask_request.slot_values or {})
+        slot_values = {
+            **dict(base_slot_values or {}),
+            **dict(ask_request.slot_values or {}),
+        }
         if "tenant_plat_id" in pending_slots and "tenant_plat_id" not in slot_values:
             match = re.search(
                 r"(?:租户平台|平台|tenant_plat_id)\s*[:：#]?\s*([0-9]{4,})",
@@ -490,6 +494,7 @@ class AskService:
         slot_values = self._extract_slot_values_from_clarification_reply(
             ask_request,
             pending_slots,
+            base_slot_values=dict(session.get("resolved_slots") or {}),
         )
         if not slot_values:
             return

@@ -364,6 +364,8 @@ export default function ChartAnswer(props: AnswerResultProps) {
     previewDataResult.loading ||
     !getIsChartFinished(effectiveChartStatus) ||
     regenerating;
+  const isChartReadyToPin =
+    effectiveChartStatus === 'FINISHED' && (isNumberCard || !!chartSpec);
 
   const DynamicProperties = getDynamicProperties(chartType as ChartType | null);
 
@@ -464,7 +466,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const shouldUsePinPopover = dashboardOptions.length !== 1;
   const pinActionDisabled =
-    pinSubmitting || createAndPinSubmitting || pinProposalLoading;
+    !isChartReadyToPin ||
+    pinSubmitting ||
+    createAndPinSubmitting ||
+    pinProposalLoading;
 
   const resolvePinTimeFilter = async () => {
     if (detectedPinTimeFilter) {
@@ -539,6 +544,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
 
   const onPin = async () => {
     if (pinActionDisabled) {
+      if (!isChartReadyToPin) {
+        appMessage.info('图表生成完成后才能固定到看板。');
+      }
       return;
     }
 

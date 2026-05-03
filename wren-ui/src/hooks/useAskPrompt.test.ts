@@ -259,6 +259,44 @@ describe('useAskPrompt helpers', () => {
         clarificationSessionId: 'ask-latest',
         pendingSlots: ['tenant_plat_id'],
       },
+      slotValues: null,
+    });
+  });
+
+  it('carries resolved clarification slots into the next follow-up submit', () => {
+    expect(
+      resolvePendingClarificationSubmitDefaults([
+        {
+          askingTask: {
+            diagnostics: {
+              clarificationState: {
+                status: 'needs_clarification',
+                clarificationSessionId: 'ask-keep-slots',
+                pendingSlots: ['period_days'],
+                resolvedSlots: {
+                  tenant_plat_id: '990001',
+                  channel_id: '990011',
+                },
+              },
+            },
+          },
+        } as any,
+      ]),
+    ).toEqual({
+      clarificationSessionId: 'ask-keep-slots',
+      clarificationState: {
+        status: 'needs_clarification',
+        clarificationSessionId: 'ask-keep-slots',
+        pendingSlots: ['period_days'],
+        resolvedSlots: {
+          tenant_plat_id: '990001',
+          channel_id: '990011',
+        },
+      },
+      slotValues: {
+        tenant_plat_id: '990001',
+        channel_id: '990011',
+      },
     });
   });
 

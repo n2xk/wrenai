@@ -62,13 +62,20 @@ def test_normalize_mysql_date_interval_functions_for_engine_preview_retry():
     sql = (
         "SELECT * FROM dwd_order_deposit WHERE callback_time < "
         "DATE_ADD('2026-04-07', INTERVAL 1 DAY) "
-        "AND callback_time >= DATE_SUB('2026-04-07', INTERVAL 7 DAY)"
+        "AND callback_time >= DATE_SUB('2026-04-07', INTERVAL 7 DAY) "
+        "AND settle_time < CAST(DATE_ADD(first_deposit_date, INTERVAL 8 DAY) "
+        "AS TIMESTAMP WITH TIME ZONE) "
+        "AND DATEDIFF(event_date, first_deposit_date) + 1 BETWEEN 1 AND 7"
     )
 
     normalized = normalize_mysql_date_interval_functions(sql)
 
     assert "DATE_ADD('day', 1, DATE '2026-04-07')" in normalized
     assert "DATE_ADD('day', -7, DATE '2026-04-07')" in normalized
+    assert "DATE_ADD('day', 8, first_deposit_date)" in normalized
+    assert "DATE_DIFF('day', first_deposit_date, event_date) + 1" in normalized
+    assert "INTERVAL 8 DAY" not in normalized
+    assert "DATEDIFF(" not in normalized
 
 
 def test_construct_instructions_groups_by_knowledge_asset_type():

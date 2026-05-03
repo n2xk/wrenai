@@ -11,7 +11,8 @@
   5. `14_业务泛化补充用例.csv`
   6. `15_第一期Excel示例表格全覆盖保存清单.csv`（FULL 同形验收）
   7. `16_第一期Excel示例表格降级保存清单.csv`（DEGRADED 降级优先验证）
-  8. `99_回归执行清单.csv`
+  8. `17_第一期Excel_FULL泛化变体清单.csv`（FULL P2 泛化补强）
+  9. `99_回归执行清单.csv`
 
 说明：CSV 不支持多 sheet，所以这里按“每个模板一份 CSV”的方式来模拟 Excel 多页签。
 
@@ -19,7 +20,17 @@
 
 `15_第一期Excel示例表格全覆盖保存清单.csv` 对应 `../第一期Excel示例表格全覆盖清单-2026-05-01.md` 的 FULL 版，用于验证原始 Excel 中 11 张示例表格是否已经同形输出。CSV 中的 `save_as_data_table_name` 是 FULL 资产化扩展时使用的推荐名称，默认 FULL 回归不强制逐张保存数据表。
 
+该 CSV 还包含严格 FULL 同形断言字段：
+
+- `strict_gate`：标记该 FT 是必须返回真实 SQL 结果，还是必须先补外部输入后才能通过。
+- `required_external_dependencies`：FULL 通过前必须补齐的外部依赖或数据模型。
+- `strict_required_columns_or_segments`：必须在问数结果 / 导出 / SQL 证据中出现的关键列、分组、周期或枚举。
+- `strict_forbidden_pass_signals`：一旦出现就不能计为 FULL PASS 的缺口信号，例如“缺投放金额”“未包含 VIP”“未单独汇总所有用户”等。
+- `strict_full_pass_rule`：该 FT 的最终同形通过规则。
+
 `16_第一期Excel示例表格降级保存清单.csv` 对应同一清单文档的 DEGRADED 版，用于在外部数据缺失时先验证内部指标降级输出、SQL 可执行、结果可预览并可保存为数据表资产。DEGRADED 通过不等于 FULL 同形覆盖通过。
+
+`17_第一期Excel_FULL泛化变体清单.csv` 是 P2 泛化补强清单：每张 FT 至少 3 条变体，覆盖单渠道基线、多渠道 / 渠道商 / TOP5 / VIP / 全枚举 / 时间粒度变化等。变体通过不能替代 FTxx-FULL 基线同形通过，但任何失败都必须记录为泛化缺口。
 
 `13_普通问数补充用例.csv` 对应 `../普通问数补充用例.md`，用于验证不以命中业务 SQL 模板为主要目标的普通 text-to-SQL、metadata 和澄清链路。
 

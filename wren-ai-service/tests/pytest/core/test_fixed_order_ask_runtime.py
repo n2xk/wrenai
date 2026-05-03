@@ -5,6 +5,7 @@ from src.core.fixed_order_ask_runtime import (
     AskExecutionState,
     BaseFixedOrderAskRuntime,
     NL2SQLToolset,
+    _can_retry_template_core_rejection_as_reference,
     build_minimal_semantic_plan,
     build_reusable_template_sql,
     build_sql_core_signature,
@@ -18,6 +19,7 @@ from src.core.fixed_order_ask_runtime import (
     ground_template_sql_to_retrieved_tables,
     is_template_core_preserved,
     rerank_sql_samples,
+    should_override_general_intent_to_text_to_sql,
 )
 
 
@@ -384,6 +386,18 @@ def test_detect_missing_tenant_plat_id_requirement_for_channel_query():
     assert "租户平台" in result["content"]
 
 
+def test_general_intent_override_keeps_business_rule_attached_data_query_on_sql_path():
+    assert should_override_general_intent_to_text_to_sql(
+        "查询租户平台990001渠道990011在2026-04-01到2026-04-07成功充值金额，并说明失败充值66是否计入。"
+    )
+
+
+def test_general_intent_override_ignores_pure_business_rule_question():
+    assert not should_override_general_intent_to_text_to_sql(
+        "失败充值是否计入充值金额？"
+    )
+
+
 def test_detect_missing_tenant_plat_id_requirement_uses_unique_history_context():
     result = detect_missing_tenant_plat_id_requirement(
         "统计渠道990011在2026-04-01到2026-04-03首充用户的二存到六存情况",
@@ -649,6 +663,21 @@ def test_detect_missing_template_parameter_requirement_clarifies_period_days():
     assert result is not None
     assert result["slot"] == "period_days"
     assert result["missing_parameters"] == ["period_days"]
+    assert "回收周期" in result["content"]
+    assert "D7" in result["content"]
+
+
+def test_detect_missing_template_parameter_requirement_clarifies_n_days():
+    result = detect_missing_template_parameter_requirement(
+        "统计租户平台990001下渠道990011首存 cohort 的杀率趋势",
+        {
+            "missing_parameters": ["n_days"],
+        },
+    )
+
+    assert result is not None
+    assert result["slot"] == "n_days"
+    assert result["missing_parameters"] == ["n_days"]
     assert "回收周期" in result["content"]
     assert "D7" in result["content"]
 
@@ -1196,6 +1225,56 @@ def test_build_template_decision_extracts_single_d_period_day():
     assert result["parameters"]["period_days"] == 30
     assert result["missing_parameters"] == []
     assert result["sql_source"] == "anchored_template"
+
+
+def test_build_template_decision_extracts_chinese_n_days_range():
+    result = build_template_decision(
+        [
+            {
+                "id": "template-10",
+                "question": "统计首存 cohort 从首日开始的 D1~DN 投充比/杀率趋势",
+                "sql": (
+                    "SELECT :tenant_plat_id, :channel_id, :cohort_start_date, "
+                    ":cohort_end_date, :n_days"
+                ),
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "business_signature": {"templateId": "T10"},
+                "score": 0.95,
+                "status": "active",
+            }
+        ],
+        query=(
+            "统计租户平台990001下渠道990011首存日期在2026-04-01到"
+            "2026-04-07的首存 cohort 首日到第7日杀率趋势，只用内部数据"
+        ),
+    )
+
+    assert result["template_id"] == "template-10"
+    assert result["parameters"]["n_days"] == 7
+    assert result["missing_parameters"] == []
+    assert result["sql_source"] == "anchored_template"
+
+
+def test_template_core_reference_retry_requires_complete_parameters():
+    assert not _can_retry_template_core_rejection_as_reference(
+        {
+            "mode": "anchored_template",
+            "template_mode": "anchored_template",
+            "missing_parameters": ["n_days"],
+        },
+        retry_used=False,
+    )
+    assert _can_retry_template_core_rejection_as_reference(
+        {
+            "mode": "anchored_template",
+            "template_mode": "anchored_template",
+            "missing_parameters": [],
+        },
+        retry_used=False,
+    )
 
 
 def test_build_template_decision_ignores_optional_is_null_placeholders():
@@ -1848,6 +1927,16 @@ def test_detect_missing_external_source_requirement_allows_explicit_roi_degraded
 
     assert result is None
 
+
+
+def test_detect_missing_external_source_requirement_ignores_roi_report_name_for_cumulative_revenue():
+    result = detect_missing_external_source_requirement(
+        "生成第一期ROI回收表里的渠道累计收入表："
+        "租户平台990001渠道990011首存日期2026-04-01到2026-04-07，"
+        "输出D1到D360累计渠道收入宽表和环比"
+    )
+
+    assert result is None
 
 def test_detect_missing_external_source_requirement_uses_configured_grain():
     result = detect_missing_external_source_requirement(

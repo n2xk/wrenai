@@ -306,6 +306,36 @@ describe('ChartAnswer', () => {
     expect(capturedChartProps.onPin).toEqual(expect.any(Function));
   });
 
+  it('disables pinning while the chart schema is still being generated', async () => {
+    renderToStaticMarkup(
+      React.createElement(ChartAnswer, {
+        threadResponse: {
+          id: 91,
+          chartDetail: {
+            status: 'FETCHING',
+            description: '销售趋势',
+            chartSchema: {
+              mark: 'line',
+              encoding: {
+                x: { field: 'date', type: 'temporal' },
+                y: { field: 'value', type: 'quantitative' },
+              },
+            },
+          },
+        },
+      } as any),
+    );
+
+    expect(capturedChartProps.pinDisabled).toBe(true);
+
+    await capturedChartProps.onPin();
+
+    expect(mockCreateDashboardItem).not.toHaveBeenCalled();
+    expect(mockMessageInfo).toHaveBeenCalledWith(
+      '图表生成完成后才能固定到看板。',
+    );
+  });
+
   it('submits createDashboardItem with selected dashboard id from the popover when multiple dashboards exist', async () => {
     const useStateSpy = setStateOverrides({
       // 5th state: isPinPopoverOpen
