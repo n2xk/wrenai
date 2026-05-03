@@ -175,7 +175,7 @@ def render_markdown(
         "## 判定规则",
         "",
         "- `FULL_PASS`：必须有真实 SQL/结果、没有缺口/阻断/提示型 message SQL，并包含该 FT 的关键列、分组和宽表信号。",
-        "- `BLOCKED_EXTERNAL`：外部投放/PV/UV/下载点击UV/VIP模型等能力缺失被正确阻断；这是安全行为，但不能计入 FULL 同形通过。",
+        "- `BLOCKED_EXTERNAL`：外部投放/PV/UV/下载点击UV等能力缺失被正确阻断；这是安全行为，但不能计入 FULL 同形通过。",
         "- `SHAPE_GAP`：有结果但字段、分组、宽表/透视形态、汇总行或周期列不足；不能计入 FULL 同形通过。",
         "- `NOT_RUN`：未找到该 FT 的执行证据。",
         "",
