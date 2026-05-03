@@ -129,6 +129,66 @@ def _rewrite_function_calls(
     return result + sql[cursor:]
 
 
+def normalize_mysql_backtick_identifiers(sql: str) -> str:
+    """Convert MySQL/TiDB backtick identifiers for the engine preview parser.
+
+    TiDB knowledge assets can legitimately use backticks for aliases such as
+    `日期`, but the current Wren engine preview path validates SQL through a
+    Trino-style parser, where backquoted identifiers are rejected.  Keep string
+    literals untouched and only rewrite identifier quotes outside quoted text.
+    """
+
+    result: list[str] = []
+    quote: str | None = None
+    index = 0
+
+    while index < len(sql):
+        char = sql[index]
+        next_char = sql[index + 1] if index + 1 < len(sql) else ""
+
+        if quote:
+            result.append(char)
+            if char == quote:
+                if next_char == quote:
+                    result.append(next_char)
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+
+        if char in {"'", '"'}:
+            quote = char
+            result.append(char)
+            index += 1
+            continue
+
+        if char != "`":
+            result.append(char)
+            index += 1
+            continue
+
+        index += 1
+        identifier: list[str] = []
+        while index < len(sql):
+            current = sql[index]
+            following = sql[index + 1] if index + 1 < len(sql) else ""
+            if current == "`":
+                if following == "`":
+                    identifier.append("`")
+                    index += 2
+                    continue
+                index += 1
+                break
+            identifier.append(current)
+            index += 1
+
+        escaped_identifier = "".join(identifier).replace('"', '""')
+        result.append(f'"{escaped_identifier}"')
+
+    return "".join(result)
+
+
 def _negate_sql_interval_value(value: str) -> str:
     normalized = value.strip()
     if re.fullmatch(r"\d+(?:\.\d+)?", normalized):
@@ -189,23 +249,26 @@ def _rewrite_mysql_datediff_call(inner: str) -> str | None:
 
 
 def normalize_mysql_date_interval_functions(sql: str) -> str:
-    """Convert common MySQL/TiDB date functions for Wren engine parsing.
+    """Convert common MySQL/TiDB syntax for Wren engine parsing.
 
     The SQL generation prompt intentionally favors MySQL/TiDB syntax, but the
     current preview path still validates through a Trino-style parser. This
     deterministic retry keeps generated SQL from failing on otherwise valid
     day-boundary filters such as DATE_ADD('2026-04-07', INTERVAL 1 DAY) or
-    DATEDIFF(event_date, cohort_date).
+    DATEDIFF(event_date, cohort_date). It also rewrites MySQL backtick aliases
+    (for example `日期`) into Trino-compatible double-quoted aliases.
     """
 
-    return _rewrite_function_calls(
+    return normalize_mysql_backtick_identifiers(
         _rewrite_function_calls(
-            _rewrite_function_calls(sql, "DATE_ADD", _rewrite_mysql_date_add_call),
-            "DATE_SUB",
-            _rewrite_mysql_date_sub_call,
+            _rewrite_function_calls(
+                _rewrite_function_calls(sql, "DATE_ADD", _rewrite_mysql_date_add_call),
+                "DATE_SUB",
+                _rewrite_mysql_date_sub_call,
+            ),
+            "DATEDIFF",
+            _rewrite_mysql_datediff_call,
         ),
-        "DATEDIFF",
-        _rewrite_mysql_datediff_call,
     )
 
 

@@ -31,9 +31,7 @@ GLOBAL_BLOCK_SIGNALS = [
     "缺少",
     "缺失",
     "请提供",
-    "请补充",
     "不能编造",
-    "无法计算",
     "当前知识库还缺少",
     "需要补充回收周期",
     "请说明要累计到",
@@ -129,6 +127,12 @@ def evaluate_case(case: FullCase, result: dict[str, Any] | None) -> tuple[str, l
 
     forbidden = [*GLOBAL_BLOCK_SIGNALS, *case.forbidden_signals]
     hit_forbidden = [signal for signal in forbidden if signal and normalize_text(signal) in haystack]
+    supplemental_prompt_re = re.compile(
+        r"请补充(?:投放|PV|UV|下载|平台|租户|渠道|日期|时间|参数|条件|周期|回收)",
+        re.I,
+    )
+    if supplemental_prompt_re.search(haystack):
+        hit_forbidden.append("请补充必要条件")
     if hit_forbidden:
         notes.append("命中阻断/缺口信号：" + "、".join(dict.fromkeys(hit_forbidden)))
 

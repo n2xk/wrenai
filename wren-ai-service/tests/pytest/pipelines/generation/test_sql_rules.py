@@ -9,6 +9,7 @@ from src.pipelines.generation.utils.sql import (
     construct_instructions,
     get_sql_generation_system_prompt,
     get_text_to_sql_rules,
+    normalize_mysql_backtick_identifiers,
     normalize_mysql_date_interval_functions,
 )
 
@@ -76,6 +77,31 @@ def test_normalize_mysql_date_interval_functions_for_engine_preview_retry():
     assert "DATE_DIFF('day', first_deposit_date, event_date) + 1" in normalized
     assert "INTERVAL 8 DAY" not in normalized
     assert "DATEDIFF(" not in normalized
+
+
+def test_normalize_mysql_backtick_identifiers_for_engine_preview_retry():
+    sql = (
+        "SELECT callback_time AS `日期`, '`不要改字符串里的反引号`' AS literal_value, "
+        "amount AS `累计1天` FROM dwd_order_deposit"
+    )
+
+    normalized = normalize_mysql_backtick_identifiers(sql)
+
+    assert 'callback_time AS "日期"' in normalized
+    assert 'amount AS "累计1天"' in normalized
+    assert "'`不要改字符串里的反引号`' AS literal_value" in normalized
+
+
+def test_mysql_preview_normalization_rewrites_dates_and_backticks():
+    sql = (
+        "SELECT DATE_ADD('2026-04-07', INTERVAL 1 DAY) AS `截止日期`, "
+        "DATEDIFF(event_date, first_deposit_date) AS `日龄`"
+    )
+
+    normalized = normalize_mysql_date_interval_functions(sql)
+
+    assert 'DATE_ADD(\'day\', 1, DATE \'2026-04-07\') AS "截止日期"' in normalized
+    assert 'DATE_DIFF(\'day\', first_deposit_date, event_date) AS "日龄"' in normalized
 
 
 def test_construct_instructions_groups_by_knowledge_asset_type():
