@@ -4,7 +4,7 @@ import_target: sql_pair
 import_format_version: v2
 dialect: tidb_mysql8
 parameter_style: colon_named
-result_grain: first_deposit_date + relative_day_no
+result_grain: first_deposit_date + user_segment + excel_recovery_columns
 id: T04
 title: cohort 累计收入
 report: ROI回收表
@@ -45,18 +45,21 @@ business_signature:
     - relative_day_revenue
   dimensions:
     - first_deposit_date
-    - relative_day_no
+    - user_segment
+    - recovery_day_columns
   parameter_slots: []
   external_dependencies: []
   positive_cues:
     - cohort累计收入
     - 首存后收入
     - N日累计收入
+    - 渠道累计收入宽表
+    - TOP3累计收入
   negative_cues:
     - 投放金额
     - PV
     - UV
-  expected_grain: first_deposit_date + relative_day_no
+  expected_grain: first_deposit_date + user_segment + excel_recovery_columns
 source_tables:
   - dwd_order_deposit
   - dwd_bet_order
@@ -71,6 +74,7 @@ parameters:
   - cohort_start_date
   - cohort_end_date
   - period_days
+  - top_n
 question_variants:
   - 计算首存 cohort 在 D1/D3/D7/D15/D30...D360 的累计渠道收入。
   - 统计某渠道首存 cohort 在指定回收周期内的累计渠道收入。
@@ -121,6 +125,9 @@ WITH RECURSIVE seq AS (
     FROM seq
     WHERE relative_day_no < :period_days
 ),
+top_limit AS (
+    SELECT COALESCE(:top_n, 3) AS top_n
+),
 first_deposit_cohort AS (
     SELECT
         d.tenant_plat_id,
@@ -136,14 +143,64 @@ first_deposit_cohort AS (
       AND d.callback_time < DATE_ADD(:cohort_end_date, INTERVAL 1 DAY)
     GROUP BY d.tenant_plat_id, d.channel_id, d.player_id
 ),
+rank_base AS (
+    SELECT
+        c.tenant_plat_id,
+        c.channel_id,
+        c.player_id,
+        COALESCE(SUM(b.valid_bet_amount), 0) AS total_valid_bet_amount
+    FROM first_deposit_cohort c
+    LEFT JOIN dwd_bet_order b
+           ON b.player_id = c.player_id
+          AND b.tenant_plat_id = c.tenant_plat_id
+          AND b.channel_id = c.channel_id
+          AND b.settle_status = 1
+          AND b.settle_time >= c.first_deposit_date
+          AND b.settle_time < DATE_ADD(c.first_deposit_date, INTERVAL :period_days DAY)
+    GROUP BY c.tenant_plat_id, c.channel_id, c.player_id
+),
+ranked_cohort AS (
+    SELECT
+        c.*,
+        ROW_NUMBER() OVER (
+            ORDER BY rb.total_valid_bet_amount DESC, c.player_id
+        ) AS bet_rank
+    FROM first_deposit_cohort c
+    INNER JOIN rank_base rb
+            ON rb.tenant_plat_id = c.tenant_plat_id
+           AND rb.channel_id = c.channel_id
+           AND rb.player_id = c.player_id
+),
+cohort_segments AS (
+    SELECT
+        tenant_plat_id,
+        channel_id,
+        player_id,
+        first_deposit_date,
+        '全部' AS user_segment
+    FROM ranked_cohort
+    UNION ALL
+    SELECT
+        rc.tenant_plat_id,
+        rc.channel_id,
+        rc.player_id,
+        rc.first_deposit_date,
+        CASE
+            WHEN rc.bet_rank <= tl.top_n THEN CONCAT('TOP', tl.top_n)
+            ELSE CONCAT('非TOP', tl.top_n)
+        END AS user_segment
+    FROM ranked_cohort rc
+    CROSS JOIN top_limit tl
+),
 cohort_size AS (
     SELECT
         c.tenant_plat_id,
         c.channel_id,
         c.first_deposit_date,
-        COUNT(*) AS cohort_user_count
-    FROM first_deposit_cohort c
-    GROUP BY c.tenant_plat_id, c.channel_id, c.first_deposit_date
+        c.user_segment,
+        COUNT(DISTINCT c.player_id) AS cohort_user_count
+    FROM cohort_segments c
+    GROUP BY c.tenant_plat_id, c.channel_id, c.first_deposit_date, c.user_segment
 ),
 bet_revenue AS (
     SELECT
@@ -296,6 +353,7 @@ daily_revenue AS (
         c.tenant_plat_id,
         c.channel_id,
         c.first_deposit_date,
+        c.user_segment,
         DATEDIFF(e.event_date, c.first_deposit_date) + 1 AS relative_day_no,
         SUM(e.win_loss_amount) AS daily_win_loss_amount,
         SUM(e.rebate_amount) AS daily_rebate_amount,
@@ -303,7 +361,7 @@ daily_revenue AS (
         SUM(e.marketing_amount) AS daily_marketing_amount,
         SUM(e.discount_adjust_amount) AS daily_discount_adjust_amount,
         SUM(e.channel_revenue_amount) AS daily_channel_revenue
-    FROM first_deposit_cohort c
+    FROM cohort_segments c
     INNER JOIN player_revenue_events e
             ON e.player_id = c.player_id
     WHERE DATEDIFF(e.event_date, c.first_deposit_date) + 1 BETWEEN 1 AND :period_days
@@ -311,33 +369,100 @@ daily_revenue AS (
         c.tenant_plat_id,
         c.channel_id,
         c.first_deposit_date,
+        c.user_segment,
         DATEDIFF(e.event_date, c.first_deposit_date) + 1
+),
+cumulative_by_day AS (
+    SELECT
+        cs.tenant_plat_id,
+        cs.channel_id,
+        cs.first_deposit_date,
+        cs.user_segment,
+        s.relative_day_no,
+        cs.cohort_user_count,
+        SUM(COALESCE(dr.daily_channel_revenue, 0)) OVER (
+            PARTITION BY cs.tenant_plat_id, cs.channel_id, cs.first_deposit_date, cs.user_segment
+            ORDER BY s.relative_day_no
+        ) AS cumulative_channel_revenue
+    FROM cohort_size cs
+    CROSS JOIN seq s
+    LEFT JOIN daily_revenue dr
+           ON dr.tenant_plat_id = cs.tenant_plat_id
+          AND dr.channel_id = cs.channel_id
+          AND dr.first_deposit_date = cs.first_deposit_date
+          AND dr.user_segment = cs.user_segment
+          AND dr.relative_day_no = s.relative_day_no
+),
+pivot_result AS (
+    SELECT
+        tenant_plat_id,
+        channel_id,
+        first_deposit_date,
+        user_segment,
+        cohort_user_count,
+        MAX(CASE WHEN relative_day_no = 1 THEN cumulative_channel_revenue END) AS cumulative_1_day,
+        MAX(CASE WHEN relative_day_no = 3 THEN cumulative_channel_revenue END) AS cumulative_3_day,
+        MAX(CASE WHEN relative_day_no = 7 THEN cumulative_channel_revenue END) AS cumulative_7_day,
+        MAX(CASE WHEN relative_day_no = 15 THEN cumulative_channel_revenue END) AS cumulative_15_day,
+        MAX(CASE WHEN relative_day_no = 30 THEN cumulative_channel_revenue END) AS cumulative_30_day,
+        MAX(CASE WHEN relative_day_no = 60 THEN cumulative_channel_revenue END) AS cumulative_60_day,
+        MAX(CASE WHEN relative_day_no = 90 THEN cumulative_channel_revenue END) AS cumulative_90_day,
+        MAX(CASE WHEN relative_day_no = 120 THEN cumulative_channel_revenue END) AS cumulative_120_day,
+        MAX(CASE WHEN relative_day_no = 150 THEN cumulative_channel_revenue END) AS cumulative_150_day,
+        MAX(CASE WHEN relative_day_no = 180 THEN cumulative_channel_revenue END) AS cumulative_180_day,
+        MAX(CASE WHEN relative_day_no = 210 THEN cumulative_channel_revenue END) AS cumulative_210_day,
+        MAX(CASE WHEN relative_day_no = 240 THEN cumulative_channel_revenue END) AS cumulative_240_day,
+        MAX(CASE WHEN relative_day_no = 270 THEN cumulative_channel_revenue END) AS cumulative_270_day,
+        MAX(CASE WHEN relative_day_no = 300 THEN cumulative_channel_revenue END) AS cumulative_300_day,
+        MAX(CASE WHEN relative_day_no = 330 THEN cumulative_channel_revenue END) AS cumulative_330_day,
+        MAX(CASE WHEN relative_day_no = 360 THEN cumulative_channel_revenue END) AS cumulative_360_day
+    FROM cumulative_by_day
+    GROUP BY tenant_plat_id, channel_id, first_deposit_date, user_segment, cohort_user_count
+),
+with_dims AS (
+    SELECT
+        pr.*,
+        tp.name AS site_name,
+        ch.channel_partner_username AS channel_partner_name,
+        ch.name AS channel_name
+    FROM pivot_result pr
+    LEFT JOIN tenant_plat tp
+           ON tp.id = pr.tenant_plat_id
+    LEFT JOIN channel ch
+           ON ch.id = pr.channel_id
+          AND ch.tenant_plat_id = pr.tenant_plat_id
 )
 SELECT
-    cs.tenant_plat_id,
-    cs.channel_id,
-    cs.first_deposit_date,
-    CONCAT('D', s.relative_day_no) AS day_label,
-    s.relative_day_no,
-    cs.cohort_user_count,
-    COALESCE(dr.daily_win_loss_amount, 0) AS daily_win_loss_amount,
-    COALESCE(dr.daily_rebate_amount, 0) AS daily_rebate_amount,
-    COALESCE(dr.daily_task_amount, 0) AS daily_task_amount,
-    COALESCE(dr.daily_marketing_amount, 0) AS daily_marketing_amount,
-    COALESCE(dr.daily_discount_adjust_amount, 0) AS daily_discount_adjust_amount,
-    COALESCE(dr.daily_channel_revenue, 0) AS daily_channel_revenue,
-    SUM(COALESCE(dr.daily_channel_revenue, 0)) OVER (
-        PARTITION BY cs.tenant_plat_id, cs.channel_id, cs.first_deposit_date
-        ORDER BY s.relative_day_no
-    ) AS cumulative_channel_revenue
-FROM cohort_size cs
-CROSS JOIN seq s
-LEFT JOIN daily_revenue dr
-       ON dr.tenant_plat_id = cs.tenant_plat_id
-      AND dr.channel_id = cs.channel_id
-      AND dr.first_deposit_date = cs.first_deposit_date
-      AND dr.relative_day_no = s.relative_day_no
-ORDER BY cs.first_deposit_date, s.relative_day_no;
+    first_deposit_date AS `日期`,
+    site_name AS `站点名称`,
+    channel_partner_name AS `所属渠道商`,
+    channel_name AS `渠道名称`,
+    user_segment AS `用户类型`,
+    cohort_user_count AS `首存用户数`,
+    cumulative_1_day AS `累计1天`,
+    cumulative_3_day AS `3天`,
+    cumulative_7_day AS `7天`,
+    cumulative_15_day AS `15天`,
+    cumulative_30_day AS `30天`,
+    cumulative_60_day AS `60天`,
+    cumulative_90_day AS `90天`,
+    cumulative_120_day AS `120天`,
+    cumulative_150_day AS `150天`,
+    cumulative_180_day AS `180天`,
+    cumulative_210_day AS `210天`,
+    cumulative_240_day AS `240天`,
+    cumulative_270_day AS `270天`,
+    cumulative_300_day AS `300天`,
+    cumulative_330_day AS `330天`,
+    cumulative_360_day AS `360天`,
+    ROUND(
+        (cumulative_360_day - LAG(cumulative_360_day) OVER (PARTITION BY user_segment ORDER BY first_deposit_date))
+        / NULLIF(LAG(cumulative_360_day) OVER (PARTITION BY user_segment ORDER BY first_deposit_date), 0),
+        6
+    ) AS `环比系数`
+FROM with_dims
+ORDER BY first_deposit_date,
+    CASE user_segment WHEN '全部' THEN 0 WHEN CONCAT('TOP', COALESCE(:top_n, 3)) THEN 1 ELSE 2 END;
 ```
 
 ## 备注
