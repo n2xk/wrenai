@@ -40,6 +40,17 @@ def test_shared_slot_extractor_carries_base_values_and_external_supply():
     }
 
 
+def test_shared_slot_extractor_parses_period_days_from_clarification_reply():
+    assert extract_slot_values_from_clarification_reply(
+        query="就看首存后 D7",
+        pending_slots=["period_days"],
+        base_slot_values={"tenant_plat_id": "990001"},
+    ) == {
+        "tenant_plat_id": "990001",
+        "period_days": "7",
+    }
+
+
 def test_question_skeleton_masks_literals_but_keeps_structure():
     assert normalize_question_skeleton(
         "统计渠道990011在2026-04-01充值金额"

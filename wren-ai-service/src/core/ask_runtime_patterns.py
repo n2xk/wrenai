@@ -125,7 +125,7 @@ DEFAULT_SEMANTIC_METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
     "pv": (r"\bPV\b", r"访问量", r"访问PV"),
     "registration_count": (r"注册人数", r"注册用户"),
     "retention_deposit": (r"续存", r"复存", r"[二三四五六2-6]\s*存"),
-    "roi": (r"\bROI\b", r"投放回收", r"回本"),
+    "roi": (r"(?<![A-Za-z0-9])ROI(?![A-Za-z0-9])", r"投放回收", r"回本"),
     "uv": (r"\bUV\b", r"独立访客", r"访问UV"),
     "withdraw_amount": (r"提现金额", r"提款金额"),
     "win_loss": (r"输赢", r"平台输赢"),

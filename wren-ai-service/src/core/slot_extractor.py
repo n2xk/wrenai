@@ -26,6 +26,10 @@ _METRIC_FOCUS_PATTERN = re.compile(
     r"(ROI|投放|回本|充值|存款|投注|流水|首存|首充|续存|留存|流量|综合日报)",
     flags=re.IGNORECASE,
 )
+_PERIOD_DAYS_PATTERN = re.compile(
+    r"(?:D|d)\s*(\d{1,3})|(?:回收|累计|首存后|第)?\s*(\d{1,3})\s*天",
+    flags=re.IGNORECASE,
+)
 
 
 def _extract_integer_values(patterns: Sequence[str], text: str) -> list[int]:
@@ -136,6 +140,14 @@ def extract_slot_values_from_clarification_reply(
         metric_match = _METRIC_FOCUS_PATTERN.search(query)
         if metric_match:
             slot_values["metric_focus"] = metric_match.group(1)
+
+    period_match = _PERIOD_DAYS_PATTERN.search(query)
+    if period_match:
+        period_days = next((group for group in period_match.groups() if group), None)
+        if period_days:
+            for period_slot in ("period_days", "n_days"):
+                if period_slot in pending_slots and period_slot not in slot_values:
+                    slot_values[period_slot] = str(int(period_days))
 
     for pending_slot in pending_slots:
         dependency_id = external_dependency_id_from_slot(pending_slot)

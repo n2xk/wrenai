@@ -9,6 +9,7 @@ from src.core.fixed_order_ask_runtime import (
     _build_sql_candidate_fingerprint,
     _build_sql_correction_candidate_inputs,
     _can_retry_template_core_rejection_as_reference,
+    _extract_inline_external_dependency_supplies,
     _score_sql_business_guards,
     _select_best_sql_correction_result,
     _semantic_metric_patterns,
@@ -83,6 +84,106 @@ def test_missing_external_source_returns_clarification_slots():
         "biz_date + channel_id",
         "投放金额",
     ]
+
+
+def test_channel_roi_missing_tenant_is_business_slot_before_external_dependency():
+    query = "统计渠道990011首存cohort的ROI"
+
+    slot_requirement = detect_missing_required_slot_requirement(query)
+    source_requirement = detect_missing_external_source_requirement(
+        query,
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["biz_date + channel_id"],
+                "metadata": {
+                    "trigger_when": ["ROI"],
+                    "validation": {"required_columns": ["ad_spend"]},
+                },
+            }
+        ],
+    )
+
+    assert slot_requirement is not None
+    assert slot_requirement["missing_parameters"] == ["tenant_plat_id"]
+    assert "租户平台" in slot_requirement["content"]
+    assert source_requirement is not None
+
+
+def test_inline_external_supply_embedded_in_query_satisfies_configured_dependency():
+    query = (
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort"
+        "从D1到D7的ROI，投放金额为04-01=1000、04-02=2000、04-03=500"
+    )
+    instructions = [
+        {
+            "knowledge_asset_type": "external_dependency",
+            "external_dependency_id": "ad_spend",
+            "name": "投放金额",
+            "source_status": "missing",
+            "missing_behavior": "ask_user",
+            "required_grain": ["biz_date + channel_id"],
+            "metadata": {
+                "trigger_when": ["ROI"],
+                "validation": {"required_columns": ["ad_spend"]},
+            },
+        }
+    ]
+
+    inline_supplies = _extract_inline_external_dependency_supplies(
+        query,
+        instructions=instructions,
+    )
+    requirement = detect_missing_external_source_requirement(
+        query,
+        instructions=instructions,
+        supplied_external_dependencies={
+            "external_dependency_values": inline_supplies,
+        },
+    )
+    instruction = build_supplied_external_dependency_instruction(
+        {"external_dependency_values": inline_supplies}
+    )
+
+    assert requirement is None
+    assert inline_supplies["ad_spend"]["rows"] == [
+        {"date": "2026-04-01", "ad_spend": "1000", "channel_id": "990011"},
+        {"date": "2026-04-02", "ad_spend": "2000", "channel_id": "990011"},
+        {"date": "2026-04-03", "ad_spend": "500", "channel_id": "990011"},
+    ]
+    assert instruction is not None
+    assert "WITH supplied_external_ad_spend" in instruction["instruction"]
+
+
+def test_localized_external_dependency_id_matches_canonical_supply():
+    requirement = detect_missing_external_source_requirement(
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort从D1到D7的ROI（已补充：投放金额=date,channel_id,ad_spend\n2026-04-01,990011,1000）",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "投放金额",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["biz_date + channel_id"],
+                "metadata": {
+                    "trigger_when": ["ROI"],
+                    "validation": {"required_columns": ["ad_spend"]},
+                },
+            }
+        ],
+        supplied_external_dependencies={
+            "external_dependencies": {
+                "ad_spend": "date,channel_id,ad_spend\n2026-04-01,990011,1000"
+            }
+        },
+    )
+
+    assert requirement is None
 
 
 def test_supplied_external_dependency_csv_satisfies_coverage():
@@ -678,6 +779,55 @@ def test_detect_missing_required_slot_requirement_keeps_metric_specific_channel_
     assert result is None
 
 
+def test_detect_missing_required_slot_requirement_clarifies_vague_roi_channel_scope():
+    result = detect_missing_required_slot_requirement("看这个渠道最近ROI怎么样")
+
+    assert result is not None
+    assert result["slot"] == "channel_performance_context"
+    assert result["missing_parameters"] == [
+        "tenant_plat_id",
+        "channel_id",
+        "date_range",
+    ]
+    assert "关注的指标方向" not in result["content"]
+
+
+@pytest.mark.asyncio
+async def test_missing_slot_rule_prioritizes_business_slot_over_template_dates():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(
+        user_query="统计渠道990011首存cohort的ROI",
+        template_decision={
+            "mode": "anchored_template",
+            "missing_parameters": [
+                "cohort_start_date",
+                "cohort_end_date",
+                "period_days",
+                "tenant_plat_id",
+            ],
+            "sql_source": "anchored_generated",
+        },
+    )
+    results = runtime._mixed_answer_composer.start(request_from="test")
+    updates = []
+
+    await runtime._maybe_handle_missing_slot_rule(
+        state=state,
+        query_id="clarify-route04a",
+        histories=[],
+        trace_id=None,
+        is_followup=False,
+        is_stopped=lambda: False,
+        set_result=lambda **kwargs: updates.append(kwargs),
+        results=results,
+        orchestrator="test",
+    )
+
+    assert state.clarification_state["pending_slots"] == ["tenant_plat_id"]
+    assert "租户平台" in updates[-1]["content"]
+    assert "投放金额" not in updates[-1]["content"]
+
+
 def test_detect_missing_required_slot_requirement_uses_clarification_slot_values():
     result = detect_missing_required_slot_requirement(
         "帮我看看这个渠道最近表现怎么样",
@@ -704,6 +854,17 @@ def test_detect_missing_required_slot_requirement_clarifies_ratio_scope():
         "channel_id",
         "date_range",
     ]
+
+
+def test_detect_missing_required_slot_requirement_ratio_prompt_only_lists_missing_scope():
+    result = detect_missing_required_slot_requirement(
+        "输出租户平台990001渠道990011首存用户D1到D7每日杀率和投充比趋势"
+    )
+
+    assert result is not None
+    assert result["missing_parameters"] == ["date_range"]
+    assert "时间范围" in result["content"]
+    assert "租户平台、渠道 ID" not in result["content"]
 
 
 def test_detect_missing_required_slot_requirement_clarifies_distribution_scope():
@@ -886,6 +1047,26 @@ def test_detect_missing_template_parameter_requirement_clarifies_broad_context()
         "end_date",
     ]
     assert "关键查询范围" in result["content"]
+
+
+def test_detect_missing_template_parameter_requirement_filters_resolved_context():
+    result = detect_missing_template_parameter_requirement(
+        "输出租户平台990001渠道990011首存用户D1到D7每日充值、提现、有效投注、输赢、杀率和投充比趋势",
+        {
+            "missing_parameters": [
+                "tenant_plat_id",
+                "channel_id",
+                "start_date",
+                "end_date",
+            ],
+        },
+    )
+
+    assert result is not None
+    assert result["slot"] == "template_required_context"
+    assert result["missing_parameters"] == ["start_date", "end_date"]
+    assert "时间范围" in result["content"]
+    assert "租户平台、渠道 ID" not in result["content"]
 
 
 def test_detect_missing_template_parameter_requirement_clarifies_period_days():
@@ -2513,7 +2694,7 @@ async def test_missing_source_rule_injects_inline_cte_for_fallback_external_supp
     )
     decision = state.semantic_plan["decision"]
     assert "external_dependency_user_supplied" in decision["reason_codes"]
-    assert decision["provided_external_dependencies"] == ["投放金额"]
+    assert decision["provided_external_dependencies"] == ["ad_spend"]
 
 
 def test_build_sql_core_signature_allows_alias_and_whitespace_changes():

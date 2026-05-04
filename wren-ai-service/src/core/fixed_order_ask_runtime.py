@@ -1002,8 +1002,18 @@ def _normalize_dependency_id(value: Any) -> str:
         return ""
     aliases = {
         "spend_amount": "ad_spend",
+        "投放金额": "ad_spend",
+        "投放成本": "ad_spend",
+        "买量成本": "ad_spend",
+        "广告费": "ad_spend",
         "pv": "access_pv",
+        "PV": "access_pv",
+        "访问PV": "access_pv",
         "uv": "access_uv",
+        "UV": "access_uv",
+        "访问UV": "access_uv",
+        "下载点击UV": "download_click_uv",
+        "下载UV": "download_click_uv",
     }
     return aliases.get(normalized, normalized)
 
@@ -1616,6 +1626,86 @@ def _match_configured_external_dependencies(
         if should_match:
             configured_matches.append(dependency)
     return configured_matches
+
+
+def _extract_inline_external_dependency_supplies(
+    query: Optional[str],
+    *,
+    sql_samples: Sequence[Any] | None = None,
+    instructions: Sequence[Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Extract explicit external data embedded in the user question.
+
+    This intentionally accepts only table/date-value shaped data.  A plain
+    number in a business question is often a tenant/channel/date literal, so
+    scalar-only extraction is unsafe for first-turn ask flows.
+    """
+
+    if not query:
+        return {}
+
+    configured_dependencies = _extract_configured_external_dependencies(
+        sql_samples=sql_samples,
+        instructions=instructions,
+    )
+    configured_matches = _match_configured_external_dependencies(
+        query,
+        configured_dependencies,
+    )
+    supplies: dict[str, dict[str, Any]] = {}
+    for dependency in configured_matches:
+        dependency_id = _normalize_dependency_id(dependency.get("id"))
+        if not dependency_id:
+            continue
+        dependency_texts = [
+            dependency.get("name"),
+            dependency_id,
+            _canonical_dependency_name(dependency_id),
+            *(_normalize_string_list(dependency.get("aliases"))),
+        ]
+        if not _query_matches_any_text(query, dependency_texts):
+            continue
+
+        parsed_supply = _parse_external_supply_text(query, dependency_id)
+        rows = [
+            row
+            for row in parsed_supply.get("rows") or []
+            if isinstance(row, dict)
+        ]
+        has_structured_rows = any(
+            "date" in row or "biz_date" in row or "channel_id" in row for row in rows
+        )
+        if not rows or not has_structured_rows:
+            continue
+        supplies[dependency_id] = parsed_supply
+    return supplies
+
+
+def _merge_inline_external_dependency_supplies(
+    slot_values: dict[str, Any] | None,
+    inline_supplies: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not inline_supplies:
+        return slot_values
+
+    merged_slot_values = dict(slot_values or {})
+    existing_supplies = _normalize_external_dependency_supply_map(merged_slot_values)
+    raw_external_values = merged_slot_values.get("external_dependency_values")
+    external_values = (
+        dict(raw_external_values) if isinstance(raw_external_values, dict) else {}
+    )
+    changed = False
+    for dependency_id, supply in inline_supplies.items():
+        normalized_dependency_id = _normalize_dependency_id(dependency_id)
+        if normalized_dependency_id in existing_supplies:
+            continue
+        external_values[normalized_dependency_id] = supply
+        changed = True
+
+    if not changed:
+        return slot_values
+    merged_slot_values["external_dependency_values"] = external_values
+    return merged_slot_values
 
 
 def detect_supplied_external_dependency_coverage(
@@ -2890,6 +2980,7 @@ def _query_is_ambiguous_channel_performance_question(query: Optional[str]) -> bo
         r"(?:表现|效果|情况).*?(?:怎么样|如何)",
         r"帮我看看.*渠道.*最近",
         r"看一下.*渠道.*最近",
+        r"看.*渠道.*最近.*?(?:怎么样|如何)?",
     ]
     if not any(
         re.search(pattern, text, flags=re.IGNORECASE)
@@ -2897,10 +2988,11 @@ def _query_is_ambiguous_channel_performance_question(query: Optional[str]) -> bo
     ):
         return False
 
-    # If the user already named a concrete metric, let the normal slot/external
-    # dependency guards handle it. This keeps focused questions like “这个渠道新客
-    # 首充成本是多少” on the ROI/external-data path instead of over-clarifying.
-    return not _extract_pattern_keys(text, _semantic_metric_patterns())
+    # Vague "这个渠道/最近/怎么样" wording still needs concrete scope even when a
+    # metric such as ROI is named; otherwise the external-data guard can fire
+    # before channel/date slots are known and consume later clarification turns
+    # as external-data input.
+    return True
 
 
 def detect_missing_ambiguous_channel_requirement(
@@ -2943,13 +3035,28 @@ def detect_missing_ambiguous_channel_requirement(
     if not missing_parameters:
         return None
 
+    missing_scope_labels = list(
+        dict.fromkeys(
+            {
+                "tenant_plat_id": "租户平台",
+                "channel_id": "渠道 ID",
+                "date_range": "时间范围",
+                "metric_focus": "关注的指标方向",
+            }.get(parameter, parameter)
+            for parameter in missing_parameters
+        )
+    )
+    metric_hint = (
+        "（例如充值、投注、ROI、留存、流量或综合日报）"
+        if "metric_focus" in missing_parameters
+        else ""
+    )
     return {
         "slot": "channel_performance_context",
         "missing_parameters": missing_parameters,
         "content": (
             "这个问题还需要先明确查询范围，避免我默认猜测渠道、时间或指标。"
-            "请补充租户平台、渠道 ID、时间范围，以及你更关注的指标方向"
-            "（例如充值、投注、ROI、留存、流量或综合日报）。"
+            f"请补充{'、'.join(missing_scope_labels)}{metric_hint}。"
         ),
         "reasoning": "渠道表现类问题缺少明确范围：需要先澄清渠道、时间和关注指标。",
     }
@@ -2990,13 +3097,22 @@ def detect_missing_financial_ratio_scope_requirement(
     if not missing_parameters:
         return None
 
+    missing_scope_labels = list(
+        dict.fromkeys(
+            {
+                "tenant_plat_id": "租户平台",
+                "channel_id": "渠道 ID",
+                "date_range": "时间范围",
+            }.get(parameter, parameter)
+            for parameter in missing_parameters
+        )
+    )
     return {
         "slot": "financial_ratio_scope",
         "missing_parameters": missing_parameters,
         "content": (
             "投充比、流水充值比或杀率这类比例指标必须先明确统计范围，"
-            "否则分母为 0 或无数据日期时容易误算。请补充租户平台、渠道 ID "
-            "和时间范围后再继续。"
+            f"否则分母为 0 或无数据日期时容易误算。请补充{'、'.join(missing_scope_labels)}后再继续。"
         ),
         "reasoning": "比例类问题缺少统计范围，需先澄清 tenant/channel/date 后再生成 SQL。",
     }
@@ -3042,12 +3158,22 @@ def detect_missing_distribution_scope_requirement(
     if not missing_parameters:
         return None
 
+    missing_scope_labels = list(
+        dict.fromkeys(
+            {
+                "tenant_plat_id": "租户平台",
+                "channel_id": "渠道 ID",
+                "date_range": "时间范围",
+            }.get(parameter, parameter)
+            for parameter in missing_parameters
+        )
+    )
     return {
         "slot": "distribution_scope",
         "missing_parameters": missing_parameters,
         "content": (
             "占比、分布或金额桶这类指标需要先明确统计范围，"
-            "否则分母口径不清。请补充租户平台、必要的渠道 ID 和时间范围后再继续。"
+            f"否则分母口径不清。请补充{'、'.join(missing_scope_labels)}后再继续。"
         ),
         "reasoning": "分布/占比类问题缺少统计范围，需先澄清后再生成 SQL。",
     }
@@ -3086,6 +3212,9 @@ def detect_missing_required_slot_requirement(
 def detect_missing_template_parameter_requirement(
     query: Optional[str],
     template_decision: Optional[dict[str, Any]],
+    *,
+    histories: Sequence[Any] | None = None,
+    resolved_slots: dict[str, Any] | None = None,
 ) -> Optional[dict[str, Any]]:
     if not query or not template_decision:
         return None
@@ -3112,6 +3241,22 @@ def detect_missing_template_parameter_requirement(
             "reasoning": "模板缺少首存 cohort 起止日期，需先澄清日期范围。",
         }
 
+    resolved_context_parameters: set[str] = set()
+    if _extract_tenant_plat_ids_from_text(query) or _slot_value_is_present(
+        resolved_slots, "tenant_plat_id"
+    ) or len(_resolve_history_tenant_plat_ids(histories)) == 1:
+        resolved_context_parameters.add("tenant_plat_id")
+    if _extract_channel_ids_from_text(query) or _slot_value_is_present(
+        resolved_slots, "channel_id"
+    ) or len(_resolve_history_channel_ids(histories)) == 1:
+        resolved_context_parameters.add("channel_id")
+    if (
+        has_explicit_date
+        or _slot_values_resolve_date_range(resolved_slots)
+        or _history_has_date_context(histories)
+    ):
+        resolved_context_parameters.update({"start_date", "end_date"})
+
     required_context_slots = [
         parameter
         for parameter in (
@@ -3121,14 +3266,27 @@ def detect_missing_template_parameter_requirement(
             "end_date",
         )
         if parameter in missing_parameters
+        and parameter not in resolved_context_parameters
     ]
     if len(required_context_slots) >= 2:
+        context_labels = {
+            "tenant_plat_id": "租户平台",
+            "channel_id": "渠道 ID",
+            "start_date": "时间范围",
+            "end_date": "时间范围",
+        }
+        missing_context_labels = list(
+            dict.fromkeys(
+                context_labels.get(parameter, parameter)
+                for parameter in required_context_slots
+            )
+        )
         return {
             "slot": "template_required_context",
             "missing_parameters": required_context_slots,
             "content": (
                 "这个问题匹配到的业务模板还缺少关键查询范围。"
-                "请补充租户平台、渠道 ID 和时间范围后再继续，"
+                f"请补充{'、'.join(missing_context_labels)}后再继续，"
                 "避免我用默认值或历史样例误生成结果。"
             ),
             "reasoning": "模板缺少多个关键上下文参数，需先澄清后再生成 SQL。",
@@ -7587,6 +7745,17 @@ class BaseFixedOrderAskRuntime:
         results: dict[str, Any],
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
+        inline_supplies = _extract_inline_external_dependency_supplies(
+            state.user_query,
+            sql_samples=state.sql_samples,
+            instructions=state.effective_instructions or state.instructions,
+        )
+        if inline_supplies:
+            state.slot_values = _merge_inline_external_dependency_supplies(
+                state.slot_values,
+                inline_supplies,
+            )
+
         missing_source_requirement = detect_missing_external_source_requirement(
             state.user_query,
             sql_samples=state.sql_samples,
@@ -7727,13 +7896,15 @@ class BaseFixedOrderAskRuntime:
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
         missing_slot_requirement = (
-            detect_missing_template_parameter_requirement(
-                state.user_query,
-                state.template_decision,
-            )
-            or self._build_policy_missing_slot_requirement(state)
+            self._build_policy_missing_slot_requirement(state)
             or detect_missing_required_slot_requirement(
                 state.user_query,
+                histories=histories,
+                resolved_slots=state.slot_values,
+            )
+            or detect_missing_template_parameter_requirement(
+                state.user_query,
+                state.template_decision,
                 histories=histories,
                 resolved_slots=state.slot_values,
             )
@@ -8587,6 +8758,20 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                         retrieval_scope_id=retrieval_scope_id,
                     )
 
+                    missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                        state=state,
+                        query_id=ask_request.query_id,
+                        histories=histories,
+                        trace_id=trace_id,
+                        is_followup=is_followup,
+                        is_stopped=is_stopped,
+                        set_result=set_result,
+                        results=results,
+                        orchestrator=orchestrator,
+                    )
+                    if missing_slot_result is not None:
+                        return missing_slot_result
+
                     missing_source_result = (
                         await self._maybe_handle_missing_source_rule(
                             state=state,
@@ -8603,20 +8788,6 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     )
                     if missing_source_result is not None:
                         return missing_source_result
-
-                    missing_slot_result = await self._maybe_handle_missing_slot_rule(
-                        state=state,
-                        query_id=ask_request.query_id,
-                        histories=histories,
-                        trace_id=trace_id,
-                        is_followup=is_followup,
-                        is_stopped=is_stopped,
-                        set_result=set_result,
-                        results=results,
-                        orchestrator=orchestrator,
-                    )
-                    if missing_slot_result is not None:
-                        return missing_slot_result
 
                     if self._allow_intent_classification:
                         early_result = await self._handle_intent_result(
@@ -8747,6 +8918,20 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     retrieval_scope_id=retrieval_scope_id,
                 )
 
+                missing_slot_result = await self._maybe_handle_missing_slot_rule(
+                    state=state,
+                    query_id=ask_request.query_id,
+                    histories=histories,
+                    trace_id=trace_id,
+                    is_followup=is_followup,
+                    is_stopped=is_stopped,
+                    set_result=set_result,
+                    results=results,
+                    orchestrator=orchestrator,
+                )
+                if missing_slot_result is not None:
+                    return missing_slot_result
+
                 missing_source_result = await self._maybe_handle_missing_source_rule(
                     state=state,
                     ask_request=ask_request,
@@ -8761,20 +8946,6 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                 )
                 if missing_source_result is not None:
                     return missing_source_result
-
-                missing_slot_result = await self._maybe_handle_missing_slot_rule(
-                    state=state,
-                    query_id=ask_request.query_id,
-                    histories=histories,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
-                    is_stopped=is_stopped,
-                    set_result=set_result,
-                    results=results,
-                    orchestrator=orchestrator,
-                )
-                if missing_slot_result is not None:
-                    return missing_slot_result
 
                 if self._allow_intent_classification:
                     early_result = await self._handle_intent_result(
