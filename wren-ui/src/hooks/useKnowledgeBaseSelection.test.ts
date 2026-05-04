@@ -1,6 +1,8 @@
 import {
   areKnowledgeBaseListsEquivalent,
+  resolveKnowledgeBaseSwitchActiveId,
   resolveStableKnowledgeBaseList,
+  shouldShortCircuitKnowledgeBaseSwitch,
 } from './useKnowledgeBaseSelection';
 
 type KnowledgeBase = {
@@ -87,5 +89,28 @@ describe('useKnowledgeBaseSelection helpers', () => {
       }),
     ).toBe(current);
     expect(resolveStableKnowledgeBaseList(current, [])).toEqual([]);
+  });
+
+  it('uses the route knowledge base as the active switch target when selector state is stale', () => {
+    expect(
+      resolveKnowledgeBaseSwitchActiveId({
+        routeKnowledgeBaseId: 'kb-2',
+        currentKnowledgeBaseId: 'kb-1',
+      }),
+    ).toBe('kb-2');
+    expect(
+      shouldShortCircuitKnowledgeBaseSwitch({
+        targetKnowledgeBaseId: 'kb-1',
+        routeKnowledgeBaseId: 'kb-2',
+        currentKnowledgeBaseId: 'kb-1',
+      }),
+    ).toBe(false);
+    expect(
+      shouldShortCircuitKnowledgeBaseSwitch({
+        targetKnowledgeBaseId: 'kb-2',
+        routeKnowledgeBaseId: 'kb-2',
+        currentKnowledgeBaseId: 'kb-1',
+      }),
+    ).toBe(true);
   });
 });

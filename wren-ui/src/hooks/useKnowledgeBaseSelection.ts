@@ -77,6 +77,30 @@ export const resolveStableKnowledgeBaseList = <
     : nextKnowledgeBases;
 };
 
+export const resolveKnowledgeBaseSwitchActiveId = ({
+  routeKnowledgeBaseId,
+  currentKnowledgeBaseId,
+}: {
+  routeKnowledgeBaseId?: string | null;
+  currentKnowledgeBaseId?: string | null;
+}) => routeKnowledgeBaseId || currentKnowledgeBaseId || null;
+
+export const shouldShortCircuitKnowledgeBaseSwitch = ({
+  targetKnowledgeBaseId,
+  routeKnowledgeBaseId,
+  currentKnowledgeBaseId,
+}: {
+  targetKnowledgeBaseId?: string | null;
+  routeKnowledgeBaseId?: string | null;
+  currentKnowledgeBaseId?: string | null;
+}) =>
+  Boolean(targetKnowledgeBaseId) &&
+  targetKnowledgeBaseId ===
+    resolveKnowledgeBaseSwitchActiveId({
+      routeKnowledgeBaseId,
+      currentKnowledgeBaseId,
+    });
+
 export default function useKnowledgeBaseSelection<
   TKnowledgeBase extends KnowledgeBaseSwitchable,
 >({
@@ -238,14 +262,25 @@ export default function useKnowledgeBaseSelection<
 
   const switchKnowledgeBase = useCallback(
     async (knowledgeBase: TKnowledgeBase, buildSwitchUrl: string) => {
-      if (knowledgeBase.id === currentKnowledgeBaseId) {
+      const activeSwitchKnowledgeBaseId = resolveKnowledgeBaseSwitchActiveId({
+        routeKnowledgeBaseId,
+        currentKnowledgeBaseId,
+      });
+
+      if (
+        shouldShortCircuitKnowledgeBaseSwitch({
+          targetKnowledgeBaseId: knowledgeBase.id,
+          routeKnowledgeBaseId,
+          currentKnowledgeBaseId,
+        })
+      ) {
         setPendingKnowledgeBaseId(null);
         setSelectedKnowledgeBaseId(knowledgeBase.id);
         return;
       }
 
       if (
-        !shouldRouteSwitchKnowledgeBase(knowledgeBase, currentKnowledgeBaseId)
+        !shouldRouteSwitchKnowledgeBase(knowledgeBase, activeSwitchKnowledgeBaseId)
       ) {
         setPendingKnowledgeBaseId(null);
         setSelectedKnowledgeBaseId(knowledgeBase.id);
@@ -268,6 +303,7 @@ export default function useKnowledgeBaseSelection<
     [
       currentKnowledgeBaseId,
       currentPath,
+      routeKnowledgeBaseId,
       shouldRouteSwitchKnowledgeBase,
       transitionTo,
     ],
