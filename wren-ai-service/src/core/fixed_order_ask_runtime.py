@@ -8100,10 +8100,13 @@ class BaseFixedOrderAskRuntime:
                 ]
 
         supplied_external_builders_enabled = _supplied_external_sql_builders_enabled()
+        # External FULL builders must run even when an anchored/internal template has
+        # already populated api_results.  After the user supplied authoritative
+        # external values, Excel-shaped deterministic SQL should override the
+        # earlier degraded/internal-only template result instead of being skipped.
         supplied_external_daily_report_sql = (
             None
             if is_stopped()
-            or state.api_results
             or not supplied_external_builders_enabled
             else build_supplied_external_daily_report_sql(
                 state.user_query, state.slot_values
@@ -8136,7 +8139,6 @@ class BaseFixedOrderAskRuntime:
         supplied_external_roi_sql = (
             None
             if is_stopped()
-            or state.api_results
             or not supplied_external_builders_enabled
             else build_supplied_external_roi_sql(state.user_query, state.slot_values)
         )

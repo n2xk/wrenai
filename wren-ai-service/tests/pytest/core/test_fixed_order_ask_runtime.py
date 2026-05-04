@@ -179,6 +179,33 @@ def test_supplied_external_daily_report_sql_uses_external_metrics_and_excel_colu
     assert "tidb_business_demo_dwd_player_login_log" in sql
 
 
+def test_supplied_external_daily_report_sql_accepts_clarification_session_slots():
+    supplied_csv = (
+        "biz_date,tenant_plat_id,channel_id,ad_spend,access_pv,access_uv,download_click_uv\n"
+        "2026-04-01,990001,990011,1120,12530,3150,845"
+    )
+
+    sql = build_supplied_external_daily_report_sql(
+        "生成第一期综合日报表完整宽表：租户平台990001渠道990011在2026-04-01到2026-04-06每日综合日报，"
+        "包含汇总行、投放金额、PV、UV、下载点击UV。",
+        {
+            "external_dependencies": {
+                "投放金额": supplied_csv,
+                "访问PV": supplied_csv,
+                "访问UV": supplied_csv,
+                "下载点击UV": supplied_csv,
+            }
+        },
+    )
+
+    assert sql is not None
+    assert "external_metrics AS" in sql
+    assert "1120 AS ad_spend" in sql
+    assert "12530 AS access_pv" in sql
+    assert "3150 AS access_uv" in sql
+    assert "845 AS download_click_uv" in sql
+
+
 def test_supplied_external_roi_sql_uses_excel_shape_after_ad_spend_supply():
     sql = build_supplied_external_roi_sql(
         "生成第一期ROI回收表里的渠道整体ROI表：租户平台990001渠道990011首存日期"
