@@ -25,6 +25,13 @@ DEFAULT_VARIANT_CSV = ROOT / "csv" / "17_第一期Excel_FULL泛化变体清单.c
 DEFAULT_ASK_SUMMARY = (
     ROOT.parent.parent / "wren-ui" / "tmp" / "tidb-b2-b6-full-e2e-output" / "ask-summary.json"
 )
+DEFAULT_EXTERNAL_SUPPLY_SUMMARY = (
+    ROOT.parent.parent
+    / "wren-ui"
+    / "tmp"
+    / "tidb-full-external-supply-e2e-output"
+    / "summary.json"
+)
 
 GLOBAL_BLOCK_SIGNALS = [
     "SQL 缺失",
@@ -91,6 +98,44 @@ def load_ask_summary(path: Path | None) -> dict[str, dict[str, Any]]:
     return result
 
 
+def load_external_supply_summary(path: Path | None) -> dict[str, dict[str, Any]]:
+    """Load FT01/FT02/FT04 external-supply closure evidence.
+
+    The main B6 runner intentionally records these cases as BLOCKED_EXTERNAL on
+    the first turn when PV/UV/ad-spend inputs are missing. A FULL pass for these
+    cases requires a second, UI E2E "补充并继续" run. This helper normalizes that
+    dedicated runner's summary so the strict validator can report the final
+    end-to-end outcome instead of only the safe first-turn block.
+    """
+    if not path or not path.exists():
+        return {}
+
+    summary = json.loads(path.read_text(encoding="utf-8"))
+    rows = summary.get("results") or []
+    result: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        raw_test_id = str(row.get("testId") or row.get("test_id") or "")
+        match = re.match(r"^(FT\d+)-FULL-EXTERNAL$", raw_test_id)
+        if not match:
+            continue
+        if str(row.get("status") or "").upper() != "PASS":
+            continue
+        preview = row.get("preview") or {}
+        row_count = int(preview.get("rowCount") or 0)
+        column_count = int(preview.get("columnCount") or 0)
+        if row_count <= 0 or column_count <= 0:
+            continue
+        result[match.group(1)] = {
+            "_external_supply_pass": True,
+            "testId": raw_test_id,
+            "threadId": row.get("threadId"),
+            "responseId": row.get("responseId"),
+            "suppliedSlots": row.get("suppliedSlots") or [],
+            "preview": preview,
+        }
+    return result
+
+
 def load_variant_counts(path: Path) -> dict[str, int]:
     if not path.exists():
         return {}
@@ -111,6 +156,18 @@ def evaluate_case(case: FullCase, result: dict[str, Any] | None) -> tuple[str, l
         return "NOT_RUN", ["未找到该 FULL 用例的 ask-summary 结果"]
 
     notes: list[str] = []
+    if case.strict_gate == "external_input_required" and result.get("_external_supply_pass"):
+        preview = result.get("preview") or {}
+        supplied_slots = "、".join(str(item) for item in result.get("suppliedSlots") or [])
+        notes.append(
+            "外部补数专项通过："
+            f"thread={result.get('threadId')} response={result.get('responseId')} "
+            f"rows={preview.get('rowCount')} columns={preview.get('columnCount')}"
+        )
+        if supplied_slots:
+            notes.append(f"已补充外部槽位：{supplied_slots}")
+        return "FULL_PASS", notes
+
     status = str(result.get("status") or "")
     has_sql = bool(result.get("hasSql"))
     content = str(result.get("contentPreview") or result.get("content") or "")
@@ -155,10 +212,13 @@ def render_markdown(
     cases: list[FullCase],
     ask_results: dict[str, dict[str, Any]],
     variant_counts: dict[str, int],
+    external_supply_results: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     evaluated = []
+    external_supply_results = external_supply_results or {}
     for case in cases:
-        strict_status, notes = evaluate_case(case, ask_results.get(case.test_id))
+        result = external_supply_results.get(case.test_id) or ask_results.get(case.test_id)
+        strict_status, notes = evaluate_case(case, result)
         evaluated.append((case, strict_status, notes))
 
     counts: dict[str, int] = {}
@@ -175,6 +235,7 @@ def render_markdown(
         "## 判定规则",
         "",
         "- `FULL_PASS`：必须有真实 SQL/结果、没有缺口/阻断/提示型 message SQL，并包含该 FT 的关键列、分组和宽表信号。",
+        "- 对外部数据必需的 FT01/FT02/FT04，`FULL_PASS` 必须来自首问阻断后的 UI E2E 补数闭环专项证据。",
         "- `BLOCKED_EXTERNAL`：外部投放/PV/UV/下载点击UV等能力缺失被正确阻断；这是安全行为，但不能计入 FULL 同形通过。",
         "- `SHAPE_GAP`：有结果但字段、分组、宽表/透视形态、汇总行或周期列不足；不能计入 FULL 同形通过。",
         "- `NOT_RUN`：未找到该 FT 的执行证据。",
@@ -211,6 +272,7 @@ def main() -> None:
     parser.add_argument("--full-csv", type=Path, default=DEFAULT_FULL_CSV)
     parser.add_argument("--variants-csv", type=Path, default=DEFAULT_VARIANT_CSV)
     parser.add_argument("--ask-summary", type=Path, default=DEFAULT_ASK_SUMMARY)
+    parser.add_argument("--external-supply-summary", type=Path, default=DEFAULT_EXTERNAL_SUPPLY_SUMMARY)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
@@ -222,7 +284,12 @@ def main() -> None:
     if missing_variants:
         raise SystemExit("each FT should have at least 3 variants; missing=" + ",".join(missing_variants))
 
-    markdown = render_markdown(cases, load_ask_summary(args.ask_summary), variant_counts)
+    markdown = render_markdown(
+        cases,
+        load_ask_summary(args.ask_summary),
+        variant_counts,
+        load_external_supply_summary(args.external_supply_summary),
+    )
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(markdown, encoding="utf-8")
