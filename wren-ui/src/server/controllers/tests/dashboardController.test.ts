@@ -48,6 +48,7 @@ describe('DashboardController scope guards', () => {
         listDashboardsForScope: jest.fn(),
         getCurrentDashboard: jest.fn(),
         getCurrentDashboardForScope: jest.fn(),
+        initDashboard: jest.fn(),
         getDashboardForScope: jest.fn(),
         getDashboardItems: jest.fn(),
         parseCronExpression: jest.fn(),
@@ -605,6 +606,80 @@ describe('DashboardController scope guards', () => {
       sourceThreadId: 34,
       sourceQuestion: '各供应商单产品成本趋势',
     });
+  });
+
+  it('pins chart responses to the workspace dashboard by default while preserving item runtime identity', async () => {
+    const resolver = new DashboardController();
+    const ctx = createContext();
+    ctx.dashboardService.getCurrentDashboardForScope.mockResolvedValue({
+      id: 9,
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: null,
+      kbSnapshotId: null,
+      deployHash: null,
+    });
+    ctx.askingService.getResponseScoped.mockResolvedValue({
+      id: 12,
+      threadId: 34,
+      question: '生成充值趋势图',
+      projectId: null,
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+      kbSnapshotId: 'snapshot-1',
+      deployHash: 'deploy-bound',
+      sql: 'select 1',
+      chartDetail: {
+        status: 'FINISHED',
+        chartSchema: { mark: 'bar' },
+      },
+    });
+    ctx.kbSnapshotRepository.findOneBy.mockResolvedValue({
+      id: 'snapshot-1',
+      projectBridgeId: 42,
+      deployHash: 'deploy-from-snapshot',
+    });
+    ctx.projectService.getProjectById.mockResolvedValue({
+      id: 42,
+      type: 'view',
+    });
+    ctx.deployService.getDeploymentByRuntimeIdentity.mockResolvedValue({
+      projectId: 42,
+      manifest: 'manifest-42',
+    });
+    ctx.dashboardService.createDashboardItem.mockResolvedValue({
+      id: 88,
+      dashboardId: 9,
+      type: 'BAR',
+    });
+
+    await resolver.createDashboardItem(
+      null,
+      { data: { responseId: 12, itemType: 'BAR' as any } },
+      ctx,
+    );
+
+    expect(ctx.dashboardService.getCurrentDashboardForScope).toHaveBeenCalledWith(
+      null,
+      expect.objectContaining({
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: 'user-1',
+      }),
+    );
+    expect(ctx.dashboardService.createDashboardItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardId: 9,
+        sourceRuntimeIdentity: {
+          workspaceId: 'workspace-1',
+          knowledgeBaseId: 'kb-1',
+          kbSnapshotId: 'snapshot-1',
+          deployHash: 'deploy-bound',
+        },
+      }),
+    );
   });
 
   it('allows pinning number-card chart responses as dashboard NUMBER items', async () => {

@@ -35,9 +35,13 @@ type TimedSuggestedQuestionsEntry = {
   updatedAt: number;
 };
 
-const SUGGESTED_QUESTIONS_CACHE_TTL_MS = 30_000;
+const SUGGESTED_QUESTIONS_CACHE_TTL_MS = 5 * 60_000;
 const SUGGESTED_QUESTIONS_STORAGE_PREFIX = 'wren.suggestedQuestions:';
 const suggestedQuestionsCache = new Map<string, TimedSuggestedQuestionsEntry>();
+const suggestedQuestionsRequests = new Map<
+  string,
+  Promise<SuggestedQuestionsPayload>
+>();
 
 const getSuggestedQuestionsStorage = () => {
   if (typeof window === 'undefined') {
@@ -119,8 +123,13 @@ const getFreshSuggestedQuestionsPayload = (requestUrl: string) => {
   return cachedEntry.payload;
 };
 
+export const peekSuggestedQuestions = (
+  selector: ClientRuntimeScopeSelector = resolveClientRuntimeScopeSelector(),
+) => getFreshSuggestedQuestionsPayload(buildSuggestedQuestionsUrl(selector));
+
 export const clearSuggestedQuestionsCache = () => {
   suggestedQuestionsCache.clear();
+  suggestedQuestionsRequests.clear();
 
   const storage = getSuggestedQuestionsStorage();
   if (!storage) {
@@ -268,18 +277,33 @@ export const fetchSuggestedQuestions = async (
     return cachedPayload;
   }
 
-  const response = await fetch(requestUrl);
-  const payload = await parseRestJsonResponse<SuggestedQuestionsPayload>(
-    response,
-    '加载推荐问题失败，请稍后重试。',
-  );
-  const entry = {
-    payload,
-    updatedAt: Date.now(),
-  };
-  suggestedQuestionsCache.set(requestUrl, entry);
-  writeStoredSuggestedQuestions(requestUrl, entry);
-  return payload;
+  const existingRequest = suggestedQuestionsRequests.get(requestUrl);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = fetch(requestUrl)
+    .then((response) =>
+      parseRestJsonResponse<SuggestedQuestionsPayload>(
+        response,
+        '加载推荐问题失败，请稍后重试。',
+      ),
+    )
+    .then((payload) => {
+      const entry = {
+        payload,
+        updatedAt: Date.now(),
+      };
+      suggestedQuestionsCache.set(requestUrl, entry);
+      writeStoredSuggestedQuestions(requestUrl, entry);
+      return payload;
+    })
+    .finally(() => {
+      suggestedQuestionsRequests.delete(requestUrl);
+    });
+
+  suggestedQuestionsRequests.set(requestUrl, request);
+  return request;
 };
 
 export const createThread = async (

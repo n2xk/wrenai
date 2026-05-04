@@ -20,6 +20,10 @@ from src.web.v1.services import Configuration
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+STREAMING_TIMEOUT_SECONDS = 120
+STREAMING_TIMEOUT_MESSAGE = (
+    "系统提示：思考过程流式输出超过 120 秒没有新内容，后台仍会继续生成最终结果。"
+)
 
 
 sql_generation_reasoning_user_prompt_template = """
@@ -38,11 +42,26 @@ SQL:
 {% endfor %}
 {% endif %}
 
-{% if instructions %}
+{% if instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
 ### USER INSTRUCTIONS ###
-{% for instruction in instructions %}
+{% if instructions.business_glossary %}
+#### BUSINESS GLOSSARY ####
+{% for instruction in instructions.business_glossary %}
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
+{% endif %}
+{% if instructions.query_rules %}
+#### QUERY RULES ####
+{% for instruction in instructions.query_rules %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+{% if instructions.context_notes %}
+#### CONTEXT NOTES ####
+{% for instruction in instructions.context_notes %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
 {% endif %}
 
 ### User's QUERY HISTORY ###
@@ -80,6 +99,7 @@ def prompt(
         sql_samples=sql_samples,
         instructions=construct_instructions(
             instructions=instructions,
+            group_by_asset_type=True,
         ),
         language=configuration.language,
         current_time=configuration.show_current_time(),
@@ -95,10 +115,13 @@ async def generate_sql_reasoning(
     query_id: str,
     generator_name: str,
 ) -> dict:
-    return await generator(
-        prompt=prompt.get("prompt"),
-        query_id=query_id,
-    ), generator_name
+    return (
+        await generator(
+            prompt=prompt.get("prompt"),
+            query_id=query_id,
+        ),
+        generator_name,
+    )
 
 
 @observe()
@@ -153,7 +176,7 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
             try:
                 # Wait for an item from the user's queue
                 self._streaming_results = await asyncio.wait_for(
-                    _get_streaming_results(query_id), timeout=120
+                    _get_streaming_results(query_id), timeout=STREAMING_TIMEOUT_SECONDS
                 )
                 if (
                     self._streaming_results == "<DONE>"
@@ -164,6 +187,11 @@ class FollowUpSQLGenerationReasoning(BasicPipeline):
                     yield self._streaming_results
                     self._streaming_results = ""  # Clear after yielding
             except TimeoutError:
+                logger.warning(
+                    "Follow-up SQL generation reasoning streaming timed out for query_id=%s",
+                    query_id,
+                )
+                yield STREAMING_TIMEOUT_MESSAGE
                 break
 
     @observe(name="FollowupSQL Generation Reasoning")

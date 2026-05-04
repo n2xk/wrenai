@@ -196,6 +196,8 @@ export const generateThreadResponseChartAction = async (
         previewColumnCount: number;
         previewRowCount: number;
         previewColumns: Array<{ name: string; type?: string | null }>;
+        customInstruction?: string | null;
+        chartRequestQuestion?: string | null;
         submittedAt: string;
         lastErrorCode?: string | null;
         lastErrorMessage?: string | null;
@@ -225,6 +227,8 @@ export const generateThreadResponseChartAction = async (
           name: column.name,
           type: column.type || null,
         })),
+      customInstruction: customInstruction?.trim() || null,
+      chartRequestQuestion: effectiveChartQuery,
       submittedAt: new Date().toISOString(),
     };
     logger.info(

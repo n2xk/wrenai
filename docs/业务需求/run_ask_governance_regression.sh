@@ -24,16 +24,24 @@ fi
 
 AI_ENDPOINT="${WREN_AI_ENDPOINT:-http://127.0.0.1:5555}"
 
-echo "[ask-governance] 1/5 TiDB seed SQL regression"
+echo "[ask-governance] 1/6 Offline ask-runtime policy smoke"
+if command -v poetry >/dev/null 2>&1; then
+  (cd wren-ai-service && poetry run python ../docs/业务需求/verify_ask_runtime_eval_cases.py)
+else
+  PYTHONPATH="$ROOT_DIR/wren-ai-service:${PYTHONPATH:-}" \
+    python docs/业务需求/verify_ask_runtime_eval_cases.py
+fi
+
+echo "[ask-governance] 2/6 TiDB seed SQL regression"
 python docs/业务需求/verify_tidb_regression.py --extended-seed
 
-echo "[ask-governance] 2/5 Ask route regression"
+echo "[ask-governance] 3/6 Ask route regression"
 python docs/业务需求/verify_ask_route_regression.py \
   --ai-endpoint "$AI_ENDPOINT" \
   --mdl-hash "$MDL_HASH" \
   --output docs/业务需求/问数路由回归结果-2026-04-30.md
 
-echo "[ask-governance] 3/5 Business generalization route regression"
+echo "[ask-governance] 4/6 Business generalization route regression"
 python docs/业务需求/verify_business_generalization_regression.py \
   --ai-endpoint "$AI_ENDPOINT" \
   --mdl-hash "$MDL_HASH" \
@@ -41,14 +49,14 @@ python docs/业务需求/verify_business_generalization_regression.py \
   --output docs/业务需求/业务泛化全量路由回归结果-2026-04-30.md \
   --strict
 
-echo "[ask-governance] 4/5 Numeric/UI manual-case verifier"
+echo "[ask-governance] 5/6 Numeric/UI manual-case verifier"
 python docs/业务需求/verify_business_manual_cases.py \
   --ai-endpoint "$AI_ENDPOINT" \
   --mdl-hash "$MDL_HASH" \
   --output docs/业务需求/业务泛化人工核验结果-2026-04-30.md \
   --strict
 
-echo "[ask-governance] 5/5 Artifactization smoke"
+echo "[ask-governance] 6/6 Artifactization smoke"
 ARTIFACT_ARGS=(
   --ui-endpoint "${WREN_UI_ENDPOINT:-http://127.0.0.1:3002}"
   --report docs/业务需求/问数产物化冒烟验证结果-2026-04-30.md

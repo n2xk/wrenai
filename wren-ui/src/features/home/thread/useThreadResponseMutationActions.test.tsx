@@ -255,6 +255,11 @@ describe('useThreadResponseMutationActions', () => {
     expect(upsertThreadResponse).toHaveBeenCalledWith(
       expect.objectContaining({ id: 31 }),
     );
+    expect(mockTriggerThreadResponseChart).toHaveBeenCalledWith(
+      runtimeScopeSelector,
+      31,
+      { customInstruction: '生成一张图表给我' },
+    );
     expect(startThreadResponsePolling).toHaveBeenCalledWith(31);
   });
 
@@ -379,6 +384,49 @@ describe('useThreadResponseMutationActions', () => {
     expect(mockTriggerThreadResponseChart).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId: 'ws-1' }),
       31,
+      { customInstruction: '生成一张图表给我' },
+    );
+  });
+
+  it('passes chart refine prompts as custom chart generation instructions', async () => {
+    mockTriggerThreadResponseChart.mockResolvedValue({
+      id: 31,
+      question: '生成图表',
+      responseKind: 'CHART_FOLLOWUP',
+      sourceResponseId: 30,
+      sql: 'select 1',
+      chartDetail: {
+        status: 'FETCHING',
+      },
+    });
+
+    const { hook, runtimeScopeSelector } = renderHarness({
+      currentResponses: [
+        {
+          id: 31,
+          question: '生成图表',
+          responseKind: 'CHART_FOLLOWUP',
+          sourceResponseId: 30,
+          sql: 'select 1',
+          chartDetail: {
+            status: 'FINISHED',
+            chartSchema: { mark: { type: 'line' } },
+          },
+        },
+      ],
+      currentThreadId: 19,
+    });
+
+    await hook.onGenerateThreadResponseChart(31, {
+      question: '为折线图添加数据标签',
+      sourceResponseId: 31,
+    });
+
+    expect(mockCreateThreadResponse).not.toHaveBeenCalled();
+    expect(mockTriggerThreadResponseChart).toHaveBeenCalledWith(
+      runtimeScopeSelector,
+      31,
+      { customInstruction: '为折线图添加数据标签' },
     );
   });
 });

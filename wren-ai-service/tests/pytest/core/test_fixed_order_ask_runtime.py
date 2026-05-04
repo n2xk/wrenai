@@ -5,10 +5,19 @@ from src.core.fixed_order_ask_runtime import (
     AskExecutionState,
     BaseFixedOrderAskRuntime,
     NL2SQLToolset,
+    _build_sql_correction_candidate_inputs,
     _can_retry_template_core_rejection_as_reference,
+    _build_execution_result_signature,
+    _semantic_metric_patterns,
+    _select_best_sql_correction_result,
+    _supplied_external_sql_builders_enabled,
     build_minimal_semantic_plan,
+    build_query_decomposition_plan,
     build_reusable_template_sql,
     build_sql_core_signature,
+    build_supplied_external_daily_report_sql,
+    build_supplied_external_dependency_instruction,
+    build_supplied_external_roi_sql,
     build_template_decision,
     detect_missing_external_source_requirement,
     detect_missing_required_slot_requirement,
@@ -43,6 +52,176 @@ def test_filter_active_sql_samples_excludes_deprecated_templates():
 
     assert filtered_samples == [active_sample]
     assert inactive_sample == deprecated_sample
+
+
+def test_missing_external_source_returns_clarification_slots():
+    requirement = detect_missing_external_source_requirement(
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-03的ROI",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["biz_date + channel_id"],
+                "metadata": {
+                    "trigger_when": ["ROI"],
+                    "validation": {"required_columns": ["ad_spend"]},
+                },
+            }
+        ],
+    )
+
+    assert requirement is not None
+    assert requirement["pending_external_dependency_slots"] == [
+        "external_dependency:ad_spend"
+    ]
+    assert requirement["external_dependency_request"]["example_columns"] == [
+        "biz_date + channel_id",
+        "投放金额",
+    ]
+
+
+def test_supplied_external_dependency_csv_satisfies_coverage():
+    coverage = detect_supplied_external_dependency_coverage(
+        "统计租户平台990001下渠道990011在2026-04-01到2026-04-03的ROI",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["biz_date + channel_id", "cohort_period"],
+                "metadata": {
+                    "trigger_when": ["ROI"],
+                    "validation": {"required_columns": ["ad_spend"]},
+                },
+            }
+        ],
+        supplied_external_dependencies={
+            "external_dependency:ad_spend": (
+                "date,channel_id,ad_spend\n"
+                "2026-04-01,990011,1000\n"
+                "2026-04-02,990011,1200"
+            )
+        },
+    )
+
+    assert coverage is not None
+    assert coverage["source"] == "external_dependency_user_supplied"
+    assert coverage["required_external_dependencies"] == ["ad_spend"]
+    assert coverage["evaluations"][0]["satisfied"] is True
+    assert coverage["supplies"]["ad_spend"]["grain"] == [
+        "biz_date + channel_id",
+        "date + channel_id",
+    ]
+
+
+def test_supplied_external_dependency_instruction_contains_inline_select_cte():
+    instruction = build_supplied_external_dependency_instruction(
+        {
+            "external_dependency:投放金额": (
+                "date,channel_id,ad_spend\n"
+                "2026-04-01,990011,1120\n"
+                "2026-04-02,990011,1240"
+            )
+        }
+    )
+
+    assert instruction is not None
+    text = instruction["instruction"]
+    assert "WITH supplied_external_ad_spend" in text
+    assert (
+        "SELECT DATE '2026-04-01' AS biz_date, 990011 AS channel_id, 1120 AS ad_spend"
+        in text
+    )
+    assert "UNION ALL" in text
+    assert "不要假设存在 dwd_ad_spend" in text
+
+
+def test_supplied_external_daily_report_sql_uses_external_metrics_and_excel_columns():
+    sql = build_supplied_external_daily_report_sql(
+        "生成第一期综合日报表完整宽表：租户平台990001渠道990011在2026-04-01到2026-04-06每日综合日报，"
+        "包含汇总行、投放金额、PV、UV、下载点击UV、UV下载率、UV注册率、首存成本、首存率、有效投注、会员输赢、杀率、合计优惠。",
+        {
+            "external_dependency:投放金额": (
+                "biz_date,tenant_plat_id,channel_id,ad_spend,access_pv,access_uv,download_click_uv\n"
+                "2026-04-01,990001,990011,1120,12530,3150,845\n"
+                "2026-04-02,990001,990011,1240,13060,3300,890"
+            )
+        },
+    )
+
+    assert sql is not None
+    assert "external_metrics AS" in sql
+    assert (
+        "SELECT DATE '2026-04-01' AS biz_date, 990001 AS tenant_plat_id, 990011 AS channel_id"
+        in sql
+    )
+    assert 'report_date AS "日期"' in sql
+    assert 'site_name AS "所属站点"' in sql
+    assert 'ad_spend AS "投放金额"' in sql
+    assert 'access_pv AS "PV"' in sql
+    assert 'access_uv AS "UV"' in sql
+    assert 'download_click_uv AS "下载点击UV"' in sql
+    assert 'download_click_uv / NULLIF(access_uv, 0) AS "UV下载率"' in sql
+    assert 'register_user_count / NULLIF(access_uv, 0) AS "UV注册率"' in sql
+    assert 'ad_spend / NULLIF(first_deposit_user_count, 0) AS "首存成本"' in sql
+    assert (
+        'task_amount + rebate_amount + discount_adjust_amount + marketing_lottery_amount AS "合计优惠"'
+        in sql
+    )
+    assert "'汇总' AS report_date" in sql
+    assert "tidb_business_demo_dwd_player_login_log" in sql
+
+
+def test_supplied_external_roi_sql_uses_excel_shape_after_ad_spend_supply():
+    sql = build_supplied_external_roi_sql(
+        "生成第一期ROI回收表里的渠道整体ROI表：租户平台990001渠道990011首存日期"
+        "2026-04-01到2026-04-07，输出Excel固定回收周期列"
+        "D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360"
+        "的ROI宽表和环比。",
+        {
+            "external_dependency:投放金额": (
+                "date,channel_id,ad_spend\n"
+                "2026-04-01,990011,1120\n"
+                "2026-04-02,990011,1240"
+            )
+        },
+    )
+
+    assert sql is not None
+    assert "supplied_external_ad_spend AS" in sql
+    assert (
+        "SELECT DATE '2026-04-01' AS biz_date, 990011 AS channel_id, 1120 AS ad_spend"
+        in sql
+    )
+    assert '"投放金额"' in sql
+    assert '"用户类型"' in sql
+    assert '"累计1天"' in sql
+    assert '"360天"' in sql
+    assert "'环比系数' AS d1" in sql
+    assert "D3_ROI" not in sql
+    assert (
+        "DATE_DIFF('day', c.first_deposit_date, CAST(b.settle_time AS DATE)) + 1" in sql
+    )
+
+
+def test_supplied_external_roi_sql_supports_topn_roi_shape():
+    sql = build_supplied_external_roi_sql(
+        "生成TOP3 ROI表：租户平台990001渠道990011首存日期2026-04-01到2026-04-07",
+        {
+            "external_dependency:ad_spend": (
+                "日期,渠道ID,投放金额\n" "2026-04-01,990011,1120"
+            )
+        },
+    )
+
+    assert sql is not None
+    assert "WHERE bet_rank <= 3" in sql
+    assert "'TOP3' AS user_type" in sql
 
 
 def test_filter_active_sql_samples_excludes_future_effective_templates():
@@ -112,6 +291,34 @@ def test_build_template_decision_marks_inactive_only_template_for_fallback():
     assert result["mode"] == "reference"
     assert result["fallback_reason"] == "inactive_template"
     assert result["template_id"] == "template-future"
+
+
+def test_runtime_template_decision_state_filters_inactive_templates():
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(
+        user_query="首存金额分桶",
+        sql_samples=[
+            {
+                "id": "template-future",
+                "question": "首存金额分桶",
+                "sql": "SELECT 1",
+                "asset_kind": "sql_template",
+                "template_level": "L2",
+                "template_mode": "anchored_template",
+                "source_type": "business_import",
+                "status": "active",
+                "effective_from": "2099-01-01",
+                "score": 0.99,
+            }
+        ],
+    )
+
+    runtime._build_template_decision_state(state, histories=[])
+
+    assert state.sql_samples == []
+    assert state.template_decision["mode"] == "reference"
+    assert state.template_decision["fallback_reason"] == "inactive_template"
+    assert state.template_decision["template_id"] == "template-future"
 
 
 def test_build_template_decision_downgrades_low_margin_business_template_conflict():
@@ -742,6 +949,24 @@ def test_build_minimal_semantic_plan_exposes_template_external_dependencies():
     assert plan["decision"]["external_dependencies"] == []
 
 
+def test_semantic_metric_patterns_accept_env_extension(monkeypatch):
+    monkeypatch.setenv("WREN_SEMANTIC_METRIC_PATTERNS", '{"gmv": ["GMV", "总流水"]}')
+
+    patterns = _semantic_metric_patterns()
+
+    assert patterns["gmv"] == ("GMV", "总流水")
+    assert "deposit_amount" in patterns
+
+
+def test_semantic_metric_patterns_can_replace_defaults(monkeypatch):
+    monkeypatch.setenv("WREN_SEMANTIC_METRIC_PATTERNS", '{"gmv": ["GMV"]}')
+    monkeypatch.setenv("WREN_SEMANTIC_METRIC_PATTERNS_REPLACE", "1")
+
+    patterns = _semantic_metric_patterns()
+
+    assert patterns == {"gmv": ("GMV",)}
+
+
 class _SemanticPlanStub:
     async def run(self, **kwargs):
         return {
@@ -762,6 +987,24 @@ class _SemanticPlanStub:
 class _FailingSemanticPlanStub:
     async def run(self, **kwargs):
         raise RuntimeError("provider unavailable")
+
+
+class _RouteRelaxingSemanticPlanStub:
+    async def run(self, **kwargs):
+        return {
+            "post_process": {
+                "subject": "channel",
+                "metrics": ["first_deposit"],
+                "dimensions": ["channel_id"],
+                "filters": {"channel_id": 990011},
+                "missing_slots": [],
+                "decision": {
+                    "route": "normal_text_to_sql",
+                    "reason_codes": ["llm_relaxed_route"],
+                },
+                "confidence": 0.9,
+            }
+        }
 
 
 @pytest.mark.asyncio
@@ -834,6 +1077,27 @@ async def test_maybe_enhance_semantic_plan_state_falls_back_on_llm_failure():
 
     assert state.semantic_plan["source"] == "deterministic"
     assert "llm_semantic_plan_failed" in state.semantic_plan["decision"]["reason_codes"]
+
+
+@pytest.mark.asyncio
+async def test_maybe_enhance_semantic_plan_state_keeps_deterministic_route_guard():
+    runtime = BaseFixedOrderAskRuntime(
+        toolset=NL2SQLToolset({"semantic_plan": _RouteRelaxingSemanticPlanStub()}),
+        allow_semantic_plan_llm=True,
+    )
+    state = AskExecutionState(user_query="统计渠道990011首充用户")
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    await runtime._maybe_enhance_semantic_plan_state(
+        state,
+        histories=[],
+        configuration=object(),
+    )
+
+    assert state.semantic_plan["source"] == "llm_enhanced"
+    assert state.semantic_plan["decision"]["route"] == "clarification_required"
+    assert "tenant_plat_id" in state.semantic_plan["missing_slots"]
+    assert "llm_relaxed_route" in state.semantic_plan["decision"]["reason_codes"]
 
 
 def test_apply_policy_state_downgrades_forbidden_template():
@@ -1788,7 +2052,25 @@ def test_build_template_decision_does_not_guess_ambiguous_template_top_n():
     assert "top_n" not in result["parameters"]
 
 
-def test_detect_missing_external_source_requirement_lists_all_requested_traffic_metrics():
+def test_detect_missing_external_source_requirement_ignores_legacy_fallback_by_default(
+    monkeypatch,
+):
+    monkeypatch.delenv(
+        "WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", raising=False
+    )
+
+    result = detect_missing_external_source_requirement(
+        "按渠道/日期把 PV、UV 和下载点击UV 并入综合日报"
+    )
+
+    assert result is None
+
+
+def test_detect_missing_external_source_requirement_lists_all_requested_traffic_metrics(
+    monkeypatch,
+):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
     result = detect_missing_external_source_requirement(
         "按渠道/日期把 PV、UV 和下载点击UV 并入综合日报"
     )
@@ -1814,7 +2096,11 @@ def test_detect_missing_external_source_requirement_lists_all_requested_traffic_
     ]
 
 
-def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv():
+def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv(
+    monkeypatch,
+):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
     result = detect_missing_external_source_requirement(
         "统计渠道日报，并补充PV、UV、下载点击UV、UV下载率和UV注册率"
     )
@@ -1832,7 +2118,11 @@ def test_detect_missing_external_source_requirement_handles_cjk_adjacent_pv_uv()
     assert "示例表头" in result["content"]
 
 
-def test_detect_missing_external_source_requirement_handles_plain_traffic_aliases():
+def test_detect_missing_external_source_requirement_handles_plain_traffic_aliases(
+    monkeypatch,
+):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
     result = detect_missing_external_source_requirement(
         "帮我把访问量、独立访客、下载点击人数一起放进渠道日报"
     )
@@ -1844,7 +2134,9 @@ def test_detect_missing_external_source_requirement_handles_plain_traffic_aliase
     assert "下载点击UV" in required_metrics
 
 
-def test_detect_missing_external_source_requirement_handles_roi_synonyms():
+def test_detect_missing_external_source_requirement_handles_roi_synonyms(monkeypatch):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
     result = detect_missing_external_source_requirement(
         "看这个渠道首存用户投放回收和回本情况"
     )
@@ -1928,7 +2220,6 @@ def test_detect_missing_external_source_requirement_allows_explicit_roi_degraded
     assert result is None
 
 
-
 def test_detect_missing_external_source_requirement_ignores_roi_report_name_for_cumulative_revenue():
     result = detect_missing_external_source_requirement(
         "生成第一期ROI回收表里的渠道累计收入表："
@@ -1937,6 +2228,33 @@ def test_detect_missing_external_source_requirement_ignores_roi_report_name_for_
     )
 
     assert result is None
+
+
+def test_detect_missing_external_source_requirement_treats_no_fabrication_as_guard():
+    result = detect_missing_external_source_requirement(
+        "生成第一期ROI回收表里的渠道整体ROI表："
+        "租户平台990001渠道990011首存日期2026-04-01到2026-04-07，"
+        "输出D1到D360 ROI宽表和环比；如果缺投放金额，请先说明需要补充，不要编造。",
+        instructions=[
+            {
+                "knowledge_asset_type": "external_dependency",
+                "external_dependency_id": "ad_spend",
+                "name": "投放金额",
+                "source_status": "missing",
+                "missing_behavior": "ask_user",
+                "required_grain": ["biz_date + channel_id"],
+                "metadata": {
+                    "trigger_when": ["ROI", "投放金额"],
+                    "not_trigger_when": ["暂时不用投放金额"],
+                },
+            }
+        ],
+    )
+
+    assert result is not None
+    assert result["required_external_dependencies"] == ["ad_spend"]
+    assert "缺失指标：投放金额" in result["content"]
+
 
 def test_detect_missing_external_source_requirement_uses_configured_grain():
     result = detect_missing_external_source_requirement(
@@ -2124,6 +2442,49 @@ async def test_missing_source_rule_marks_valid_user_supplied_external_dependency
     decision = state.semantic_plan["decision"]
     assert "external_dependency_user_supplied" in decision["reason_codes"]
     assert decision["external_dependencies"] == ["ad_spend"]
+
+
+@pytest.mark.asyncio
+async def test_missing_source_rule_injects_inline_cte_for_fallback_external_supply(
+    monkeypatch,
+):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
+    runtime = BaseFixedOrderAskRuntime(toolset=NL2SQLToolset({}))
+    state = AskExecutionState(
+        user_query="生成渠道整体ROI表",
+        instructions=[],
+        effective_instructions=[],
+        slot_values={
+            "external_dependency:投放金额": (
+                "date,channel_id,ad_spend\n" "2026-04-01,990011,1120"
+            )
+        },
+    )
+    runtime._sync_semantic_plan_state(state, histories=[])
+
+    result = await runtime._maybe_handle_missing_source_rule(
+        state=state,
+        ask_request=object(),
+        histories=[],
+        trace_id=None,
+        is_followup=False,
+        is_stopped=lambda: True,
+        set_result=lambda **_kwargs: None,
+        build_ask_error=lambda **kwargs: kwargs,
+        results={},
+        orchestrator="test",
+    )
+
+    assert result is None
+    assert any(
+        instruction.get("knowledge_asset_type") == "external_dependency_supply"
+        and "WITH supplied_external" in instruction.get("instruction", "")
+        for instruction in state.effective_instructions
+    )
+    decision = state.semantic_plan["decision"]
+    assert "external_dependency_user_supplied" in decision["reason_codes"]
+    assert decision["provided_external_dependencies"] == ["投放金额"]
 
 
 def test_build_sql_core_signature_allows_alias_and_whitespace_changes():
@@ -2330,3 +2691,157 @@ def test_ground_template_sql_to_retrieved_tables_infers_shared_prefix_for_missin
     assert "FROM tidb_business_demo_dim_player p" in grounded_sql
     assert "JOIN tidb_business_demo_dwd_order_deposit d" in grounded_sql
     assert "JOIN tidb_business_demo_dwd_player_login_log l" in grounded_sql
+
+
+def test_build_minimal_semantic_plan_uses_structured_history_slots():
+    plan = build_minimal_semantic_plan(
+        "那只看非TOP3呢？",
+        histories=[
+            {
+                "question": "统计租户平台990001渠道990011在2026-04-01到2026-04-07的TOP3",
+                "sql": "SELECT 1",
+                "resolved_slots": {
+                    "tenant_plat_id": "990001",
+                    "channel_id": "990011",
+                    "date_range": {
+                        "start_date": "2026-04-01",
+                        "end_date": "2026-04-07",
+                    },
+                },
+                "template_id": "T09",
+            }
+        ],
+    )
+
+    assert plan["filters"]["tenant_plat_id"] == 990001
+    assert plan["filters"]["channel_id"] == 990011
+    assert plan["filters"]["start_date"] == "2026-04-01"
+    assert plan["filters"]["end_date"] == "2026-04-07"
+    assert plan["resolved_slots"]["tenant_plat_id"]["source"] == "history_context"
+
+
+def test_rerank_sql_samples_prefers_matching_question_skeleton():
+    query = "统计渠道990011在2026-04-01充值金额"
+    samples = [
+        {
+            "id": "login-template",
+            "question": "统计渠道880001在2025-01-01登录人数",
+            "sql": "SELECT COUNT(*) FROM login_log",
+            "score": 0.7,
+        },
+        {
+            "id": "deposit-template",
+            "question": "统计渠道880001在2025-01-01充值金额",
+            "sql": "SELECT SUM(amount) FROM dwd_order_deposit",
+            "score": 0.7,
+        },
+    ]
+
+    ranked = rerank_sql_samples(query, samples)
+
+    assert ranked[0]["id"] == "deposit-template"
+
+
+def test_supplied_external_sql_builders_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("WREN_SUPPLIED_EXTERNAL_SQL_BUILDERS_ENABLED", "0")
+
+    assert _supplied_external_sql_builders_enabled() is False
+
+    monkeypatch.setenv("WREN_SUPPLIED_EXTERNAL_SQL_BUILDERS_ENABLED", "1")
+
+    assert _supplied_external_sql_builders_enabled() is True
+
+
+def test_sql_correction_candidate_inputs_use_distinct_strategies():
+    candidates = _build_sql_correction_candidate_inputs(
+        original_sql="SELECT bad_col FROM orders",
+        error_message="Column bad_col not found",
+        diagnosis_reasoning="bad_col does not exist",
+        candidate_count=3,
+    )
+
+    assert len(candidates) == 3
+    assert {candidate["sql"] for candidate in candidates} == {
+        "SELECT bad_col FROM orders"
+    }
+    assert "diagnosis_first" in candidates[0]["error"]
+    assert "schema_first" in candidates[1]["error"]
+    assert "dialect_first" in candidates[2]["error"]
+
+
+def test_select_best_sql_correction_result_prefers_valid_minimal_change():
+    original_sql = "SELECT bad_col FROM orders"
+    broad_rewrite = {
+        "post_process": {
+            "valid_generation_result": {
+                "sql": "SELECT COUNT(*) AS order_count FROM orders"
+            },
+            "invalid_generation_result": {},
+        }
+    }
+    minimal_fix = {
+        "post_process": {
+            "valid_generation_result": {"sql": "SELECT good_col FROM orders"},
+            "invalid_generation_result": {},
+        }
+    }
+    invalid = {
+        "post_process": {
+            "valid_generation_result": {},
+            "invalid_generation_result": {
+                "sql": "SELECT bad_col FROM orders",
+                "original_sql": original_sql,
+                "error": "still invalid",
+                "type": "DRY_RUN",
+            },
+        }
+    }
+
+    best, first_invalid = _select_best_sql_correction_result(
+        [invalid, broad_rewrite, minimal_fix],
+        original_sql=original_sql,
+    )
+
+    assert best is minimal_fix
+    assert first_invalid == invalid["post_process"]["invalid_generation_result"]
+
+
+def test_query_decomposition_plan_for_complex_roi_topn_question():
+    plan = build_query_decomposition_plan(
+        "统计租户平台990001下渠道990011首存用户TOP3和非TOP3的D1、D3、D7 ROI宽表",
+        table_names=[
+            "tidb_business_demo_dwd_order_deposit",
+            "tidb_business_demo_dwd_bet_order",
+            "tidb_business_demo_dim_player",
+        ],
+    )
+
+    assert plan["enabled"] is True
+    assert "topn_segment" in plan["features"]
+    assert "cohort" in plan["features"]
+    assert "external_metric" in plan["features"]
+    assert [step["name"] for step in plan["steps"]] == [
+        "base_scope",
+        "cohort_users",
+        "segment_users",
+        "external_metrics",
+        "metric_aggregation",
+        "final_pivot",
+    ]
+
+
+def test_execution_result_signature_normalizes_preview_rows():
+    signature = _build_execution_result_signature(
+        {
+            "columns": [{"name": "biz_date"}, {"name": "amount"}],
+            "data": [
+                {"biz_date": "2026-04-01", "amount": 123.45},
+                {"biz_date": "2026-04-02", "amount": object()},
+            ],
+        }
+    )
+
+    assert signature["columns"] == ["biz_date", "amount"]
+    assert signature["row_count"] == 2
+    assert signature["sample"][0] == {"biz_date": "2026-04-01", "amount": 123.45}
+    assert isinstance(signature["sample"][1]["amount"], str)

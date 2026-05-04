@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   fetchSuggestedQuestions,
+  peekSuggestedQuestions,
   type SuggestedQuestionsPayload,
 } from '@/utils/homeRest';
 import { type ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
@@ -29,7 +30,8 @@ export default function useHomeSuggestedQuestions({
       };
     }
 
-    setSuggestedQuestionsData(null);
+    const cachedPayload = peekSuggestedQuestions(askRuntimeSelector);
+    setSuggestedQuestionsData(cachedPayload);
 
     const runFetch = () => {
       void fetchSuggestedQuestions(askRuntimeSelector)
@@ -45,7 +47,9 @@ export default function useHomeSuggestedQuestions({
         });
     };
 
-    if (
+    if (cachedPayload) {
+      runFetch();
+    } else if (
       typeof window !== 'undefined' &&
       typeof window.requestIdleCallback === 'function'
     ) {

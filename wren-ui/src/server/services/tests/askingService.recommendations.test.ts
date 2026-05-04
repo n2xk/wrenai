@@ -611,11 +611,7 @@ describe('AskingService', () => {
         'runtime-scope-1',
       );
 
-      expect(service.previewDataScoped).toHaveBeenCalledWith(
-        55,
-        runtimeIdentity,
-        20,
-      );
+      expect(service.previewDataScoped).not.toHaveBeenCalled();
       expect(
         service.wrenAIAdaptor.generateRecommendationQuestions,
       ).toHaveBeenCalledWith(
@@ -628,12 +624,11 @@ describe('AskingService', () => {
           sourceChartType: 'bar',
           sourceChartTitle: '部门平均薪资',
           sourceChartEncodings: ['x: dept_name', 'y: avg_salary'],
-          sourceDimensionColumns: ['dept_name'],
-          sourceMeasureColumns: ['avg_salary'],
-          sourcePreviewColumnCount: 2,
-          sourcePreviewRowCount: 2,
           sourceIntentLineage: ['ASK', 'CHART'],
           sourceResponseKind: 'ASK',
+          regenerate: false,
+          validateSql: false,
+          allowDataPreview: false,
         }),
       );
       expect(

@@ -45,11 +45,26 @@ data_assistance_user_prompt_template = """
     {{ db_schema }}
 {% endfor %}
 
-{% if instructions %}
+{% if instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
 ### USER INSTRUCTIONS ###
-{% for instruction in instructions %}
+{% if instructions.business_glossary %}
+#### BUSINESS GLOSSARY ####
+{% for instruction in instructions.business_glossary %}
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
+{% endif %}
+{% if instructions.query_rules %}
+#### QUERY RULES ####
+{% for instruction in instructions.query_rules %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+{% if instructions.context_notes %}
+#### CONTEXT NOTES ####
+{% for instruction in instructions.context_notes %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
 {% endif %}
 
 ### INPUT ###
@@ -83,7 +98,10 @@ def prompt(
         db_schemas=db_schemas,
         language=language,
         custom_instruction=custom_instruction,
-        instructions=construct_instructions(instructions=instructions),
+        instructions=construct_instructions(
+            instructions=instructions,
+            group_by_asset_type=True,
+        ),
     )
     return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 

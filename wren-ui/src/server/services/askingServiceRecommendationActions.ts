@@ -301,19 +301,23 @@ export const generateThreadResponseRecommendationsAction = async (
     .slice(-5)
     .map((response: any) => response.question)
     .filter((question: string | undefined) => Boolean(question));
-  const sourcePreview = sourceResponse.sql
-    ? summarizePreviewData(
-        await service
-          .previewDataScoped(
-            sourceResponse.id,
-            recommendationRuntimeIdentity,
-            20,
-          )
-          .catch(() => null),
-      )
-    : null;
+  const genericRecommendationTrigger = isGenericRecommendationTrigger(
+    configurations.question,
+  );
+  const sourcePreview =
+    sourceResponse.sql && !genericRecommendationTrigger
+      ? summarizePreviewData(
+          await service
+            .previewDataScoped(
+              sourceResponse.id,
+              recommendationRuntimeIdentity,
+              20,
+            )
+            .catch(() => null),
+        )
+      : null;
   const promptContext = buildRecommendationPromptContext({
-    question: isGenericRecommendationTrigger(configurations.question)
+    question: genericRecommendationTrigger
       ? undefined
       : configurations.question,
     sourceResponse,
@@ -409,6 +413,13 @@ export const generateThreadResponseRecommendationsAction = async (
       ...project,
       language: languageConfig || project.language,
     }),
+    // Conversation recommendations are chips that draft prompts back into the
+    // composer. Validating every chip by running SQL generation multiplies LLM
+    // calls and makes “推荐几个问题给我” feel slow; the selected question is
+    // still validated by the normal ask flow when the user sends it.
+    regenerate: false,
+    validateSql: false,
+    allowDataPreview: false,
   });
 
   const updatedResponse = await service.threadResponseRepository.updateOne(

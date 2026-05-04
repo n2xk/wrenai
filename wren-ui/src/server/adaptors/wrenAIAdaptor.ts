@@ -316,6 +316,8 @@ export class WrenAIAdaptor implements IWrenAIAdaptor {
       max_questions: input.maxQuestions,
       max_categories: input.maxCategories,
       regenerate: input.regenerate,
+      validate_sql: input.validateSql,
+      allow_data_preview: input.allowDataPreview,
       configuration: input.configuration,
     };
     logger.info?.(`Wren AI: Generating recommendation questions`);

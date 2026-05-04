@@ -28,7 +28,7 @@ export default function ChartAnswerPinConfigModal({
   onSubmit: (queryControls: DashboardQueryControls) => void | Promise<void>;
 }) {
   const [timeFilterMode, setTimeFilterMode] =
-    useState<DashboardTimeFilterMode>('rolling_window');
+    useState<DashboardTimeFilterMode>('fixed');
   const [timeFilterAnchor, setTimeFilterAnchor] =
     useState<DashboardTimeFilterAnchor>('last_complete_day');
 
@@ -36,7 +36,7 @@ export default function ChartAnswerPinConfigModal({
     if (!open) {
       return;
     }
-    setTimeFilterMode('rolling_window');
+    setTimeFilterMode('fixed');
     setTimeFilterAnchor('last_complete_day');
   }, [detectedTimeFilter, open]);
 

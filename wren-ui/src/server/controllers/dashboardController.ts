@@ -36,6 +36,7 @@ import {
   assertDashboardExecutableRuntimeScope,
   assertDashboardKnowledgeBaseReadAccess,
   ensureCurrentDashboardForRequestedScope,
+  ensureCurrentDashboardForWorkspaceScope,
   ensureDashboardForWorkspaceScope,
   ensureDashboardItemInScope,
   getCurrentPersistedDashboardScopeIdentity,
@@ -242,7 +243,7 @@ export class DashboardController {
     const dashboard =
       dashboardId != null
         ? await ensureDashboardForWorkspaceScope(ctx, dashboardId)
-        : await ensureCurrentDashboardForRequestedScope(ctx, dashboardId);
+        : await ensureCurrentDashboardForWorkspaceScope(ctx);
     const runtimeIdentity = getCurrentPersistedRuntimeIdentity(ctx);
     await ctx.askingService.assertResponseScope(responseId, runtimeIdentity);
     const response = await ctx.askingService.getResponseScoped(

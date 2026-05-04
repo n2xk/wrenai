@@ -124,6 +124,27 @@ const resolveRecommendationPayload = (payload: unknown) => {
   };
 };
 
+const resolveChartGenerationPayload = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    return { customInstruction: undefined };
+  }
+
+  const maybePayload = payload as {
+    customInstruction?: unknown;
+    question?: unknown;
+  };
+  const customInstruction =
+    typeof maybePayload.customInstruction === 'string'
+      ? maybePayload.customInstruction.trim()
+      : typeof maybePayload.question === 'string'
+        ? maybePayload.question.trim()
+        : '';
+
+  return {
+    customInstruction: customInstruction || undefined,
+  };
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
@@ -154,6 +175,10 @@ export default async function handler(
       runtimeScope?.knowledgeBase,
     );
 
+    const chartGenerationPayload =
+      action === 'generate-chart'
+        ? resolveChartGenerationPayload(req.body)
+        : { customInstruction: undefined };
     const response =
       action === 'generate-answer'
         ? await askingService.generateThreadResponseAnswerScoped(
@@ -177,6 +202,7 @@ export default async function handler(
                 runtimeIdentity,
                 { language },
                 runtimeScope?.selector?.runtimeScopeId || null,
+                chartGenerationPayload.customInstruction,
               )
             : await askingService.adjustThreadResponseChartScoped(
                 responseId,
@@ -206,7 +232,9 @@ export default async function handler(
         id: responseId,
         action,
         data:
-          action === 'adjust-chart' && req.body && typeof req.body === 'object'
+          (action === 'adjust-chart' || action === 'generate-chart') &&
+          req.body &&
+          typeof req.body === 'object'
             ? req.body
             : null,
       },

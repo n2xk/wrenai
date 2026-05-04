@@ -116,6 +116,51 @@ describe('chartSpecRuntime', () => {
     );
   });
 
+  it('canonicalizes layered line charts with text labels without top-level mark errors', () => {
+    const result = canonicalizeChartSchema({
+      mark: { type: 'bar' },
+      encoding: {},
+      layer: [
+        {
+          mark: { type: 'line', point: true },
+          encoding: {
+            x: { field: 'biz_date', type: 'temporal' },
+            y: { field: 'deposit_amount', type: 'quantitative' },
+          },
+        },
+        {
+          mark: { type: 'text' },
+          encoding: {
+            x: { field: 'biz_date', type: 'temporal' },
+            y: { field: 'deposit_amount', type: 'quantitative' },
+            text: {
+              field: 'deposit_amount',
+              type: 'quantitative',
+              format: '.2f',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(result.validationErrors).toEqual([]);
+    expect(result.canonicalChartSchema).toMatchObject({
+      layer: [
+        {
+          mark: expect.objectContaining({ type: 'line' }),
+        },
+        {
+          mark: expect.objectContaining({ type: 'text' }),
+        },
+      ],
+    });
+    expect(result.canonicalChartSchema).not.toHaveProperty('mark');
+    expect(result.canonicalChartSchema).not.toHaveProperty('encoding');
+    expect(result.renderHints).toEqual(
+      expect.objectContaining({ preferredRenderer: 'canvas' }),
+    );
+  });
+
   it('applies deterministic grouped bar adjustments without AI-only fields', () => {
     const result = applyDeterministicChartAdjustment(
       {

@@ -133,22 +133,45 @@ const convertMarkToChartType = (
 const inferChartTypeFromSpec = (
   spec: ChartSpecRecord,
 ): RuntimeChartType | null => {
-  const markType = getMarkType(spec.mark);
+  const markType =
+    getMarkType(spec.mark) ||
+    (Array.isArray(spec.layer)
+      ? getMarkType(
+          spec.layer.find(
+            (layer) => getMarkType(layer.mark)?.toLowerCase() !== 'text',
+          )?.mark,
+        )
+      : null);
   if (!markType) return null;
   const inferred = convertMarkToChartType(markType, spec.encoding);
   return normalizeChartType(inferred);
 };
 
 const inferPreferredRenderer = (spec: ChartSpecRecord): 'svg' | 'canvas' => {
-  const markType = getMarkType(spec.mark)?.toLowerCase() || 'bar';
+  const markType =
+    getMarkType(spec.mark)?.toLowerCase() ||
+    (Array.isArray(spec.layer)
+      ? getMarkType(
+          spec.layer.find(
+            (layer) => getMarkType(layer.mark)?.toLowerCase() !== 'text',
+          )?.mark,
+        )?.toLowerCase()
+      : null) ||
+    'bar';
   return DEFAULT_RENDERER_BY_MARK[markType] || 'svg';
 };
 
-const collectValidationErrors = (spec: ChartSpecRecord) => {
+const collectValidationErrors = (spec: ChartSpecRecord): string[] => {
+  if (Array.isArray(spec.layer) && spec.layer.length > 0) {
+    return uniq(
+      spec.layer.flatMap((layer) => collectValidationErrors(layer)),
+    );
+  }
+
   const errors: string[] = [];
   const markType = getMarkType(spec.mark)?.toLowerCase() || null;
   const encoding = spec.encoding || {};
-  const supportedMarkTypes = new Set(['bar', 'line', 'area', 'arc']);
+  const supportedMarkTypes = new Set(['bar', 'line', 'area', 'arc', 'text']);
 
   if (!markType) {
     errors.push('Chart spec is missing mark type');
@@ -183,6 +206,13 @@ const collectValidationErrors = (spec: ChartSpecRecord) => {
     errors.push(
       'Line/area chart requires at least one quantitative or temporal axis',
     );
+  }
+
+  if (markType === 'text') {
+    if (!(encoding as { text?: EncodingFieldSpec }).text?.field) {
+      errors.push('Text chart layer requires text field');
+    }
+    return uniq(errors);
   }
 
   if (markType === 'bar' && (!encoding.x?.field || !encoding.y?.field)) {
@@ -252,6 +282,53 @@ export const canonicalizeChartSchema = (
   }
 
   try {
+    if (Array.isArray(spec.layer) && spec.layer.length > 0) {
+      const canonicalLayers = spec.layer.map((layer) => {
+        const layerSpec = cloneDeep(layer) as ChartSpecRecord;
+        const layerMark = normalizeMarkSpec(layerSpec.mark);
+        const layerEncoding = cleanupEncoding(
+          cloneDeep((layerSpec.encoding || {}) as EncodingSpec),
+        );
+
+        ensureColorFallback(layerEncoding);
+        ensureEncodingTitles(layerEncoding);
+        ensureBarEncodingDefaults(layerMark.type || null, layerEncoding);
+
+        return {
+          ...layerSpec,
+          mark: layerMark,
+          encoding: layerEncoding,
+        };
+      });
+      const topLevelEncoding = cleanupEncoding(
+        cloneDeep((spec.encoding || {}) as EncodingSpec),
+      );
+      const canonicalSpec = {
+        ...cloneDeep(spec),
+        layer: canonicalLayers,
+        autosize: cloneDeep(DEFAULT_CANONICAL_AUTOSIZE),
+        width: spec.width ?? DEFAULT_CANONICAL_DIMENSION,
+        height: spec.height ?? DEFAULT_CANONICAL_DIMENSION,
+        params: cloneDeep(spec.params || []),
+      } as ChartSpecRecord;
+      delete canonicalSpec.mark;
+      if (Object.keys(topLevelEncoding).length > 0) {
+        canonicalSpec.encoding = topLevelEncoding;
+      } else {
+        delete canonicalSpec.encoding;
+      }
+      delete canonicalSpec.data;
+
+      return {
+        canonicalChartSchema: canonicalSpec,
+        canonicalizationVersion: CANONICALIZATION_VERSION,
+        renderHints: {
+          preferredRenderer: inferPreferredRenderer(canonicalSpec),
+        },
+        validationErrors: collectValidationErrors(canonicalSpec),
+      };
+    }
+
     const mark = normalizeMarkSpec(spec.mark);
     const encoding = cleanupEncoding(
       cloneDeep((spec.encoding || {}) as EncodingSpec),

@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from typing import Any
 
@@ -31,6 +32,13 @@ from src.utils import trace_cost
 logger = logging.getLogger("wren-ai-service")
 
 
+def _instruction_first_prompt_enabled() -> bool:
+    raw_value = os.getenv("WREN_PROMPT_INSTRUCTION_FIRST_ENABLED")
+    if raw_value is None:
+        return False
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 sql_generation_user_prompt_template = """
 ### DATABASE SCHEMA ###
 {% for document in documents %}
@@ -56,17 +64,7 @@ sql_generation_user_prompt_template = """
 {% endfor %}
 {% endif %}
 
-{% if sql_samples %}
-### SQL SAMPLES ###
-{% for sample in sql_samples %}
-Question:
-{{sample.question}}
-SQL:
-{{sample.sql}}
-{% endfor %}
-{% endif %}
-
-{% if instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
+{% macro render_user_instructions(instructions) -%}
 ### USER INSTRUCTIONS ###
 {% if instructions.business_glossary %}
 #### BUSINESS GLOSSARY ####
@@ -86,6 +84,25 @@ SQL:
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
 {% endif %}
+{%- endmacro %}
+
+{% set has_user_instructions = instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
+{% if instruction_first and has_user_instructions %}
+{{ render_user_instructions(instructions) }}
+{% endif %}
+
+{% if sql_samples %}
+### SQL SAMPLES ###
+{% for sample in sql_samples %}
+Question:
+{{sample.question}}
+SQL:
+{{sample.sql}}
+{% endfor %}
+{% endif %}
+
+{% if not instruction_first and has_user_instructions %}
+{{ render_user_instructions(instructions) }}
 {% endif %}
 
 ### QUESTION ###
@@ -123,6 +140,7 @@ def prompt(
             instructions=instructions,
             group_by_asset_type=True,
         ),
+        instruction_first=_instruction_first_prompt_enabled(),
         calculated_field_instructions=(
             get_calculated_field_instructions(sql_knowledge)
             if has_calculated_field

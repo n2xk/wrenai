@@ -444,6 +444,12 @@ def evaluate_result(
     text = result.content_text
     expectation = result.case.route_expectation
 
+    if case_id in {"ROUTE13", "ROUTE14", "ROUTE15"}:
+        return "needs_manual", [
+            "requires_multi_turn_or_correction_path",
+            "此用例必须按测试计划在 UI 同一 thread 中执行并采集 diagnostics 证据",
+        ]
+
     if result.status != "finished":
         if result.case.case_id in {"ROUTE07", "ROUTE08"} or "已有结果" in (
             result.case.precondition or ""

@@ -14,6 +14,8 @@ const mockMessageSuccess = jest.fn();
 const mockMessageError = jest.fn();
 const mockMessageWarning = jest.fn();
 const mockMessageInfo = jest.fn();
+const mockMessageLoadingHide = jest.fn();
+const mockMessageLoading = jest.fn((..._args: any[]) => mockMessageLoadingHide);
 let mockWatchedChartType: string | null = 'LINE';
 let mockChartSpecOptionValues: { chartType: string | null } = {
   chartType: 'LINE',
@@ -71,6 +73,8 @@ jest.mock('antd', () => {
       error: (...args: any[]) => mockMessageError(...args),
       warning: (...args: any[]) => mockMessageWarning(...args),
       info: (...args: any[]) => mockMessageInfo(...args),
+      loading: (content: any, duration?: any) =>
+        mockMessageLoading(content, duration),
     },
   };
 });
@@ -227,6 +231,7 @@ describe('ChartAnswer', () => {
       confidence: null,
       warnings: ['ai_proposal_unavailable'],
     });
+    mockMessageLoading.mockReturnValue(mockMessageLoadingHide);
   });
 
   it('pins directly when there is only one dashboard', async () => {
@@ -1020,6 +1025,11 @@ describe('ChartAnswer', () => {
       101,
       expect.any(String),
     );
+    expect(mockMessageLoading).toHaveBeenCalledWith(
+      '正在识别图表日期范围...',
+      0,
+    );
+    expect(mockMessageLoadingHide).toHaveBeenCalled();
     expect(capturedPinConfigModalProps.onSubmit).toEqual(expect.any(Function));
     expect(mockCreateDashboardItem).not.toHaveBeenCalled();
 

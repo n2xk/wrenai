@@ -2,6 +2,7 @@ import {
   buildSuggestedQuestionsUrl,
   clearSuggestedQuestionsCache,
   fetchSuggestedQuestions,
+  peekSuggestedQuestions,
 } from './homeRest';
 
 describe('homeRest suggested questions helpers', () => {
@@ -71,6 +72,50 @@ describe('homeRest suggested questions helpers', () => {
 
     const firstPayload = await fetchSuggestedQuestions(selector);
     const secondPayload = await fetchSuggestedQuestions(selector);
+
+    expect(firstPayload).toEqual(secondPayload);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes cached suggested questions synchronously for fast first paint', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          questions: [{ question: '订单异常原因', label: '订单异常' }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const selector = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+    };
+
+    expect(peekSuggestedQuestions(selector)).toBeNull();
+    const payload = await fetchSuggestedQuestions(selector);
+    expect(peekSuggestedQuestions(selector)).toEqual(payload);
+  });
+
+  it('deduplicates concurrent suggested question requests', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          questions: [{ question: '订单异常原因', label: '订单异常' }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const selector = {
+      workspaceId: 'workspace-1',
+      knowledgeBaseId: 'kb-1',
+    };
+
+    const [firstPayload, secondPayload] = await Promise.all([
+      fetchSuggestedQuestions(selector),
+      fetchSuggestedQuestions(selector),
+    ]);
 
     expect(firstPayload).toEqual(secondPayload);
     expect(global.fetch).toHaveBeenCalledTimes(1);

@@ -1,12 +1,16 @@
 import asyncio
+import csv
 import itertools
 import logging
 import os
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from difflib import SequenceMatcher
+from io import StringIO
 from typing import Any, Callable, Iterable, Literal, Optional, Protocol, Sequence
 
+import aiohttp
 import sqlparse
 
 from src.core.ask_policy import (
@@ -14,6 +18,21 @@ from src.core.ask_policy import (
     evaluate_policy_context,
     is_metadata_explanation_query,
     load_ask_policy_config,
+)
+from src.core.ask_runtime_patterns import (
+    DEFAULT_SEMANTIC_DIMENSION_PATTERNS,
+    DEFAULT_SEMANTIC_METRIC_PATTERNS,
+    DEFAULT_TEMPLATE_FEATURE_PATTERNS,
+)
+from src.core.ask_runtime_patterns import (
+    load_regex_pattern_config as _load_regex_pattern_config,
+)
+from src.core.slot_extractor import (
+    DATE_PATTERN,
+    extract_channel_ids as _shared_extract_channel_ids,
+    extract_date_range as _shared_extract_date_range,
+    extract_tenant_plat_ids as _shared_extract_tenant_plat_ids,
+    normalize_question_skeleton,
 )
 from src.core.mixed_answer_composer import MixedAnswerComposer
 from src.core.pipeline import BasicPipeline
@@ -74,6 +93,7 @@ class AskExecutionState:
     current_sql_correction_retries: int = 0
     template_decision: Optional[dict[str, Any]] = None
     semantic_plan: Optional[dict[str, Any]] = None
+    query_decomposition: Optional[dict[str, Any]] = None
     clarification_state: Optional[dict[str, Any]] = None
     slot_values: dict[str, Any] = field(default_factory=dict)
 
@@ -135,7 +155,6 @@ TEMPLATE_MIN_ADJUSTED_SCORE = float(
     os.getenv("WREN_TEMPLATE_MIN_ADJUSTED_SCORE", "1.15")
 )
 SQL_TEMPLATE_PLACEHOLDER_PATTERN = re.compile(r"(?<!:):([A-Za-z_][A-Za-z0-9_]*)")
-DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 
 
 def normalize_semantic_plan_mode(
@@ -151,53 +170,13 @@ def normalize_semantic_plan_mode(
     return mode  # type: ignore[return-value]
 
 
-TEMPLATE_FEATURE_PATTERNS: dict[str, tuple[str, ...]] = {
-    "bucket": (r"分桶", r"档位"),
-    "cohort": (
-        r"\bcohort\b",
-        r"首存\s*cohort",
-        r"首存用户群",
-        r"首存群体",
-    ),
-    "cumulative_revenue": (r"累计收入", r"回收", r"渠道收入"),
-    "daily_summary": (
-        r"日报",
-        r"每日",
-        r"登录",
-        r"注册",
-        r"充值",
-        r"提现",
-        r"返水",
-        r"任务彩金",
-    ),
-    "financial_ratio": (r"投充比", r"杀率", r"充提差", r"输赢"),
-    "game_type": (r"游戏类型", r"game[_\s-]?type"),
-    "retention": (
-        r"续存",
-        r"复存",
-        r"留存",
-        r"2\s*[~\-到至]\s*6\s*存",
-        r"[2-6]\s*存",
-        r"[二三四五六]\s*存",
-    ),
-    "segment": (
-        r"TOP\s*\d+",
-        r"TOPN",
-        r"非\s*TOP",
-        r"NON[_\s-]?TOPN",
-        r"前\s*\d+\s*(?:名|个)?(?:大户|用户|玩家)?",
-        r"大户",
-        r"头部用户",
-        r"高流水用户",
-        r"投注流水最高",
-        r"分层",
-        r"区间汇总",
-        r"全部用户",
-        r"所有用户",
-        r"排名",
-    ),
-    "trend": (r"日龄", r"趋势", r"D\s*1", r"D\s*\d+"),
-}
+def _supplied_external_sql_builders_enabled() -> bool:
+    raw_value = os.getenv("WREN_SUPPLIED_EXTERNAL_SQL_BUILDERS_ENABLED")
+    if raw_value is None:
+        return True
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 TEMPLATE_FEATURE_WEIGHTS = {
     "bucket": 1.15,
     "cohort": 0.55,
@@ -289,6 +268,404 @@ def _tenant_slot_guard_enabled() -> bool:
     return _env_flag_enabled("WREN_TENANT_SLOT_GUARD_ENABLED", True)
 
 
+def _legacy_external_dependency_fallback_enabled() -> bool:
+    return _env_flag_enabled("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", False)
+
+
+SQL_CORRECTION_STRATEGY_HINTS = (
+    (
+        "diagnosis_first",
+        "先按诊断结论定位根因，只修复导致 dry run 失败的最小 SQL 片段，"
+        "避免重写查询结构或业务口径。",
+    ),
+    (
+        "schema_first",
+        "优先核对表名、列名、别名、JOIN 条件和 GROUP BY 粒度是否与 DATABASE SCHEMA 一致，"
+        "不要编造不存在的字段。",
+    ),
+    (
+        "dialect_first",
+        "优先修复 SQL 方言、日期函数、聚合表达式、类型转换和保留字转义问题，"
+        "保持原始 SELECT 业务字段不变。",
+    ),
+)
+
+
+SQL_GENERATION_STRATEGY_HINTS = (
+    (
+        "template_first",
+        "优先复用最匹配的 SQL template / SQL sample 的 CTE 和业务口径；"
+        "只替换参数、过滤条件和必要的字段，避免重写模板核心。",
+    ),
+    (
+        "schema_first",
+        "优先从 DATABASE SCHEMA 反推表关系、JOIN key、时间字段和指标字段；"
+        "如果模板与 schema 冲突，以 schema 中存在的表列为准。",
+    ),
+    (
+        "decomposition_first",
+        "先按 QUERY DECOMPOSITION PLAN 拆成 CTE：基础过滤、业务 cohort/TOPN 分层、"
+        "聚合指标、最终宽表/明细输出，然后组合成一条 SQL。",
+    ),
+)
+
+
+def _sql_correction_candidate_count() -> int:
+    raw_value = os.getenv("WREN_SQL_CORRECTION_CANDIDATE_COUNT", "3")
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        parsed_value = 3
+    return max(1, min(parsed_value, len(SQL_CORRECTION_STRATEGY_HINTS)))
+
+
+def _query_decomposition_enabled() -> bool:
+    return _env_flag_enabled("WREN_QUERY_DECOMPOSITION_ENABLED", True)
+
+
+def _execution_voting_enabled() -> bool:
+    return _env_flag_enabled("WREN_SQL_EXECUTION_VOTING_ENABLED", True)
+
+
+def _sql_generation_candidate_count() -> int:
+    raw_value = os.getenv("WREN_SQL_GENERATION_CANDIDATE_COUNT", "3")
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        parsed_value = 3
+    return max(1, min(parsed_value, len(SQL_GENERATION_STRATEGY_HINTS)))
+
+
+def _query_complexity_features(
+    query: Optional[str],
+    *,
+    semantic_plan: Optional[dict[str, Any]] = None,
+    table_names: Optional[Sequence[str]] = None,
+) -> list[str]:
+    normalized_query = str(query or "")
+    features: list[str] = []
+    patterns = {
+        "topn_segment": r"TOP\s*\d+|前\s*\d+|非\s*TOP|非前",
+        "cohort": r"cohort|首存|首充|续存|留存|D\s*\d+|累计\s*\d+\s*天",
+        "external_metric": r"ROI|投放|首存成本|UV下载率|UV注册率|PV|UV",
+        "wide_excel_shape": r"宽表|同形|汇总行|环比|D1|D3|D7|D15|D30|D60|D90|D120|D150|D180|D210|D240|D270|D300|D330|D360",
+        "multi_metric": r"综合日报|多个指标|趋势|分布|对比|排名",
+    }
+    for feature, pattern in patterns.items():
+        if re.search(pattern, normalized_query, flags=re.IGNORECASE):
+            features.append(feature)
+
+    if len(table_names or []) >= 3:
+        features.append("multi_table")
+
+    plan = semantic_plan or {}
+    filters = plan.get("filters") if isinstance(plan, dict) else None
+    metrics = plan.get("metrics") if isinstance(plan, dict) else None
+    dimensions = plan.get("dimensions") if isinstance(plan, dict) else None
+    if isinstance(filters, dict) and len(
+        [value for value in filters.values() if value]
+    ):
+        features.append("filtered_query")
+    if isinstance(metrics, list) and len(metrics) >= 3:
+        features.append("multi_metric")
+    if isinstance(dimensions, list) and len(dimensions) >= 2:
+        features.append("multi_dimension")
+
+    return list(dict.fromkeys(features))
+
+
+def build_query_decomposition_plan(
+    query: Optional[str],
+    *,
+    semantic_plan: Optional[dict[str, Any]] = None,
+    table_names: Optional[Sequence[str]] = None,
+) -> dict[str, Any]:
+    features = _query_complexity_features(
+        query,
+        semantic_plan=semantic_plan,
+        table_names=table_names,
+    )
+    enabled = _query_decomposition_enabled() and len(features) >= 2
+    steps: list[dict[str, str]] = []
+    if enabled:
+        steps.append(
+            {
+                "name": "base_scope",
+                "instruction": "先建立基础数据范围 CTE：租户、渠道、日期、状态等过滤条件必须集中处理。",
+            }
+        )
+        if "cohort" in features:
+            steps.append(
+                {
+                    "name": "cohort_users",
+                    "instruction": "单独建立首存/首充 cohort CTE，保留 cohort 日期、玩家、渠道和租户字段。",
+                }
+            )
+        if "topn_segment" in features:
+            steps.append(
+                {
+                    "name": "segment_users",
+                    "instruction": "单独建立 TOPN / 非 TOPN 分层 CTE，后续指标必须按该分层 JOIN 或聚合。",
+                }
+            )
+        if "external_metric" in features:
+            steps.append(
+                {
+                    "name": "external_metrics",
+                    "instruction": "外部补充数据只从用户提供的 inline CTE 或已配置依赖进入，不得编造外部物理表。",
+                }
+            )
+        steps.append(
+            {
+                "name": "metric_aggregation",
+                "instruction": "按目标 grain 聚合内部指标；派生指标在最终 SELECT 中统一计算。",
+            }
+        )
+        if "wide_excel_shape" in features:
+            steps.append(
+                {
+                    "name": "final_pivot",
+                    "instruction": "需要 Excel 同形宽表时，用条件聚合生成固定列；汇总行必须与明细行口径一致。",
+                }
+            )
+        else:
+            steps.append(
+                {
+                    "name": "final_select",
+                    "instruction": "最终 SELECT 只输出用户请求的维度、指标和必要对账列。",
+                }
+            )
+
+    return {
+        "enabled": enabled,
+        "features": features,
+        "steps": steps,
+    }
+
+
+def _format_query_decomposition_instruction(plan: dict[str, Any]) -> str:
+    if not plan.get("enabled"):
+        return ""
+    lines = [
+        "QUERY DECOMPOSITION PLAN：该问题较复杂，生成 SQL 时必须先拆解再组合。",
+        f"复杂度特征：{', '.join(plan.get('features') or [])}",
+        "推荐 CTE / 生成步骤：",
+    ]
+    for index, step in enumerate(plan.get("steps") or [], start=1):
+        lines.append(f"{index}. {step.get('name')}: {step.get('instruction')}")
+    return "\n".join(lines)
+
+
+def _build_runtime_instruction(instruction: str, *, source: str) -> dict[str, Any]:
+    return {
+        "instruction": instruction,
+        "source": source,
+        "knowledge_asset_type": "query_rules",
+        "runtime_usage": "sql_generation",
+    }
+
+
+def _build_sql_generation_candidate_instruction(
+    *,
+    candidate_index: int,
+    candidate_count: int,
+    strategy_name: str,
+    strategy_hint: str,
+) -> dict[str, Any]:
+    return _build_runtime_instruction(
+        (
+            f"SQL generation candidate {candidate_index}/{candidate_count} "
+            f"({strategy_name})：{strategy_hint}"
+        ),
+        source="runtime_sql_generation_candidate",
+    )
+
+
+def _sql_generation_candidate_count_for_state(state: AskExecutionState) -> int:
+    if not _execution_voting_enabled():
+        return 1
+    configured_count = _sql_generation_candidate_count()
+    if configured_count <= 1:
+        return 1
+    decomposition = state.query_decomposition or {}
+    if decomposition.get("enabled"):
+        return configured_count
+    if state.template_decision and state.template_decision.get("mode") in {
+        "anchored_template",
+        "executable_template",
+    }:
+        return 1
+    return 2
+
+
+def _build_execution_result_signature(preview_result: Any) -> dict[str, Any]:
+    def normalize_preview_value(value: Any) -> Any:
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        return str(value)
+
+    def normalize_preview_row(row: Any) -> Any:
+        if isinstance(row, dict):
+            return {
+                str(key): normalize_preview_value(value) for key, value in row.items()
+            }
+        if isinstance(row, (list, tuple)):
+            return [normalize_preview_value(value) for value in row]
+        return normalize_preview_value(row)
+
+    rows: list[Any] = []
+    columns: list[str] = []
+    if isinstance(preview_result, dict):
+        raw_rows = preview_result.get("data")
+        if isinstance(raw_rows, list):
+            rows = raw_rows
+        raw_columns = (
+            preview_result.get("columns")
+            or preview_result.get("fields")
+            or preview_result.get("headers")
+        )
+        if isinstance(raw_columns, list):
+            columns = [
+                str(column.get("name") if isinstance(column, dict) else column)
+                for column in raw_columns
+            ]
+    elif isinstance(preview_result, list):
+        rows = preview_result
+
+    if not columns and rows and isinstance(rows[0], dict):
+        columns = list(rows[0].keys())
+
+    return {
+        "columns": columns,
+        "row_count": len(rows),
+        "sample": [normalize_preview_row(row) for row in rows[:3]],
+    }
+
+
+def _execution_signature_key(signature: dict[str, Any]) -> str:
+    return repr(
+        (
+            tuple(signature.get("columns") or []),
+            signature.get("row_count"),
+            signature.get("sample"),
+        )
+    )
+
+
+def _score_sql_generation_candidate(
+    *,
+    sql: str,
+    candidate_index: int,
+    execution_success: bool,
+    execution_vote_count: int,
+    template_sql: Optional[str] = None,
+) -> float:
+    score = 0.0
+    if execution_success:
+        score += 2.0
+    score += execution_vote_count * 0.5
+    if template_sql:
+        score += SequenceMatcher(
+            None,
+            _normalize_sql_for_signature(template_sql),
+            _normalize_sql_for_signature(sql),
+        ).ratio()
+    # Stable tie-breaker: earlier candidate wins when quality is equal.
+    score -= candidate_index * 0.001
+    return score
+
+
+def _build_sql_correction_candidate_inputs(
+    *,
+    original_sql: str,
+    error_message: Optional[str],
+    diagnosis_reasoning: Optional[str],
+    candidate_count: Optional[int] = None,
+) -> list[dict[str, str]]:
+    base_error = (diagnosis_reasoning or error_message or "").strip()
+    if not base_error:
+        base_error = "SQL dry run failed; correct the SQL using the schema and rules."
+
+    count = (
+        candidate_count
+        if candidate_count is not None
+        else _sql_correction_candidate_count()
+    )
+    count = max(1, min(count, len(SQL_CORRECTION_STRATEGY_HINTS)))
+
+    candidates: list[dict[str, str]] = []
+    for index, (strategy_name, strategy_hint) in enumerate(
+        SQL_CORRECTION_STRATEGY_HINTS[:count],
+        start=1,
+    ):
+        candidates.append(
+            {
+                "sql": original_sql,
+                "error": (
+                    f"{base_error}\n\n"
+                    f"Correction candidate {index}/{count} ({strategy_name}): "
+                    f"{strategy_hint}"
+                ),
+            }
+        )
+    return candidates
+
+
+def _score_sql_correction_candidate(
+    *,
+    original_sql: str,
+    corrected_sql: Optional[str],
+    candidate_index: int,
+) -> float:
+    if not corrected_sql:
+        return 0.0
+    similarity = SequenceMatcher(
+        None,
+        _normalize_sql_for_signature(original_sql),
+        _normalize_sql_for_signature(corrected_sql),
+    ).ratio()
+    # Prefer smaller, diagnosis-targeted changes when multiple candidates pass
+    # dry run; use candidate order as a stable tie-breaker.
+    return similarity - (candidate_index * 0.001)
+
+
+def _select_best_sql_correction_result(
+    correction_results: Sequence[dict[str, Any]],
+    *,
+    original_sql: str,
+) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+    """Return the best valid correction result plus the first invalid fallback.
+
+    SQLCorrection does not currently expose model confidence, so we use a
+    conservative proxy: dry-run success first, then the valid SQL that preserves
+    the original SQL shape most closely.  The first invalid result is kept so
+    the existing retry loop can continue with the next concrete engine error.
+    """
+
+    first_invalid_result: Optional[dict[str, Any]] = None
+    best_result: Optional[dict[str, Any]] = None
+    best_score = float("-inf")
+    for index, correction_result in enumerate(correction_results):
+        post_process = correction_result.get("post_process") or {}
+        valid_generation_result = post_process.get("valid_generation_result") or {}
+        if valid_generation_result:
+            score = _score_sql_correction_candidate(
+                original_sql=original_sql,
+                corrected_sql=valid_generation_result.get("sql"),
+                candidate_index=index,
+            )
+            if best_result is None or score > best_score:
+                best_score = score
+                best_result = correction_result
+            continue
+
+        invalid_generation_result = post_process.get("invalid_generation_result") or {}
+        if invalid_generation_result and first_invalid_result is None:
+            first_invalid_result = invalid_generation_result
+
+    return best_result, first_invalid_result
+
+
 def _normalize_string_list(value: Any) -> list[str]:
     if value is None:
         return []
@@ -329,6 +706,135 @@ def _canonical_dependency_name(dependency_id: str) -> str:
         "download_click_uv": "下载点击UV",
     }
     return fallback_names.get(dependency_id, dependency_id)
+
+
+def _external_dependency_slot_name(dependency_id: Any) -> str:
+    return f"external_dependency:{_normalize_dependency_id(dependency_id)}"
+
+
+def _dependency_id_from_external_slot(slot: Any) -> str:
+    value = str(slot or "").strip()
+    prefixes = (
+        "external_dependency:",
+        "external_dependency.",
+        "external_dependencies.",
+    )
+    for prefix in prefixes:
+        if value.startswith(prefix):
+            return _normalize_dependency_id(value[len(prefix) :])
+    return ""
+
+
+def _normalize_external_supply_column_name(column: Any) -> str:
+    normalized = str(column or "").strip()
+    normalized_lower = normalized.lower()
+    aliases = {
+        "biz_date": "date",
+        "业务日期": "date",
+        "日期": "date",
+        "统计日期": "date",
+        "channel": "channel_id",
+        "渠道": "channel_id",
+        "渠道id": "channel_id",
+        "渠道ID": "channel_id",
+        "投放金额": "ad_spend",
+        "投放成本": "ad_spend",
+        "买量成本": "ad_spend",
+        "广告费": "ad_spend",
+        "访问PV": "access_pv",
+        "PV": "access_pv",
+        "pv": "access_pv",
+        "访问UV": "access_uv",
+        "UV": "access_uv",
+        "uv": "access_uv",
+        "下载点击UV": "download_click_uv",
+        "下载UV": "download_click_uv",
+        "下载点击人数": "download_click_uv",
+    }
+    return aliases.get(normalized, aliases.get(normalized_lower, normalized))
+
+
+def _infer_external_supply_grain(columns: Sequence[Any]) -> list[str]:
+    normalized_columns = {
+        _normalize_external_supply_column_name(column) for column in columns
+    }
+    inferred: list[str] = []
+    if {"date", "channel_id"}.issubset(normalized_columns):
+        inferred.extend(["biz_date + channel_id", "date + channel_id"])
+    elif "date" in normalized_columns:
+        inferred.extend(["biz_date", "date"])
+    if "cohort_period" in normalized_columns:
+        inferred.append("cohort_period")
+    return list(dict.fromkeys(inferred))
+
+
+def _parse_external_supply_text(raw_text: Any, dependency_id: Any) -> dict[str, Any]:
+    text = str(raw_text or "").strip()
+    dependency_id = _normalize_dependency_id(dependency_id)
+    if not text:
+        return {"columns": [], "grain": [], "rows": []}
+
+    def normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            _normalize_external_supply_column_name(key): str(value).strip()
+            for key, value in row.items()
+            if str(key or "").strip() and str(value or "").strip()
+        }
+
+    rows: list[dict[str, Any]] = []
+    normalized_text = text.replace("\t", ",")
+    csv_lines = [
+        line.strip()
+        for line in normalized_text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if csv_lines and any("," in line for line in csv_lines):
+        try:
+            reader = csv.DictReader(StringIO("\n".join(csv_lines)))
+            rows = [normalize_row(row) for row in reader if isinstance(row, dict)]
+            rows = [row for row in rows if row]
+        except csv.Error:
+            rows = []
+
+    if not rows:
+        date_value_pairs = re.findall(
+            r"(\d{4}[-/]\d{2}[-/]\d{2}|\d{2}[-/]\d{2})\s*(?:=|:|：|为)?\s*([0-9]+(?:\.[0-9]+)?)",
+            text,
+        )
+        channel_match = re.search(
+            r"(?:渠道|channel[_\s-]?id)\s*[:：#]?\s*([0-9]{3,})",
+            text,
+            flags=re.IGNORECASE,
+        )
+        for date_value, metric_value in date_value_pairs:
+            normalized_date = date_value.replace("/", "-")
+            if re.fullmatch(r"\d{2}-\d{2}", normalized_date):
+                normalized_date = f"2026-{normalized_date}"
+            row = {"date": normalized_date, dependency_id: metric_value}
+            if channel_match:
+                row["channel_id"] = channel_match.group(1)
+            rows.append(row)
+
+    if not rows:
+        value_match = re.search(r"([0-9]+(?:\.[0-9]+)?)", text)
+        if value_match:
+            rows.append({dependency_id: value_match.group(1)})
+
+    columns = list(
+        dict.fromkeys(
+            _normalize_external_supply_column_name(column)
+            for row in rows
+            for column in row.keys()
+        )
+    )
+    if dependency_id and dependency_id not in columns:
+        columns.append(dependency_id)
+    return {
+        "columns": columns,
+        "grain": _infer_external_supply_grain(columns),
+        "rows": rows,
+        "raw_text": text,
+    }
 
 
 def _extract_business_signature_list(
@@ -377,6 +883,17 @@ def _query_excludes_external_dependency(
     if _query_requests_internal_only(query):
         return True
 
+    # Phrases such as "不要编造" / "不要用默认值" are safety guards, not a
+    # request to exclude the external metric that appears before them.  Without
+    # stripping these guard phrases, queries like "如果缺投放金额，请先说明，不要
+    # 编造" incorrectly match the generic "不要 ... 投放金额" exclusion pattern
+    # and skip the external-data clarification path.
+    exclusion_query = re.sub(
+        r"(?:不要|不能|不可|避免).{0,8}(?:编造|虚构|瞎编|默认值|默认|硬凑|伪造)",
+        "",
+        query,
+        flags=re.IGNORECASE,
+    )
     exclusion_cue = "|".join(
         re.escape(cue) for cue in EXTERNAL_DEPENDENCY_EXCLUSION_CUES
     )
@@ -386,13 +903,13 @@ def _query_excludes_external_dependency(
         escaped_text = re.escape(text)
         if re.search(
             rf"(?:{exclusion_cue}).{{0,80}}{escaped_text}",
-            query,
+            exclusion_query,
             flags=re.IGNORECASE,
         ):
             return True
         if re.search(
             rf"{escaped_text}.{{0,40}}(?:{exclusion_cue})",
-            query,
+            exclusion_query,
             flags=re.IGNORECASE,
         ):
             return True
@@ -428,6 +945,7 @@ def _extract_configured_external_dependencies(
                 "input_modes": [],
                 "lifecycle": "per_question",
                 "validation": {},
+                "required_columns": [],
                 "matched_by_signature": False,
                 "matched_by_instruction": False,
             },
@@ -441,6 +959,7 @@ def _extract_configured_external_dependencies(
                 "trigger_when",
                 "not_trigger_when",
                 "input_modes",
+                "required_columns",
             }:
                 for item in _normalize_string_list(value):
                     if item not in existing[key]:
@@ -479,6 +998,16 @@ def _extract_configured_external_dependencies(
         metadata = _get_sample_value(instruction, "metadata") or {}
         if not isinstance(metadata, dict):
             metadata = {}
+        required_grain_schema = metadata.get("required_grain_schema") or metadata.get(
+            "requiredGrainSchema"
+        )
+        required_columns = metadata.get("required_columns") or metadata.get(
+            "requiredColumns"
+        )
+        if not required_columns and isinstance(required_grain_schema, dict):
+            required_columns = required_grain_schema.get(
+                "required_columns"
+            ) or required_grain_schema.get("requiredColumns")
         upsert_dependency(
             dependency_id,
             name=(
@@ -514,6 +1043,7 @@ def _extract_configured_external_dependencies(
             input_modes=metadata.get("input_modes") or metadata.get("inputModes") or [],
             lifecycle=metadata.get("lifecycle") or "per_question",
             validation=metadata.get("validation") or {},
+            required_columns=required_columns or [],
             matched_by_instruction=True,
         )
 
@@ -537,6 +1067,8 @@ def _normalize_external_dependency_supply_map(value: Any) -> dict[str, dict[str,
     supplies: dict[str, dict[str, Any]] = {}
 
     def collect_columns(raw_supply: Any) -> list[str]:
+        if isinstance(raw_supply, str):
+            return _parse_external_supply_text(raw_supply, "").get("columns", [])
         if not isinstance(raw_supply, dict):
             return []
         columns = (
@@ -546,25 +1078,66 @@ def _normalize_external_dependency_supply_map(value: Any) -> dict[str, dict[str,
             or raw_supply.get("schema")
             or []
         )
-        normalized_columns = _normalize_string_list(columns)
+        normalized_columns = [
+            _normalize_external_supply_column_name(column)
+            for column in _normalize_string_list(columns)
+        ]
         rows = raw_supply.get("rows")
         if isinstance(rows, list) and rows and isinstance(rows[0], dict):
             normalized_columns = [
                 *normalized_columns,
-                *[str(key) for key in rows[0].keys()],
+                *[
+                    _normalize_external_supply_column_name(key)
+                    for key in rows[0].keys()
+                ],
             ]
         return list(dict.fromkeys(normalized_columns))
 
     def collect_grain(raw_supply: Any) -> list[str]:
+        if isinstance(raw_supply, str):
+            return _parse_external_supply_text(raw_supply, "").get("grain", [])
         if not isinstance(raw_supply, dict):
             return []
-        return _normalize_string_list(
+        explicit_grain = _normalize_string_list(
             raw_supply.get("grain")
             or raw_supply.get("granularity")
             or raw_supply.get("required_grain")
             or raw_supply.get("requiredGrain")
             or []
         )
+        return list(
+            dict.fromkeys(
+                [
+                    *explicit_grain,
+                    *_infer_external_supply_grain(collect_columns(raw_supply)),
+                ]
+            )
+        )
+
+    def collect_rows(raw_supply: Any, dependency_id: Any) -> list[dict[str, Any]]:
+        if isinstance(raw_supply, str):
+            return _parse_external_supply_text(raw_supply, dependency_id).get(
+                "rows", []
+            )
+        if isinstance(raw_supply, dict):
+            rows = raw_supply.get("rows")
+            if isinstance(rows, list):
+                return [row for row in rows if isinstance(row, dict)]
+            raw_text = raw_supply.get("raw_text") or raw_supply.get("rawText")
+            if raw_text:
+                return _parse_external_supply_text(raw_text, dependency_id).get(
+                    "rows", []
+                )
+        return []
+
+    def collect_raw_text(raw_supply: Any) -> Optional[str]:
+        if isinstance(raw_supply, str) and raw_supply.strip():
+            return raw_supply.strip()
+        if isinstance(raw_supply, dict):
+            raw_text = raw_supply.get("raw_text") or raw_supply.get("rawText")
+            if isinstance(raw_text, str) and raw_text.strip():
+                return raw_text.strip()
+        return None
 
     def add_supply(dependency_id: Any, raw_supply: Any) -> None:
         normalized_dependency_id = _normalize_dependency_id(str(dependency_id or ""))
@@ -572,18 +1145,31 @@ def _normalize_external_dependency_supply_map(value: Any) -> dict[str, dict[str,
             return
         supply = supplies.setdefault(
             normalized_dependency_id,
-            {"columns": [], "grain": []},
+            {"columns": [], "grain": [], "rows": []},
         )
+        if isinstance(raw_supply, str):
+            raw_supply = _parse_external_supply_text(
+                raw_supply,
+                normalized_dependency_id,
+            )
         for column in collect_columns(raw_supply):
             if column not in supply["columns"]:
                 supply["columns"].append(column)
         for grain in collect_grain(raw_supply):
             if grain not in supply["grain"]:
                 supply["grain"].append(grain)
+        for row in collect_rows(raw_supply, normalized_dependency_id):
+            supply["rows"].append(row)
+        raw_text = collect_raw_text(raw_supply)
+        if raw_text:
+            supply["raw_text"] = raw_text
 
     if isinstance(raw_dependencies, dict):
         for key, raw_supply in raw_dependencies.items():
-            if isinstance(raw_supply, dict):
+            slot_dependency_id = _dependency_id_from_external_slot(key)
+            if slot_dependency_id:
+                add_supply(slot_dependency_id, raw_supply)
+            elif isinstance(raw_supply, dict):
                 dependency_id = (
                     raw_supply.get("id")
                     or raw_supply.get("external_dependency_id")
@@ -593,6 +1179,8 @@ def _normalize_external_dependency_supply_map(value: Any) -> dict[str, dict[str,
                     or key
                 )
                 add_supply(dependency_id, raw_supply)
+            elif isinstance(raw_supply, str):
+                add_supply(key, raw_supply)
         return supplies
 
     if isinstance(raw_dependencies, list):
@@ -636,9 +1224,16 @@ def _evaluate_supplied_external_dependency(
     validation = dependency.get("validation") or {}
     if not isinstance(validation, dict):
         validation = {}
-    required_columns = _normalize_string_list(
-        validation.get("required_columns") or validation.get("requiredColumns") or []
-    )
+    required_columns = [
+        _normalize_external_supply_column_name(column)
+        for column in _normalize_string_list(
+            validation.get("required_columns")
+            or validation.get("requiredColumns")
+            or dependency.get("required_columns")
+            or dependency.get("requiredColumns")
+            or []
+        )
+    ]
     required_grain = _normalize_string_list(dependency.get("required_grain"))
 
     supplied_columns = _normalize_comparable_values(supply.get("columns") or [])
@@ -655,6 +1250,8 @@ def _evaluate_supplied_external_dependency(
         for grain in required_grain
         if _normalize_comparable_values([grain]).isdisjoint(supplied_schema_values)
     ]
+    if required_grain and len(missing_grain) < len(required_grain):
+        missing_grain = []
     return {
         "satisfied": not missing_columns and not missing_grain,
         "missing_dependency": None,
@@ -765,7 +1362,842 @@ def detect_supplied_external_dependency_coverage(
         ],
         "provided_external_dependencies": list(supplies.keys()),
         "evaluations": evaluations,
+        "supplies": supplies,
     }
+
+
+def build_supplied_external_dependency_instruction(
+    supplied_external_dependencies: Any,
+) -> Optional[dict[str, Any]]:
+    supplies = _normalize_external_dependency_supply_map(supplied_external_dependencies)
+    if not supplies:
+        return None
+
+    def safe_cte_name(dependency_id: Any, index: int) -> str:
+        normalized = re.sub(
+            r"[^a-zA-Z0-9_]+",
+            "_",
+            _normalize_external_supply_column_name(dependency_id).lower(),
+        ).strip("_")
+        if not normalized or not re.match(r"^[a-zA-Z_]", normalized):
+            normalized = f"dependency_{index + 1}"
+        return f"supplied_external_{normalized}"
+
+    def sql_column_name(column: Any) -> str:
+        normalized = _normalize_external_supply_column_name(column)
+        # The internal semantic layer and imported TiDB fixture use biz_date.
+        # Keep user-facing parsing permissive ("date"/"日期"), but provide a SQL
+        # ready CTE column that LLMs can join to internal tables without
+        # inventing an external source table.
+        if normalized == "date":
+            return "biz_date"
+        normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", normalized).strip("_")
+        if not normalized or not re.match(r"^[a-zA-Z_]", normalized):
+            normalized = "value"
+        return normalized
+
+    def sql_literal(value: Any, column: str) -> str:
+        raw = str(value or "").strip()
+        escaped = raw.replace("'", "''")
+        if column in {"date", "biz_date"} and re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+            return f"DATE '{escaped}'"
+        if re.fullmatch(r"-?\d+(?:\.\d+)?", raw):
+            return raw
+        return f"'{escaped}'"
+
+    def build_inline_cte(dependency_id: str, supply: dict[str, Any], index: int) -> str:
+        rows = supply.get("rows") or []
+        if not isinstance(rows, list) or not rows:
+            return ""
+
+        row_columns = list(
+            dict.fromkeys(
+                _normalize_external_supply_column_name(column)
+                for row in rows
+                if isinstance(row, dict)
+                for column in row.keys()
+                if str(column or "").strip()
+            )
+        )
+        columns = row_columns or [
+            _normalize_external_supply_column_name(column)
+            for column in supply.get("columns") or []
+            if str(column or "").strip()
+        ]
+        # Avoid leaking localized dependency names as SQL identifiers when the
+        # supplied CSV already contains canonical metric columns.
+        columns = [
+            column
+            for column in list(dict.fromkeys(columns))
+            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", sql_column_name(column))
+        ]
+        if not columns:
+            return ""
+
+        cte_columns = [sql_column_name(column) for column in columns]
+        select_rows = []
+        for row in rows[:50]:
+            if not isinstance(row, dict):
+                continue
+            normalized_row = {
+                _normalize_external_supply_column_name(key): value
+                for key, value in row.items()
+            }
+            select_rows.append(
+                "SELECT "
+                + ", ".join(
+                    f"{sql_literal(normalized_row.get(column, ''), column)} AS {cte_column}"
+                    for column, cte_column in zip(columns, cte_columns)
+                )
+            )
+        if not select_rows:
+            return ""
+
+        return (
+            f"{safe_cte_name(dependency_id, index)} AS (\n  "
+            + "\n  UNION ALL\n  ".join(select_rows)
+            + "\n)"
+        )
+
+    inline_ctes: list[str] = []
+    for index, (dependency_id, supply) in enumerate(supplies.items()):
+        cte = build_inline_cte(dependency_id, supply, index)
+        if cte:
+            inline_ctes.append(cte)
+
+    lines = [
+        "用户已在本次对话中补充外部数据。生成 SQL 时必须只使用这些用户补充值，不能编造、不能跨问题复用。",
+        "如需参与计算，必须使用下面的 inline CTE；不要假设存在 dwd_ad_spend、external_metrics 等外部物理表。",
+        "CTE 中 biz_date/channel_id 等列可直接与内部表按日期、渠道或 cohort 粒度关联。",
+        "如果用户提到 Excel ROI 回收表的 D1 到 D360，应按 Excel 固定回收周期列 D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360 输出，不要生成 360 个逐日列。",
+    ]
+    if inline_ctes:
+        lines.extend(
+            [
+                "可直接复用的外部数据 CTE：",
+                "WITH " + ",\n".join(inline_ctes),
+            ]
+        )
+    for dependency_id, supply in supplies.items():
+        rows = supply.get("rows") or []
+        row_preview = rows[:20] if isinstance(rows, list) else []
+        lines.append(
+            f"- {dependency_id}: columns={supply.get('columns') or []}; "
+            f"grain={supply.get('grain') or []}; rows={row_preview}"
+        )
+        raw_text = supply.get("raw_text")
+        if raw_text and not row_preview:
+            lines.append(f"  raw_text={raw_text}")
+
+    return {
+        "instruction": "\n".join(lines),
+        "source": "external_dependency_user_supplied",
+        "knowledge_asset_type": "external_dependency_supply",
+        "provided_external_dependencies": list(supplies.keys()),
+        "inline_cte_count": len(inline_ctes),
+    }
+
+
+def build_supplied_external_daily_report_sql(
+    query: Optional[str],
+    supplied_external_dependencies: Any,
+) -> Optional[str]:
+    """Build a deterministic Excel-shaped comprehensive daily report SQL.
+
+    FT01 FULL needs user-supplied ad spend and traffic metrics to be joined
+    with internal daily metrics.  The generic LLM path is intentionally blocked
+    before those metrics are supplied, but after the clarification form provides
+    them we should not depend on free-form SQL generation because it can loop on
+    SQL correction or accidentally invent physical external tables.
+    """
+
+    if not query or not re.search(r"综合日报|渠道日报|日报", query):
+        return None
+    if re.search(r"ROI|投入产出|投放回收|累计收入", query, re.IGNORECASE):
+        return None
+
+    supplies = _normalize_external_dependency_supply_map(supplied_external_dependencies)
+    if not supplies:
+        return None
+
+    params = _extract_template_parameters_from_query(
+        query,
+        [
+            "tenant_plat_id",
+            "channel_id",
+            "start_date",
+            "end_date",
+        ],
+    )
+    tenant_plat_id = params.get("tenant_plat_id")
+    channel_id = params.get("channel_id")
+    if isinstance(channel_id, list):
+        channel_id = channel_id[0] if channel_id else None
+    start_date = params.get("start_date")
+    end_date = params.get("end_date")
+    if not all([tenant_plat_id, channel_id, start_date, end_date]):
+        return None
+
+    def sql_date(value: Any) -> Optional[str]:
+        raw = str(value or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+            return None
+        return raw
+
+    def sql_number(value: Any) -> Optional[str]:
+        raw = str(value or "").strip().replace(",", "")
+        if not re.fullmatch(r"-?\d+(?:\.\d+)?", raw):
+            return None
+        return raw
+
+    merged_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for supply in supplies.values():
+        if not isinstance(supply, dict):
+            continue
+        rows = supply.get("rows") or []
+        if not isinstance(rows, list):
+            continue
+        for row in rows[:200]:
+            if not isinstance(row, dict):
+                continue
+            normalized_row = {
+                _normalize_external_supply_column_name(key): value
+                for key, value in row.items()
+            }
+            biz_date = sql_date(
+                normalized_row.get("date") or normalized_row.get("biz_date")
+            )
+            row_tenant = sql_number(
+                normalized_row.get("tenant_plat_id") or tenant_plat_id
+            )
+            row_channel = sql_number(normalized_row.get("channel_id") or channel_id)
+            if not biz_date or not row_tenant or not row_channel:
+                continue
+            if str(int(float(row_tenant))) != str(int(tenant_plat_id)):
+                continue
+            if str(int(float(row_channel))) != str(int(channel_id)):
+                continue
+            if str(start_date) <= biz_date <= str(end_date):
+                merged_rows.setdefault((biz_date, row_tenant, row_channel), {}).update(
+                    normalized_row
+                )
+
+    select_rows: list[str] = []
+    for (biz_date, row_tenant, row_channel), row in sorted(merged_rows.items()):
+        ad_spend = sql_number(row.get("ad_spend"))
+        access_pv = sql_number(row.get("access_pv"))
+        access_uv = sql_number(row.get("access_uv"))
+        download_click_uv = sql_number(row.get("download_click_uv"))
+        if not all([ad_spend, access_pv, access_uv, download_click_uv]):
+            continue
+        select_rows.append(
+            "SELECT "
+            f"DATE '{biz_date}' AS biz_date, "
+            f"{int(float(row_tenant))} AS tenant_plat_id, "
+            f"{int(float(row_channel))} AS channel_id, "
+            f"{ad_spend} AS ad_spend, "
+            f"{access_pv} AS access_pv, "
+            f"{access_uv} AS access_uv, "
+            f"{download_click_uv} AS download_click_uv"
+        )
+
+    if not select_rows:
+        return None
+
+    supplied_cte = "\n  UNION ALL\n  ".join(select_rows)
+    tenant_id_sql = int(tenant_plat_id)
+    channel_id_sql = int(channel_id)
+
+    return f"""
+WITH
+external_metrics AS (
+  {supplied_cte}
+),
+dim AS (
+  SELECT
+    COALESCE(tp.name, CAST({tenant_id_sql} AS VARCHAR)) AS site_name,
+    COALESCE(ch.channel_partner_username, CAST(ch.channel_partner_id AS VARCHAR), '') AS channel_partner,
+    COALESCE(ch.name, CAST({channel_id_sql} AS VARCHAR)) AS channel_name
+  FROM (SELECT 1) x
+  LEFT JOIN tidb_business_demo_tenant_plat tp ON tp.id = {tenant_id_sql}
+  LEFT JOIN tidb_business_demo_channel ch ON ch.id = {channel_id_sql}
+    AND ch.tenant_plat_id = {tenant_id_sql}
+),
+login_daily AS (
+  SELECT CAST(l.create_time AS DATE) AS biz_date, l.channel_id, COUNT(DISTINCT l.player_id) AS login_user_count
+  FROM tidb_business_demo_dwd_player_login_log l
+  WHERE l.category = 1
+    AND l.tenant_plat_id = {tenant_id_sql}
+    AND l.channel_id = {channel_id_sql}
+    AND l.create_time >= DATE '{start_date}'
+    AND l.create_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(l.create_time AS DATE), l.channel_id
+),
+register_daily AS (
+  SELECT CAST(p.create_time AS DATE) AS biz_date, p.channel_id, COUNT(DISTINCT p.id) AS register_user_count
+  FROM tidb_business_demo_dim_player p
+  WHERE p.tenant_plat_id = {tenant_id_sql}
+    AND p.channel_id = {channel_id_sql}
+    AND p.create_time >= DATE '{start_date}'
+    AND p.create_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(p.create_time AS DATE), p.channel_id
+),
+deposit_daily AS (
+  SELECT
+    CAST(d.callback_time AS DATE) AS biz_date,
+    d.channel_id,
+    COUNT(DISTINCT d.player_id) AS deposit_user_count,
+    SUM(d.actual_amount) AS deposit_amount,
+    COUNT(DISTINCT CASE WHEN d.times = 1 THEN d.player_id END) AS first_deposit_user_count,
+    SUM(CASE WHEN d.times = 1 THEN d.actual_amount ELSE 0 END) AS first_deposit_amount,
+    COUNT(DISTINCT CASE WHEN d.times = 1 AND CAST(d.regist_time AS DATE) = CAST(d.callback_time AS DATE) THEN d.player_id END) AS new_customer_first_deposit_user_count,
+    COUNT(DISTINCT CASE WHEN d.times = 1 AND CAST(d.regist_time AS DATE) <> CAST(d.callback_time AS DATE) THEN d.player_id END) AS develop_user_count,
+    SUM(CASE WHEN d.regist_time >= DATE '{start_date}' AND d.regist_time < DATE_ADD('day', 1, DATE '{end_date}') THEN d.actual_amount ELSE 0 END) AS new_customer_deposit_amount
+  FROM tidb_business_demo_dwd_order_deposit d
+  WHERE d.status = 2
+    AND d.tenant_plat_id = {tenant_id_sql}
+    AND d.channel_id = {channel_id_sql}
+    AND d.callback_time >= DATE '{start_date}'
+    AND d.callback_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(d.callback_time AS DATE), d.channel_id
+),
+withdraw_daily AS (
+  SELECT CAST(w.callback_time AS DATE) AS biz_date, w.channel_id, COUNT(DISTINCT w.player_id) AS withdrawal_user_count, SUM(w.act_amount) AS withdrawal_amount
+  FROM tidb_business_demo_dwd_order_withdrawal w
+  WHERE w.status = 3
+    AND w.tenant_plat_id = {tenant_id_sql}
+    AND w.channel_id = {channel_id_sql}
+    AND w.callback_time >= DATE '{start_date}'
+    AND w.callback_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(w.callback_time AS DATE), w.channel_id
+),
+bet_daily AS (
+  SELECT CAST(b.settle_time AS DATE) AS biz_date, b.channel_id, COUNT(DISTINCT b.player_id) AS bet_user_count, SUM(b.valid_bet_amount) AS valid_bet_amount, SUM(b.win_loss_amount) AS win_loss_amount
+  FROM tidb_business_demo_dwd_bet_order b
+  WHERE b.settle_status = 1
+    AND b.tenant_plat_id = {tenant_id_sql}
+    AND b.channel_id = {channel_id_sql}
+    AND b.settle_time >= DATE '{start_date}'
+    AND b.settle_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(b.settle_time AS DATE), b.channel_id
+),
+rebate_daily AS (
+  SELECT CAST(r.receive_time AS DATE) AS biz_date, r.channel_id, SUM(r.amount) AS rebate_amount
+  FROM tidb_business_demo_dwd_order_rebate r
+  WHERE r.status = 1
+    AND r.tenant_plat_id = {tenant_id_sql}
+    AND r.channel_id = {channel_id_sql}
+    AND r.receive_time >= DATE '{start_date}'
+    AND r.receive_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(r.receive_time AS DATE), r.channel_id
+),
+add_sub_daily AS (
+  SELECT CAST(a.modify_time AS DATE) AS biz_date, a.channel_id,
+         SUM(CASE WHEN a.add_or_sub_type_id IN (1207, 1209) THEN a.amount ELSE 0 END) -
+         SUM(CASE WHEN a.add_or_sub_type_id IN (2204, 2207) THEN a.amount ELSE 0 END) AS discount_adjust_amount
+  FROM tidb_business_demo_dwd_order_add_or_sub a
+  WHERE a.status = 2
+    AND a.add_or_sub_type_id IN (1207, 1209, 2204, 2207)
+    AND a.tenant_plat_id = {tenant_id_sql}
+    AND a.channel_id = {channel_id_sql}
+    AND a.modify_time >= DATE '{start_date}'
+    AND a.modify_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(a.modify_time AS DATE), a.channel_id
+),
+vip_award_daily AS (
+  SELECT CAST(v.modify_time AS DATE) AS biz_date, v.channel_id, SUM(v.amount) AS vip_award_amount
+  FROM tidb_business_demo_dwd_order_vip_award v
+  WHERE v.status = 2
+    AND v.tenant_plat_id = {tenant_id_sql}
+    AND v.channel_id = {channel_id_sql}
+    AND v.modify_time >= DATE '{start_date}'
+    AND v.modify_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(v.modify_time AS DATE), v.channel_id
+),
+activity_daily AS (
+  SELECT CAST(a.receive_time AS DATE) AS biz_date, a.channel_id, SUM(a.amount) AS activity_amount
+  FROM tidb_business_demo_dwd_order_activity a
+  WHERE a.status = 2
+    AND a.tenant_plat_id = {tenant_id_sql}
+    AND a.channel_id = {channel_id_sql}
+    AND a.receive_time >= DATE '{start_date}'
+    AND a.receive_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(a.receive_time AS DATE), a.channel_id
+),
+task_daily AS (
+  SELECT CAST(t.receive_time AS DATE) AS biz_date, t.channel_id, SUM(t.amount) AS task_amount
+  FROM tidb_business_demo_dwd_order_task t
+  WHERE t.status = 2
+    AND t.tenant_plat_id = {tenant_id_sql}
+    AND t.channel_id = {channel_id_sql}
+    AND t.receive_time >= DATE '{start_date}'
+    AND t.receive_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(t.receive_time AS DATE), t.channel_id
+),
+promote_daily AS (
+  SELECT CAST(p.send_time AS DATE) AS biz_date, p.channel_id, SUM(p.amount) AS promote_activity_amount
+  FROM tidb_business_demo_dwd_order_promote_activity p
+  WHERE p.status = 1
+    AND p.tenant_plat_id = {tenant_id_sql}
+    AND p.channel_id = {channel_id_sql}
+    AND p.send_time >= DATE '{start_date}'
+    AND p.send_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(p.send_time AS DATE), p.channel_id
+),
+lottery_daily AS (
+  SELECT CAST(l.delivery_time AS DATE) AS biz_date, l.channel_id, SUM(l.amount) AS lottery_amount
+  FROM tidb_business_demo_dwd_order_lottery l
+  WHERE l.status = 2
+    AND l.tenant_plat_id = {tenant_id_sql}
+    AND l.channel_id = {channel_id_sql}
+    AND l.delivery_time >= DATE '{start_date}'
+    AND l.delivery_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY CAST(l.delivery_time AS DATE), l.channel_id
+),
+daily_base AS (
+  SELECT
+    e.biz_date,
+    e.channel_id,
+    (SELECT site_name FROM dim) AS site_name,
+    (SELECT channel_partner FROM dim) AS channel_partner,
+    (SELECT channel_name FROM dim) AS channel_name,
+    e.ad_spend, e.access_pv, e.access_uv, e.download_click_uv,
+    COALESCE(ld.login_user_count, 0) AS login_user_count,
+    COALESCE(rd.register_user_count, 0) AS register_user_count,
+    COALESCE(dd.deposit_user_count, 0) AS deposit_user_count,
+    COALESCE(dd.deposit_amount, 0) AS deposit_amount,
+    COALESCE(wd.withdrawal_user_count, 0) AS withdrawal_user_count,
+    COALESCE(wd.withdrawal_amount, 0) AS withdrawal_amount,
+    COALESCE(dd.first_deposit_user_count, 0) AS first_deposit_user_count,
+    COALESCE(dd.new_customer_first_deposit_user_count, 0) AS new_customer_first_deposit_user_count,
+    COALESCE(dd.develop_user_count, 0) AS develop_user_count,
+    COALESCE(dd.first_deposit_amount, 0) AS first_deposit_amount,
+    COALESCE(dd.new_customer_deposit_amount, 0) AS new_customer_deposit_amount,
+    COALESCE(bd.bet_user_count, 0) AS bet_user_count,
+    COALESCE(bd.valid_bet_amount, 0) AS valid_bet_amount,
+    COALESCE(bd.win_loss_amount, 0) AS win_loss_amount,
+    COALESCE(rb.rebate_amount, 0) AS rebate_amount,
+    COALESCE(asd.discount_adjust_amount, 0) AS discount_adjust_amount,
+    COALESCE(vad.vip_award_amount, 0) AS vip_award_amount,
+    COALESCE(acd.activity_amount, 0) AS activity_amount,
+    COALESCE(td.task_amount, 0) AS task_amount,
+    COALESCE(pd.promote_activity_amount, 0) AS promote_activity_amount,
+    COALESCE(ldy.lottery_amount, 0) AS lottery_amount
+  FROM external_metrics e
+  LEFT JOIN login_daily ld ON e.biz_date = ld.biz_date AND e.channel_id = ld.channel_id
+  LEFT JOIN register_daily rd ON e.biz_date = rd.biz_date AND e.channel_id = rd.channel_id
+  LEFT JOIN deposit_daily dd ON e.biz_date = dd.biz_date AND e.channel_id = dd.channel_id
+  LEFT JOIN withdraw_daily wd ON e.biz_date = wd.biz_date AND e.channel_id = wd.channel_id
+  LEFT JOIN bet_daily bd ON e.biz_date = bd.biz_date AND e.channel_id = bd.channel_id
+  LEFT JOIN rebate_daily rb ON e.biz_date = rb.biz_date AND e.channel_id = rb.channel_id
+  LEFT JOIN add_sub_daily asd ON e.biz_date = asd.biz_date AND e.channel_id = asd.channel_id
+  LEFT JOIN vip_award_daily vad ON e.biz_date = vad.biz_date AND e.channel_id = vad.channel_id
+  LEFT JOIN activity_daily acd ON e.biz_date = acd.biz_date AND e.channel_id = acd.channel_id
+  LEFT JOIN task_daily td ON e.biz_date = td.biz_date AND e.channel_id = td.channel_id
+  LEFT JOIN promote_daily pd ON e.biz_date = pd.biz_date AND e.channel_id = pd.channel_id
+  LEFT JOIN lottery_daily ldy ON e.biz_date = ldy.biz_date AND e.channel_id = ldy.channel_id
+),
+report_rows AS (
+  SELECT
+    0 AS row_sort,
+    '汇总' AS report_date,
+    MAX(site_name) AS site_name,
+    MAX(channel_partner) AS channel_partner,
+    MAX(channel_name) AS channel_name,
+    SUM(ad_spend) AS ad_spend,
+    SUM(login_user_count) AS login_user_count,
+    SUM(deposit_user_count) AS deposit_user_count,
+    SUM(deposit_amount) AS deposit_amount,
+    SUM(withdrawal_amount) AS withdrawal_amount,
+    SUM(access_pv) AS access_pv,
+    SUM(access_uv) AS access_uv,
+    SUM(download_click_uv) AS download_click_uv,
+    SUM(register_user_count) AS register_user_count,
+    SUM(first_deposit_user_count) AS first_deposit_user_count,
+    SUM(new_customer_first_deposit_user_count) AS new_customer_first_deposit_user_count,
+    SUM(develop_user_count) AS develop_user_count,
+    SUM(first_deposit_amount) AS first_deposit_amount,
+    SUM(new_customer_deposit_amount) AS new_customer_deposit_amount,
+    SUM(bet_user_count) AS bet_user_count,
+    SUM(valid_bet_amount) AS valid_bet_amount,
+    SUM(win_loss_amount) AS win_loss_amount,
+    SUM(task_amount) AS task_amount,
+    SUM(rebate_amount) AS rebate_amount,
+    SUM(discount_adjust_amount) AS discount_adjust_amount,
+    SUM(vip_award_amount + activity_amount + promote_activity_amount + lottery_amount) AS marketing_lottery_amount
+  FROM daily_base
+  UNION ALL
+  SELECT
+    1 AS row_sort,
+    CAST(biz_date AS VARCHAR) AS report_date,
+    site_name, channel_partner, channel_name,
+    ad_spend, login_user_count, deposit_user_count, deposit_amount, withdrawal_amount,
+    access_pv, access_uv, download_click_uv, register_user_count, first_deposit_user_count,
+    new_customer_first_deposit_user_count, develop_user_count, first_deposit_amount,
+    new_customer_deposit_amount, bet_user_count, valid_bet_amount, win_loss_amount,
+    task_amount, rebate_amount, discount_adjust_amount,
+    vip_award_amount + activity_amount + promote_activity_amount + lottery_amount AS marketing_lottery_amount
+  FROM daily_base
+)
+SELECT
+  report_date AS "日期",
+  site_name AS "所属站点",
+  channel_partner AS "所属渠道商",
+  channel_name AS "渠道名称",
+  ad_spend AS "投放金额",
+  login_user_count AS "登陆人数",
+  deposit_user_count AS "存款总人数",
+  deposit_amount AS "存款总金额",
+  withdrawal_amount AS "提现总金额",
+  deposit_amount - withdrawal_amount AS "充提差",
+  access_pv AS "PV",
+  access_uv AS "UV",
+  download_click_uv AS "下载点击UV",
+  download_click_uv / NULLIF(access_uv, 0) AS "UV下载率",
+  register_user_count AS "注册人数",
+  register_user_count / NULLIF(access_uv, 0) AS "UV注册率",
+  first_deposit_user_count AS "首存人数",
+  new_customer_first_deposit_user_count AS "新客首存人数",
+  develop_user_count AS "开发人数",
+  ad_spend / NULLIF(first_deposit_user_count, 0) AS "首存成本",
+  first_deposit_user_count / NULLIF(register_user_count, 0) AS "首存率",
+  first_deposit_amount AS "首存总金额",
+  first_deposit_amount / NULLIF(first_deposit_user_count, 0) AS "首存人均金额",
+  new_customer_deposit_amount AS "新客存款金额",
+  bet_user_count AS "投注人数",
+  valid_bet_amount AS "有效投注",
+  win_loss_amount AS "会员输赢",
+  win_loss_amount / NULLIF(valid_bet_amount, 0) AS "杀率",
+  task_amount AS "任务彩金",
+  rebate_amount AS "洗码",
+  discount_adjust_amount AS "优惠加扣款",
+  marketing_lottery_amount AS "营销+彩票",
+  task_amount + rebate_amount + discount_adjust_amount + marketing_lottery_amount AS "合计优惠"
+FROM report_rows
+ORDER BY row_sort, "日期"
+""".strip()
+
+
+def build_supplied_external_roi_sql(
+    query: Optional[str],
+    supplied_external_dependencies: Any,
+) -> Optional[str]:
+    """Build a deterministic Excel-shaped ROI SQL when ad spend is supplied.
+
+    The normal LLM path can answer this, but it has two recurring failure modes
+    in the strict Excel FULL cases: it may split ROI and period-over-period
+    ratios into alternating columns, and it may generate D1..D360 as daily
+    columns instead of the fixed Excel recovery checkpoints.  When the user has
+    already supplied the missing ad spend rows, this narrow builder keeps the
+    same external-data safety contract while producing the expected table shape.
+    """
+
+    if not query or not re.search(r"ROI|投入产出|投放回收", query, re.IGNORECASE):
+        return None
+    if re.search(r"累计收入表", query) and not re.search(r"ROI", query, re.IGNORECASE):
+        return None
+
+    supplies = _normalize_external_dependency_supply_map(supplied_external_dependencies)
+    if not supplies:
+        return None
+
+    ad_spend_supply = next(
+        (
+            supply
+            for supply in supplies.values()
+            if isinstance(supply, dict)
+            and any(
+                _normalize_external_supply_column_name(column) == "ad_spend"
+                for column in (supply.get("columns") or [])
+            )
+        ),
+        None,
+    )
+    if not ad_spend_supply:
+        return None
+
+    rows = ad_spend_supply.get("rows") or []
+    if not isinstance(rows, list) or not rows:
+        return None
+
+    params = _extract_template_parameters_from_query(
+        query,
+        [
+            "tenant_plat_id",
+            "channel_id",
+            "cohort_start_date",
+            "cohort_end_date",
+            "top_n",
+        ],
+    )
+    tenant_plat_id = params.get("tenant_plat_id")
+    channel_id = params.get("channel_id")
+    if isinstance(channel_id, list):
+        channel_id = channel_id[0] if channel_id else None
+    start_date = params.get("cohort_start_date")
+    end_date = params.get("cohort_end_date")
+    if not all([tenant_plat_id, channel_id, start_date, end_date]):
+        return None
+
+    top_n = int(params.get("top_n") or 3)
+    topn_requested = _query_requests_topn_user_segment(query)
+    user_type = f"TOP{top_n}" if topn_requested else "全部用户"
+
+    def sql_date(value: Any) -> Optional[str]:
+        raw = str(value or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+            return None
+        return raw
+
+    def sql_number(value: Any) -> Optional[str]:
+        raw = str(value or "").strip().replace(",", "")
+        if not re.fullmatch(r"-?\d+(?:\.\d+)?", raw):
+            return None
+        return raw
+
+    select_rows: list[str] = []
+    for row in rows[:200]:
+        if not isinstance(row, dict):
+            continue
+        normalized_row = {
+            _normalize_external_supply_column_name(key): value
+            for key, value in row.items()
+        }
+        biz_date = sql_date(
+            normalized_row.get("date") or normalized_row.get("biz_date")
+        )
+        ad_spend = sql_number(normalized_row.get("ad_spend"))
+        row_channel_id = sql_number(normalized_row.get("channel_id") or channel_id)
+        if not biz_date or not ad_spend:
+            continue
+        select_rows.append(
+            "SELECT "
+            f"DATE '{biz_date}' AS biz_date, "
+            f"{row_channel_id or int(channel_id)} AS channel_id, "
+            f"{ad_spend} AS ad_spend"
+        )
+
+    if not select_rows:
+        return None
+
+    supplied_cte = "\n  UNION ALL\n  ".join(select_rows)
+    segment_filter = f"\n  WHERE bet_rank <= {top_n}" if topn_requested else ""
+
+    return f"""
+WITH RECURSIVE
+seq AS (
+  SELECT 1 AS n
+  UNION ALL
+  SELECT n + 1 FROM seq WHERE n < 360
+),
+first_deposit_all AS (
+  SELECT
+    d.tenant_plat_id,
+    d.channel_id,
+    d.player_id,
+    CAST(MIN(d.callback_time) AS DATE) AS first_deposit_date
+  FROM tidb_business_demo_dwd_order_deposit d
+  WHERE d.status = 2
+    AND d.times = 1
+    AND d.tenant_plat_id = {int(tenant_plat_id)}
+    AND d.channel_id = {int(channel_id)}
+    AND d.callback_time >= DATE '{start_date}'
+    AND d.callback_time < DATE_ADD('day', 1, DATE '{end_date}')
+  GROUP BY d.tenant_plat_id, d.channel_id, d.player_id
+),
+rank_base AS (
+  SELECT
+    c.player_id,
+    COALESCE(SUM(b.valid_bet_amount), 0) AS total_valid_bet_amount
+  FROM first_deposit_all c
+  LEFT JOIN tidb_business_demo_dwd_bet_order b
+    ON b.player_id = c.player_id
+   AND b.tenant_plat_id = c.tenant_plat_id
+   AND b.channel_id = c.channel_id
+   AND b.settle_status = 1
+   AND b.settle_time >= c.first_deposit_date
+   AND b.settle_time < DATE_ADD('day', 360, c.first_deposit_date)
+  GROUP BY c.player_id
+),
+first_deposit AS (
+  SELECT ranked.*
+  FROM (
+    SELECT
+      c.*,
+      ROW_NUMBER() OVER (ORDER BY rb.total_valid_bet_amount DESC, c.player_id) AS bet_rank
+    FROM first_deposit_all c
+    INNER JOIN rank_base rb ON rb.player_id = c.player_id
+  ) ranked{segment_filter}
+),
+daily_revenue AS (
+  SELECT
+    c.player_id,
+    c.first_deposit_date,
+    DATE_DIFF('day', c.first_deposit_date, CAST(b.settle_time AS DATE)) + 1 AS relative_day_no,
+    SUM(b.win_loss_amount) AS revenue_amount
+  FROM first_deposit c
+  INNER JOIN tidb_business_demo_dwd_bet_order b
+    ON b.player_id = c.player_id
+   AND b.tenant_plat_id = c.tenant_plat_id
+   AND b.channel_id = c.channel_id
+  WHERE b.settle_status = 1
+    AND b.settle_time >= c.first_deposit_date
+    AND b.settle_time < DATE_ADD('day', 360, c.first_deposit_date)
+  GROUP BY c.player_id, c.first_deposit_date, DATE_DIFF('day', c.first_deposit_date, CAST(b.settle_time AS DATE)) + 1
+),
+player_day_grid AS (
+  SELECT c.player_id, c.first_deposit_date, s.n AS relative_day_no
+  FROM first_deposit c
+  CROSS JOIN seq s
+),
+player_cumulative AS (
+  SELECT
+    g.player_id,
+    g.first_deposit_date,
+    g.relative_day_no,
+    SUM(COALESCE(dr.revenue_amount, 0)) OVER (
+      PARTITION BY g.player_id
+      ORDER BY g.relative_day_no
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS cumulative_revenue
+  FROM player_day_grid g
+  LEFT JOIN daily_revenue dr
+    ON dr.player_id = g.player_id
+   AND dr.first_deposit_date = g.first_deposit_date
+   AND dr.relative_day_no = g.relative_day_no
+),
+fixed_days AS (
+  SELECT 1 AS rd UNION ALL SELECT 3 UNION ALL SELECT 7 UNION ALL SELECT 15
+  UNION ALL SELECT 30 UNION ALL SELECT 60 UNION ALL SELECT 90 UNION ALL SELECT 120
+  UNION ALL SELECT 150 UNION ALL SELECT 180 UNION ALL SELECT 210 UNION ALL SELECT 240
+  UNION ALL SELECT 270 UNION ALL SELECT 300 UNION ALL SELECT 330 UNION ALL SELECT 360
+),
+cohort_revenue AS (
+  SELECT pc.first_deposit_date, pc.relative_day_no AS rd, SUM(pc.cumulative_revenue) AS total_revenue
+  FROM player_cumulative pc
+  INNER JOIN fixed_days fd ON fd.rd = pc.relative_day_no
+  GROUP BY pc.first_deposit_date, pc.relative_day_no
+),
+supplied_external_ad_spend AS (
+  {supplied_cte}
+),
+dim AS (
+  SELECT
+    COALESCE(tp.name, CAST({int(tenant_plat_id)} AS VARCHAR)) AS site_name,
+    COALESCE(ch.channel_partner_username, CAST(ch.channel_partner_id AS VARCHAR), '') AS channel_partner,
+    COALESCE(ch.name, CAST({int(channel_id)} AS VARCHAR)) AS channel_name
+  FROM (SELECT 1) x
+  LEFT JOIN tidb_business_demo_tenant_plat tp ON tp.id = {int(tenant_plat_id)}
+  LEFT JOIN tidb_business_demo_channel ch ON ch.id = {int(channel_id)}
+    AND ch.tenant_plat_id = {int(tenant_plat_id)}
+),
+summary_revenue AS (
+  SELECT rd, SUM(total_revenue) AS total_revenue
+  FROM cohort_revenue
+  GROUP BY rd
+),
+base_long AS (
+  SELECT
+    0 AS row_sort,
+    '汇总' AS report_date,
+    (SELECT site_name FROM dim) AS site_name,
+    (SELECT channel_partner FROM dim) AS channel_partner,
+    (SELECT channel_name FROM dim) AS channel_name,
+    (SELECT SUM(ad_spend) FROM supplied_external_ad_spend) AS ad_spend,
+    '{user_type}' AS user_type,
+    fd.rd,
+    sr.total_revenue / NULLIF((SELECT SUM(ad_spend) FROM supplied_external_ad_spend), 0) AS roi
+  FROM fixed_days fd
+  LEFT JOIN summary_revenue sr ON sr.rd = fd.rd
+  UNION ALL
+  SELECT
+    2 AS row_sort,
+    CAST(s.biz_date AS VARCHAR) AS report_date,
+    (SELECT site_name FROM dim) AS site_name,
+    (SELECT channel_partner FROM dim) AS channel_partner,
+    (SELECT channel_name FROM dim) AS channel_name,
+    s.ad_spend,
+    '{user_type}' AS user_type,
+    fd.rd,
+    cr.total_revenue / NULLIF(s.ad_spend, 0) AS roi
+  FROM supplied_external_ad_spend s
+  CROSS JOIN fixed_days fd
+  LEFT JOIN cohort_revenue cr ON cr.first_deposit_date = s.biz_date AND cr.rd = fd.rd
+),
+pivoted AS (
+  SELECT
+    row_sort,
+    report_date AS "日期",
+    site_name AS "站点名称",
+    channel_partner AS "所属渠道商",
+    channel_name AS "渠道名称",
+    ad_spend AS "投放金额",
+    user_type AS "用户类型",
+    MAX(CASE WHEN rd = 1 THEN roi END) AS d1,
+    MAX(CASE WHEN rd = 3 THEN roi END) AS d3,
+    MAX(CASE WHEN rd = 7 THEN roi END) AS d7,
+    MAX(CASE WHEN rd = 15 THEN roi END) AS d15,
+    MAX(CASE WHEN rd = 30 THEN roi END) AS d30,
+    MAX(CASE WHEN rd = 60 THEN roi END) AS d60,
+    MAX(CASE WHEN rd = 90 THEN roi END) AS d90,
+    MAX(CASE WHEN rd = 120 THEN roi END) AS d120,
+    MAX(CASE WHEN rd = 150 THEN roi END) AS d150,
+    MAX(CASE WHEN rd = 180 THEN roi END) AS d180,
+    MAX(CASE WHEN rd = 210 THEN roi END) AS d210,
+    MAX(CASE WHEN rd = 240 THEN roi END) AS d240,
+    MAX(CASE WHEN rd = 270 THEN roi END) AS d270,
+    MAX(CASE WHEN rd = 300 THEN roi END) AS d300,
+    MAX(CASE WHEN rd = 330 THEN roi END) AS d330,
+    MAX(CASE WHEN rd = 360 THEN roi END) AS d360
+  FROM base_long
+  GROUP BY row_sort, report_date, site_name, channel_partner, channel_name, ad_spend, user_type
+),
+ratio_row AS (
+  SELECT
+    1 AS row_sort,
+    CAST(NULL AS VARCHAR) AS "日期",
+    CAST(NULL AS VARCHAR) AS "站点名称",
+    CAST(NULL AS VARCHAR) AS "所属渠道商",
+    CAST(NULL AS VARCHAR) AS "渠道名称",
+    CAST(NULL AS DOUBLE) AS "投放金额",
+    CAST(NULL AS VARCHAR) AS "用户类型",
+    '环比系数' AS d1,
+    CAST((d3 - d1) / NULLIF(d1, 0) AS VARCHAR) AS d3,
+    CAST((d7 - d3) / NULLIF(d3, 0) AS VARCHAR) AS d7,
+    CAST((d15 - d7) / NULLIF(d7, 0) AS VARCHAR) AS d15,
+    CAST((d30 - d15) / NULLIF(d15, 0) AS VARCHAR) AS d30,
+    CAST((d60 - d30) / NULLIF(d30, 0) AS VARCHAR) AS d60,
+    CAST((d90 - d60) / NULLIF(d60, 0) AS VARCHAR) AS d90,
+    CAST((d120 - d90) / NULLIF(d90, 0) AS VARCHAR) AS d120,
+    CAST((d150 - d120) / NULLIF(d120, 0) AS VARCHAR) AS d150,
+    CAST((d180 - d150) / NULLIF(d150, 0) AS VARCHAR) AS d180,
+    CAST((d210 - d180) / NULLIF(d180, 0) AS VARCHAR) AS d210,
+    CAST((d240 - d210) / NULLIF(d210, 0) AS VARCHAR) AS d240,
+    CAST((d270 - d240) / NULLIF(d240, 0) AS VARCHAR) AS d270,
+    CAST((d300 - d270) / NULLIF(d270, 0) AS VARCHAR) AS d300,
+    CAST((d330 - d300) / NULLIF(d300, 0) AS VARCHAR) AS d330,
+    CAST((d360 - d330) / NULLIF(d330, 0) AS VARCHAR) AS d360
+  FROM pivoted
+  WHERE row_sort = 0
+),
+final_rows AS (
+  SELECT row_sort, "日期", "站点名称", "所属渠道商", "渠道名称", "投放金额", "用户类型",
+         CAST(d1 AS VARCHAR) AS "累计1天", CAST(d3 AS VARCHAR) AS "3天", CAST(d7 AS VARCHAR) AS "7天", CAST(d15 AS VARCHAR) AS "15天",
+         CAST(d30 AS VARCHAR) AS "30天", CAST(d60 AS VARCHAR) AS "60天", CAST(d90 AS VARCHAR) AS "90天", CAST(d120 AS VARCHAR) AS "120天",
+         CAST(d150 AS VARCHAR) AS "150天", CAST(d180 AS VARCHAR) AS "180天", CAST(d210 AS VARCHAR) AS "210天", CAST(d240 AS VARCHAR) AS "240天",
+         CAST(d270 AS VARCHAR) AS "270天", CAST(d300 AS VARCHAR) AS "300天", CAST(d330 AS VARCHAR) AS "330天", CAST(d360 AS VARCHAR) AS "360天"
+  FROM pivoted
+  UNION ALL
+  SELECT row_sort, "日期", "站点名称", "所属渠道商", "渠道名称", "投放金额", "用户类型",
+         d1, d3, d7, d15, d30, d60, d90, d120, d150, d180, d210, d240, d270, d300, d330, d360
+  FROM ratio_row
+)
+SELECT "日期", "站点名称", "所属渠道商", "渠道名称", "投放金额", "用户类型",
+       "累计1天", "3天", "7天", "15天", "30天", "60天", "90天", "120天",
+       "150天", "180天", "210天", "240天", "270天", "300天", "330天", "360天"
+FROM final_rows
+ORDER BY row_sort, "日期"
+""".strip()
 
 
 def _first_match(patterns: Sequence[str], query: str) -> Optional[str]:
@@ -997,6 +2429,18 @@ def _get_history_sql(history: Any) -> Optional[str]:
     return _normalize_instruction(getattr(history, "sql", None))
 
 
+def _get_history_resolved_slots(history: Any) -> dict[str, Any]:
+    if isinstance(history, dict):
+        raw_slots = history.get("resolved_slots") or history.get("resolvedSlots")
+    else:
+        raw_slots = getattr(history, "resolved_slots", None) or getattr(
+            history,
+            "resolvedSlots",
+            None,
+        )
+    return dict(raw_slots) if isinstance(raw_slots, dict) else {}
+
+
 def _iter_history_questions(histories: Sequence[Any] | None) -> list[str]:
     if not histories:
         return []
@@ -1007,31 +2451,24 @@ def _iter_history_questions(histories: Sequence[Any] | None) -> list[str]:
     ]
 
 
-def _extract_tenant_plat_ids_from_text(text: Optional[str]) -> list[int]:
-    if not text:
+def _iter_history_resolved_slots(
+    histories: Sequence[Any] | None,
+) -> list[dict[str, Any]]:
+    if not histories:
         return []
+    return [
+        slots
+        for slots in (_get_history_resolved_slots(history) for history in histories)
+        if slots
+    ]
 
-    return _extract_integer_values(
-        [
-            r"tenant_plat_id\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
-            r"租户平台\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
-            r"平台\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
-        ],
-        text,
-    )
+
+def _extract_tenant_plat_ids_from_text(text: Optional[str]) -> list[int]:
+    return _shared_extract_tenant_plat_ids(text)
 
 
 def _extract_channel_ids_from_text(text: Optional[str]) -> list[int]:
-    if not text:
-        return []
-
-    return _extract_integer_values(
-        [
-            r"channel_id\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
-            r"渠道(?:ID|id)?\s*[=:：]?\s*((?:\d+\s*(?:,|，|、|和|与|及)?\s*)+)",
-        ],
-        text,
-    )
+    return _shared_extract_channel_ids(text)
 
 
 def _query_requires_tenant_plat_id(query: Optional[str]) -> bool:
@@ -1046,6 +2483,10 @@ def _query_requires_tenant_plat_id(query: Optional[str]) -> bool:
 
 def _resolve_history_tenant_plat_ids(histories: Sequence[Any] | None) -> list[int]:
     tenant_ids: list[int] = []
+    for slots in _iter_history_resolved_slots(histories):
+        for tenant_id in _extract_slot_value_ids(slots, "tenant_plat_id"):
+            if tenant_id not in tenant_ids:
+                tenant_ids.append(tenant_id)
     for question in _iter_history_questions(histories):
         for tenant_id in _extract_tenant_plat_ids_from_text(question):
             if tenant_id not in tenant_ids:
@@ -1055,6 +2496,10 @@ def _resolve_history_tenant_plat_ids(histories: Sequence[Any] | None) -> list[in
 
 def _resolve_history_channel_ids(histories: Sequence[Any] | None) -> list[int]:
     channel_ids: list[int] = []
+    for slots in _iter_history_resolved_slots(histories):
+        for channel_id in _extract_slot_value_ids(slots, "channel_id"):
+            if channel_id not in channel_ids:
+                channel_ids.append(channel_id)
     for question in _iter_history_questions(histories):
         for channel_id in _extract_channel_ids_from_text(question):
             if channel_id not in channel_ids:
@@ -1063,10 +2508,27 @@ def _resolve_history_channel_ids(histories: Sequence[Any] | None) -> list[int]:
 
 
 def _history_has_date_context(histories: Sequence[Any] | None) -> bool:
+    if any(
+        _slot_values_resolve_date_range(slots)
+        for slots in _iter_history_resolved_slots(histories)
+    ):
+        return True
     return any(
         _extract_date_range_from_text(question)
         for question in _iter_history_questions(histories)
     )
+
+
+def _resolve_history_date_range(histories: Sequence[Any] | None) -> dict[str, str]:
+    for slots in reversed(_iter_history_resolved_slots(histories)):
+        date_range = _extract_slot_value_date_range(slots)
+        if date_range:
+            return date_range
+    for question in reversed(_iter_history_questions(histories)):
+        date_range = _extract_date_range_from_text(question)
+        if date_range:
+            return date_range
+    return {}
 
 
 def detect_missing_tenant_plat_id_requirement(
@@ -1128,7 +2590,7 @@ def _query_is_ambiguous_channel_performance_question(query: Optional[str]) -> bo
     # If the user already named a concrete metric, let the normal slot/external
     # dependency guards handle it. This keeps focused questions like “这个渠道新客
     # 首充成本是多少” on the ROI/external-data path instead of over-clarifying.
-    return not _extract_pattern_keys(text, SEMANTIC_METRIC_PATTERNS)
+    return not _extract_pattern_keys(text, _semantic_metric_patterns())
 
 
 def detect_missing_ambiguous_channel_requirement(
@@ -1385,12 +2847,7 @@ def detect_missing_template_parameter_requirement(
 
 
 def _extract_date_range_from_text(text: Optional[str]) -> dict[str, str]:
-    dates = DATE_PATTERN.findall(text or "")
-    if len(dates) >= 2:
-        return {"start_date": dates[0], "end_date": dates[1]}
-    if len(dates) == 1:
-        return {"date": dates[0]}
-    return {}
+    return _shared_extract_date_range(text)
 
 
 def _collapse_single_or_list(values: list[Any]) -> Any:
@@ -1486,7 +2943,7 @@ def _query_has_metric_focus(query: Optional[str]) -> bool:
     if not query:
         return False
     return bool(
-        _extract_pattern_keys(query, SEMANTIC_METRIC_PATTERNS)
+        _extract_pattern_keys(query, _semantic_metric_patterns())
         or re.search(
             r"(?:关注指标|指标方向|metric_focus)\s*[=:：]?\s*[\\w\\u4e00-\\u9fff]+",
             query,
@@ -1500,53 +2957,31 @@ def _extract_semantic_features(query: Optional[str]) -> list[str]:
         return []
 
     features: list[str] = []
-    for feature, patterns in TEMPLATE_FEATURE_PATTERNS.items():
+    for feature, patterns in _template_feature_patterns().items():
         if any(re.search(pattern, query, flags=re.IGNORECASE) for pattern in patterns):
             features.append(feature)
     return features
 
 
-SEMANTIC_METRIC_PATTERNS: dict[str, tuple[str, ...]] = {
-    "ad_spend": (r"投放金额", r"投放成本", r"广告费", r"买量成本"),
-    "bet_amount": (r"有效投注", r"流水", r"投注"),
-    "bet_count": (r"下注次数", r"投注次数"),
-    "deposit_amount": (r"充值金额", r"存款金额", r"充值总额", r"存款总额"),
-    "deposit_count": (r"充值笔数", r"存款笔数", r"几笔成功充值"),
-    "deposit_user_count": (r"充值人数", r"存款人数"),
-    "download_click_uv": (r"下载点击", r"下载点击UV"),
-    "first_deposit": (r"首存", r"首充", r"首次存款", r"第一次充值"),
-    "first_deposit_cost": (r"首存成本", r"首充成本", r"新客.*成本"),
-    "kill_rate": (r"杀率", r"平台赢率"),
-    "login_user_count": (r"登录人数", r"登录用户", r"登录去重"),
-    "pv": (r"\bPV\b", r"访问量", r"访问PV"),
-    "registration_count": (r"注册人数", r"注册用户"),
-    "retention_deposit": (r"续存", r"复存", r"[二三四五六2-6]\s*存"),
-    "roi": (r"\bROI\b", r"投放回收", r"回本"),
-    "uv": (r"\bUV\b", r"独立访客", r"访问UV"),
-    "withdraw_amount": (r"提现金额", r"提款金额"),
-    "win_loss": (r"输赢", r"平台输赢"),
-}
+def _template_feature_patterns() -> dict[str, tuple[str, ...]]:
+    return _load_regex_pattern_config(
+        "WREN_TEMPLATE_FEATURE_PATTERNS",
+        DEFAULT_TEMPLATE_FEATURE_PATTERNS,
+    )
 
 
-SEMANTIC_DIMENSION_PATTERNS: dict[str, tuple[str, ...]] = {
-    "biz_date": (r"每日", r"按天", r"日期", r"日报", r"趋势"),
-    "channel_id": (r"渠道", r"channel[_\s-]?id"),
-    "cohort_age": (r"D\s*\d+", r"日龄"),
-    "first_deposit_date": (r"首存日期", r"首充日期", r"cohort"),
-    "game_type": (r"游戏类型", r"game[_\s-]?type"),
-    "player_id": (r"玩家", r"用户", r"player[_\s-]?id", r"名单", r"明细"),
-    "segment": (
-        r"TOP\s*\d+",
-        r"非\s*TOP",
-        r"前\s*\d+\s*(?:名|个)?(?:大户|用户|玩家)?",
-        r"分层",
-        r"大户",
-        r"头部用户",
-        r"高流水用户",
-        r"投注流水最高",
-    ),
-    "tenant_plat_id": (r"租户平台", r"tenant[_\s-]?plat[_\s-]?id"),
-}
+def _semantic_metric_patterns() -> dict[str, tuple[str, ...]]:
+    return _load_regex_pattern_config(
+        "WREN_SEMANTIC_METRIC_PATTERNS",
+        DEFAULT_SEMANTIC_METRIC_PATTERNS,
+    )
+
+
+def _semantic_dimension_patterns() -> dict[str, tuple[str, ...]]:
+    return _load_regex_pattern_config(
+        "WREN_SEMANTIC_DIMENSION_PATTERNS",
+        DEFAULT_SEMANTIC_DIMENSION_PATTERNS,
+    )
 
 
 DATA_QUERY_ACTION_PATTERN = re.compile(
@@ -1581,7 +3016,7 @@ def should_override_general_intent_to_text_to_sql(query: Optional[str]) -> bool:
         return False
     if not DATA_QUERY_ACTION_PATTERN.search(text):
         return False
-    if not _extract_pattern_keys(text, SEMANTIC_METRIC_PATTERNS):
+    if not _extract_pattern_keys(text, _semantic_metric_patterns()):
         return False
     if not BUSINESS_RULE_ATTACHMENT_PATTERN.search(text):
         return False
@@ -1878,13 +3313,23 @@ def build_minimal_semantic_plan(
     if not tenant_ids:
         history_tenant_ids = _resolve_history_tenant_plat_ids(histories)
         tenant_ids = history_tenant_ids
-    channel_ids = _extract_channel_ids_from_text(query) or _extract_slot_value_ids(
+    explicit_channel_ids = _extract_channel_ids_from_text(query)
+    slot_channel_ids = _extract_slot_value_ids(
         resolved_slot_values,
         "channel_id",
     )
-    date_range = _extract_date_range_from_text(query) or _extract_slot_value_date_range(
-        resolved_slot_values,
-    )
+    history_channel_ids: list[int] = []
+    channel_ids = explicit_channel_ids or slot_channel_ids
+    if not channel_ids:
+        history_channel_ids = _resolve_history_channel_ids(histories)
+        channel_ids = history_channel_ids
+    explicit_date_range = _extract_date_range_from_text(query)
+    slot_date_range = _extract_slot_value_date_range(resolved_slot_values)
+    history_date_range: dict[str, str] = {}
+    date_range = explicit_date_range or slot_date_range
+    if not date_range:
+        history_date_range = _resolve_history_date_range(histories)
+        date_range = history_date_range
     missing_slot_requirement = detect_missing_required_slot_requirement(
         query,
         histories=histories,
@@ -1906,8 +3351,8 @@ def build_minimal_semantic_plan(
         filters["channel_id"] = _collapse_single_or_list(channel_ids)
     filters.update(date_range)
     features = _extract_semantic_features(query)
-    metrics = _extract_pattern_keys(query, SEMANTIC_METRIC_PATTERNS)
-    dimensions = _extract_pattern_keys(query, SEMANTIC_DIMENSION_PATTERNS)
+    metrics = _extract_pattern_keys(query, _semantic_metric_patterns())
+    dimensions = _extract_pattern_keys(query, _semantic_dimension_patterns())
     if tenant_ids and "tenant_plat_id" not in dimensions:
         dimensions.append("tenant_plat_id")
     if channel_ids and "channel_id" not in dimensions:
@@ -1932,15 +3377,27 @@ def build_minimal_semantic_plan(
     if channel_ids:
         resolved_slots["channel_id"] = _build_resolved_slot(
             value=_collapse_single_or_list(channel_ids),
-            source="explicit_user_input",
+            source=(
+                "explicit_user_input"
+                if explicit_channel_ids
+                else (
+                    "clarification_reply"
+                    if slot_channel_ids
+                    else "history_context" if history_channel_ids else "unknown"
+                )
+            ),
         )
     for key, value in date_range.items():
         resolved_slots[key] = _build_resolved_slot(
             value=value,
             source=(
                 "explicit_user_input"
-                if _extract_date_range_from_text(query)
-                else "clarification_reply"
+                if explicit_date_range
+                else (
+                    "clarification_reply"
+                    if slot_date_range
+                    else "history_context" if history_date_range else "unknown"
+                )
             ),
         )
     if _slot_value_is_present(resolved_slot_values, "metric_focus"):
@@ -2032,7 +3489,7 @@ def _extract_query_features(text: Optional[str]) -> set[str]:
 
     return {
         feature
-        for feature, patterns in TEMPLATE_FEATURE_PATTERNS.items()
+        for feature, patterns in _template_feature_patterns().items()
         if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns)
     }
 
@@ -2504,6 +3961,25 @@ def _score_sql_sample_for_query(
             and feature in DISCRIMINATIVE_TEMPLATE_FEATURES
         ):
             score -= weight * 0.6
+
+    query_skeleton = normalize_question_skeleton(query)
+    sample_skeleton = normalize_question_skeleton(sample_text)
+    if (
+        query_skeleton
+        and sample_skeleton
+        and "[" in query_skeleton
+        and "[" in sample_skeleton
+    ):
+        if query_skeleton == sample_skeleton:
+            score += 0.2
+        else:
+            skeleton_similarity = SequenceMatcher(
+                None,
+                query_skeleton,
+                sample_skeleton,
+            ).ratio()
+            if skeleton_similarity >= 0.72:
+                score += 0.1 * skeleton_similarity
 
     if _query_requests_player_level_detail(query):
         if _sample_supports_player_level_detail(sample):
@@ -3015,6 +4491,61 @@ def _backfill_template_parameters(
     return parameters
 
 
+def _extract_template_parameters_from_slot_values(
+    slot_values: dict[str, Any],
+    placeholders: Sequence[str],
+) -> dict[str, Any]:
+    if not slot_values or not placeholders:
+        return {}
+
+    placeholder_set = set(placeholders)
+    parameters: dict[str, Any] = {}
+    if "tenant_plat_id" in placeholder_set:
+        tenant_ids = _extract_slot_value_ids(slot_values, "tenant_plat_id")
+        if tenant_ids:
+            parameters["tenant_plat_id"] = (
+                tenant_ids[0] if len(tenant_ids) == 1 else tenant_ids
+            )
+    if "channel_id" in placeholder_set:
+        channel_ids = _extract_slot_value_ids(slot_values, "channel_id")
+        if channel_ids:
+            parameters["channel_id"] = (
+                channel_ids[0] if len(channel_ids) == 1 else channel_ids
+            )
+
+    date_range = _extract_slot_value_date_range(slot_values)
+    if date_range:
+        if "date" in date_range:
+            for key in (
+                "start_date",
+                "end_date",
+                "cohort_start_date",
+                "cohort_end_date",
+            ):
+                if key in placeholder_set:
+                    parameters[key] = date_range["date"]
+        else:
+            start_date = date_range.get("start_date")
+            end_date = date_range.get("end_date")
+            if start_date:
+                for key in ("start_date", "cohort_start_date"):
+                    if key in placeholder_set:
+                        parameters[key] = start_date
+            if end_date:
+                for key in ("end_date", "cohort_end_date"):
+                    if key in placeholder_set:
+                        parameters[key] = end_date
+
+    for key in ("top_n", "n_days", "period_days"):
+        if key in placeholder_set and _slot_value_is_present(slot_values, key):
+            raw_value = slot_values.get(key)
+            try:
+                parameters[key] = int(str(raw_value).strip().lstrip("Dd"))
+            except (TypeError, ValueError):
+                parameters[key] = raw_value
+    return parameters
+
+
 def _extract_template_parameters(
     query: Optional[str],
     placeholders: Sequence[str],
@@ -3037,6 +4568,13 @@ def _extract_template_parameters(
     for history_question in reversed(_iter_history_questions(histories)):
         fallback_parameters = _extract_template_parameters_from_query(
             history_question,
+            placeholders,
+        )
+        for key, value in fallback_parameters.items():
+            parameters.setdefault(key, value)
+    for history_slots in reversed(_iter_history_resolved_slots(histories)):
+        fallback_parameters = _extract_template_parameters_from_slot_values(
+            history_slots,
             placeholders,
         )
         for key, value in fallback_parameters.items():
@@ -3392,6 +4930,17 @@ def detect_missing_external_source_requirement(
                 "missing_supplied_grain": missing_supply_grain,
             },
             "required_external_dependencies": required_dependency_ids,
+            "pending_external_dependency_slots": [
+                _external_dependency_slot_name(dependency_id)
+                for dependency_id in required_dependency_ids
+            ],
+            "external_dependency_request": {
+                "required_metrics": required_metrics,
+                "required_external_dependencies": required_dependency_ids,
+                "required_grain": required_grain_values,
+                "required_grain_hint": required_grain_label,
+                "example_columns": example_columns,
+            },
         }
 
     configured_matches = _match_configured_external_dependencies(
@@ -3409,6 +4958,9 @@ def detect_missing_external_source_requirement(
         return None
 
     if _query_requests_internal_only(query):
+        return None
+
+    if not _legacy_external_dependency_fallback_enabled():
         return None
 
     required_metrics: list[str] = []
@@ -4393,6 +5945,7 @@ class NL2SQLToolset:
         use_dry_plan: bool,
         allow_dry_plan_fallback: bool,
         sql_knowledge: Any,
+        allow_data_preview: bool = False,
     ) -> dict[str, Any]:
         if histories:
             return await self._pipelines["followup_sql_generation"].run(
@@ -4410,6 +5963,7 @@ class NL2SQLToolset:
                 use_dry_plan=use_dry_plan,
                 allow_dry_plan_fallback=allow_dry_plan_fallback,
                 sql_knowledge=sql_knowledge,
+                allow_data_preview=allow_data_preview,
             )
 
         return await self._pipelines["sql_generation"].run(
@@ -4426,7 +5980,220 @@ class NL2SQLToolset:
             use_dry_plan=use_dry_plan,
             allow_dry_plan_fallback=allow_dry_plan_fallback,
             sql_knowledge=sql_knowledge,
+            allow_data_preview=allow_data_preview,
         )
+
+    async def generate_sql_candidates(
+        self,
+        *,
+        query: str,
+        contexts: Sequence[Any],
+        sql_generation_reasoning: Any,
+        histories: Sequence[AskHistoryLike],
+        runtime_scope_id: Optional[str],
+        sql_samples: Sequence[Any],
+        instructions: Sequence[Any],
+        has_calculated_field: bool,
+        has_metric: bool,
+        has_json_field: bool,
+        sql_functions: Any,
+        use_dry_plan: bool,
+        allow_dry_plan_fallback: bool,
+        sql_knowledge: Any,
+        candidate_count: int,
+    ) -> list[dict[str, Any]]:
+        candidate_count = max(
+            1, min(candidate_count, len(SQL_GENERATION_STRATEGY_HINTS))
+        )
+
+        async def _run_candidate(
+            index: int,
+            strategy_name: str,
+            strategy_hint: str,
+        ) -> Optional[dict[str, Any]]:
+            candidate_instructions = [
+                *list(instructions or []),
+                _build_sql_generation_candidate_instruction(
+                    candidate_index=index + 1,
+                    candidate_count=candidate_count,
+                    strategy_name=strategy_name,
+                    strategy_hint=strategy_hint,
+                ),
+            ]
+            try:
+                result = await self.generate_sql(
+                    query=query,
+                    contexts=contexts,
+                    sql_generation_reasoning=sql_generation_reasoning,
+                    histories=histories,
+                    runtime_scope_id=runtime_scope_id,
+                    sql_samples=sql_samples,
+                    instructions=candidate_instructions,
+                    has_calculated_field=has_calculated_field,
+                    has_metric=has_metric,
+                    has_json_field=has_json_field,
+                    sql_functions=sql_functions,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    sql_knowledge=sql_knowledge,
+                )
+                result["candidate_strategy"] = strategy_name
+                result["candidate_index"] = index
+                return result
+            except Exception as exc:
+                logger.warning(
+                    "SQL generation candidate failed; trying remaining candidates: %s",
+                    exc,
+                    exc_info=True,
+                )
+                return None
+
+        results = await asyncio.gather(
+            *[
+                _run_candidate(index, strategy_name, strategy_hint)
+                for index, (strategy_name, strategy_hint) in enumerate(
+                    SQL_GENERATION_STRATEGY_HINTS[:candidate_count]
+                )
+            ]
+        )
+        return [result for result in results if result]
+
+    async def preview_sql_execution(
+        self,
+        *,
+        sql: str,
+        runtime_scope_id: Optional[str],
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        sql_generation_pipeline = self._pipelines.get(
+            "followup_sql_generation"
+        ) or self._pipelines.get("sql_generation")
+        components = getattr(sql_generation_pipeline, "_components", {}) or {}
+        post_processor = (
+            components.get("post_processor") if isinstance(components, dict) else None
+        )
+        engine = getattr(post_processor, "_engine", None)
+        if engine is None:
+            return {"success": False, "result": None, "error": "engine_unavailable"}
+
+        async with aiohttp.ClientSession() as session:
+            success, result, addition = await engine.execute_sql(
+                sql,
+                session,
+                runtime_scope_id=runtime_scope_id,
+                dry_run=False,
+                limit=limit,
+                sql_mode="dialect",
+            )
+        return {
+            "success": success,
+            "result": result,
+            "signature": _build_execution_result_signature(result),
+            "error": (addition or {}).get("error_message", ""),
+            "correlation_id": (addition or {}).get("correlation_id", ""),
+        }
+
+    async def select_best_sql_generation_result(
+        self,
+        generation_results: Sequence[dict[str, Any]],
+        *,
+        runtime_scope_id: Optional[str],
+        template_sql: Optional[str] = None,
+    ) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
+        first_invalid_result: Optional[dict[str, Any]] = None
+        valid_candidates: list[dict[str, Any]] = []
+        seen_sql: set[str] = set()
+        for generation_result in generation_results:
+            post_process = generation_result.get("post_process") or {}
+            valid_generation_result = post_process.get("valid_generation_result") or {}
+            if valid_generation_result:
+                sql = str(valid_generation_result.get("sql") or "").strip()
+                normalized_sql = _normalize_sql_for_signature(sql)
+                if sql and normalized_sql not in seen_sql:
+                    seen_sql.add(normalized_sql)
+                    valid_candidates.append(generation_result)
+                continue
+
+            invalid_generation_result = (
+                post_process.get("invalid_generation_result") or {}
+            )
+            if invalid_generation_result and first_invalid_result is None:
+                first_invalid_result = invalid_generation_result
+
+        if not valid_candidates:
+            return None, first_invalid_result
+
+        if len(valid_candidates) == 1:
+            return valid_candidates[0], first_invalid_result
+
+        preview_results = await asyncio.gather(
+            *[
+                self.preview_sql_execution(
+                    sql=str(
+                        (candidate.get("post_process") or {})
+                        .get("valid_generation_result", {})
+                        .get("sql")
+                        or ""
+                    ),
+                    runtime_scope_id=runtime_scope_id,
+                )
+                for candidate in valid_candidates
+            ],
+            return_exceptions=True,
+        )
+        vote_counts: dict[str, int] = {}
+        preview_metadata: list[dict[str, Any]] = []
+        for preview_result in preview_results:
+            if isinstance(preview_result, Exception):
+                metadata = {
+                    "success": False,
+                    "signature": {},
+                    "error": str(preview_result),
+                }
+            else:
+                metadata = preview_result
+            key = (
+                _execution_signature_key(metadata.get("signature") or {})
+                if metadata.get("success")
+                else ""
+            )
+            if key:
+                vote_counts[key] = vote_counts.get(key, 0) + 1
+            preview_metadata.append(metadata)
+
+        best_result: Optional[dict[str, Any]] = None
+        best_score = float("-inf")
+        for index, candidate in enumerate(valid_candidates):
+            valid_generation_result = (candidate.get("post_process") or {}).get(
+                "valid_generation_result",
+                {},
+            )
+            sql = str(valid_generation_result.get("sql") or "")
+            metadata = preview_metadata[index]
+            signature_key = (
+                _execution_signature_key(metadata.get("signature") or {})
+                if metadata.get("success")
+                else ""
+            )
+            score = _score_sql_generation_candidate(
+                sql=sql,
+                candidate_index=int(candidate.get("candidate_index") or index),
+                execution_success=bool(metadata.get("success")),
+                execution_vote_count=vote_counts.get(signature_key, 0),
+                template_sql=template_sql,
+            )
+            candidate["execution_vote"] = {
+                "success": bool(metadata.get("success")),
+                "vote_count": vote_counts.get(signature_key, 0),
+                "signature": metadata.get("signature") or {},
+                "error": metadata.get("error") or "",
+                "score": score,
+            }
+            if best_result is None or score > best_score:
+                best_score = score
+                best_result = candidate
+
+        return best_result, first_invalid_result
 
     async def diagnose_sql(
         self,
@@ -4480,6 +6247,48 @@ class NL2SQLToolset:
             sql_functions=sql_functions,
             sql_knowledge=sql_knowledge,
         )
+
+    async def correct_sql_candidates(
+        self,
+        *,
+        contexts: Sequence[Any],
+        instructions: Sequence[Any],
+        invalid_generation_results: Sequence[dict[str, Any]],
+        runtime_scope_id: Optional[str],
+        use_dry_plan: bool,
+        allow_dry_plan_fallback: bool,
+        sql_functions: Any,
+        sql_knowledge: Any,
+    ) -> list[dict[str, Any]]:
+        async def _run_candidate(
+            invalid_generation_result: dict[str, Any],
+        ) -> Optional[dict[str, Any]]:
+            try:
+                return await self.correct_sql(
+                    contexts=contexts,
+                    instructions=instructions,
+                    invalid_generation_result=invalid_generation_result,
+                    runtime_scope_id=runtime_scope_id,
+                    use_dry_plan=use_dry_plan,
+                    allow_dry_plan_fallback=allow_dry_plan_fallback,
+                    sql_functions=sql_functions,
+                    sql_knowledge=sql_knowledge,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "SQL correction candidate failed; trying remaining candidates: %s",
+                    exc,
+                    exc_info=True,
+                )
+                return None
+
+        results = await asyncio.gather(
+            *[
+                _run_candidate(invalid_generation_result)
+                for invalid_generation_result in invalid_generation_results
+            ]
+        )
+        return [result for result in results if result]
 
     async def validate_template_sql(
         self,
@@ -4685,6 +6494,11 @@ class BaseFixedOrderAskRuntime:
         merged["decision"] = {
             **deterministic_decision,
             **llm_decision,
+            # Route is a safety decision derived from deterministic guards
+            # (template lifecycle, required slots, external dependencies,
+            # policy).  The LLM plan may enrich subject/metric/grain, but it
+            # must not silently relax or upgrade the route.
+            "route": deterministic_decision.get("route") or llm_decision.get("route"),
             "reason_codes": reason_codes,
             "missing_slots": merged["missing_slots"],
             "resolved_slots": merged["resolved_slots"],
@@ -4966,6 +6780,63 @@ class BaseFixedOrderAskRuntime:
             schema_compatible=schema_compatible,
             validation_error=validation_error,
         )
+
+    def _build_template_decision_state(
+        self,
+        state: AskExecutionState,
+        *,
+        histories: Sequence[AskHistoryLike],
+    ) -> None:
+        state.sql_samples, inactive_template_sample = filter_active_sql_samples(
+            state.sql_samples
+        )
+        state.template_decision = build_template_decision(
+            state.sql_samples,
+            state.user_query,
+            histories=histories,
+            inactive_sample=inactive_template_sample,
+        )
+        self._sync_template_decision_state_metrics(state)
+
+    async def _prepare_guidance_state(
+        self,
+        state: AskExecutionState,
+        *,
+        ask_request: AskRequestLike,
+        histories: Sequence[AskHistoryLike],
+        retrieval_scope_id: Optional[str],
+    ) -> None:
+        retrieval_query, state.sql_samples, state.instructions = (
+            await self._retrieve_guidance_candidates(
+                query=state.user_query,
+                histories=histories,
+                retrieval_scope_id=retrieval_scope_id,
+            )
+        )
+        state.sql_samples = rerank_sql_samples(
+            retrieval_query,
+            state.sql_samples,
+            histories=histories,
+        )
+        self._build_template_decision_state(
+            state,
+            histories=histories,
+        )
+        self._sync_semantic_plan_state(state, histories=histories)
+        await self._maybe_enhance_semantic_plan_state(
+            state,
+            histories=histories,
+            configuration=ask_request.configurations,
+        )
+        self._apply_policy_state(
+            state,
+            request_policy=getattr(ask_request, "ask_policy", None),
+        )
+        state.effective_instructions = [
+            *state.instructions,
+            *build_template_instruction(state.template_decision),
+            *extract_skill_instructions(ask_request.skills),
+        ]
 
     async def _maybe_prepare_direct_template_sql(
         self,
@@ -5358,22 +7229,40 @@ class BaseFixedOrderAskRuntime:
             supplied_external_dependencies=state.slot_values,
         )
         if not missing_source_requirement:
+            supplied_instruction = build_supplied_external_dependency_instruction(
+                state.slot_values
+            )
+            if supplied_instruction:
+                state.effective_instructions = [
+                    *state.effective_instructions,
+                    supplied_instruction,
+                ]
+                if state.semantic_plan is not None:
+                    decision = state.semantic_plan.setdefault("decision", {})
+                    reason_codes = decision.setdefault("reason_codes", [])
+                    if "external_dependency_user_supplied" not in reason_codes:
+                        reason_codes.append("external_dependency_user_supplied")
+                    decision["provided_external_dependencies"] = (
+                        supplied_instruction.get("provided_external_dependencies") or []
+                    )
+
             supplied_coverage = detect_supplied_external_dependency_coverage(
                 state.user_query,
                 sql_samples=state.sql_samples,
                 instructions=state.effective_instructions or state.instructions,
                 supplied_external_dependencies=state.slot_values,
             )
-            if supplied_coverage and state.semantic_plan is not None:
-                decision = state.semantic_plan.setdefault("decision", {})
-                reason_codes = decision.setdefault("reason_codes", [])
-                if "external_dependency_user_supplied" not in reason_codes:
-                    reason_codes.append("external_dependency_user_supplied")
-                decision["external_dependency_coverage"] = supplied_coverage
-                decision["external_dependencies"] = supplied_coverage.get(
-                    "required_external_dependencies",
-                    [],
-                )
+            if supplied_coverage:
+                if state.semantic_plan is not None:
+                    decision = state.semantic_plan.setdefault("decision", {})
+                    reason_codes = decision.setdefault("reason_codes", [])
+                    if "external_dependency_user_supplied" not in reason_codes:
+                        reason_codes.append("external_dependency_user_supplied")
+                    decision["external_dependency_coverage"] = supplied_coverage
+                    decision["external_dependencies"] = supplied_coverage.get(
+                        "required_external_dependencies",
+                        [],
+                    )
             return None
 
         state.effective_instructions = [
@@ -5388,6 +7277,26 @@ class BaseFixedOrderAskRuntime:
             )
         state.intent_reasoning = missing_source_requirement["reasoning"]
         state.ask_path = "general"
+        pending_external_slots = list(
+            missing_source_requirement.get("pending_external_dependency_slots") or []
+        )
+        if pending_external_slots:
+            expires_at = datetime.now(UTC) + timedelta(minutes=30)
+            clarification_session_id = str(
+                getattr(ask_request, "query_id", None) or trace_id or "external-data"
+            )
+            state.clarification_state = {
+                "status": "needs_clarification",
+                "clarification_session_id": clarification_session_id,
+                "original_question": state.user_query,
+                "pending_slots": pending_external_slots,
+                "resolved_slots": dict(state.slot_values or {}),
+                "expires_at": expires_at.isoformat(),
+                "external_dependency_request": missing_source_requirement.get(
+                    "external_dependency_request"
+                )
+                or {},
+            }
         self._sync_semantic_plan_state(
             state,
             histories=histories,
@@ -5398,6 +7307,8 @@ class BaseFixedOrderAskRuntime:
             )
             or [],
         )
+        if state.semantic_plan is not None and state.clarification_state is not None:
+            state.semantic_plan["clarification_state"] = state.clarification_state
 
         if not is_stopped():
             set_result(
@@ -5451,16 +7362,16 @@ class BaseFixedOrderAskRuntime:
         orchestrator: str,
     ) -> Optional[dict[str, Any]]:
         missing_slot_requirement = (
-            detect_missing_required_slot_requirement(
-                state.user_query,
-                histories=histories,
-                resolved_slots=state.slot_values,
-            )
-            or detect_missing_template_parameter_requirement(
+            detect_missing_template_parameter_requirement(
                 state.user_query,
                 state.template_decision,
             )
             or self._build_policy_missing_slot_requirement(state)
+            or detect_missing_required_slot_requirement(
+                state.user_query,
+                histories=histories,
+                resolved_slots=state.slot_values,
+            )
         )
         if not missing_slot_requirement:
             return None
@@ -5803,6 +7714,92 @@ class BaseFixedOrderAskRuntime:
                     state.user_query,
                 )
 
+        if not state.query_decomposition:
+            state.query_decomposition = build_query_decomposition_plan(
+                state.user_query,
+                semantic_plan=state.semantic_plan,
+                table_names=state.table_names,
+            )
+            if state.semantic_plan is not None:
+                state.semantic_plan["query_decomposition"] = state.query_decomposition
+            decomposition_instruction = _format_query_decomposition_instruction(
+                state.query_decomposition
+            )
+            if decomposition_instruction:
+                state.effective_instructions = [
+                    *state.effective_instructions,
+                    _build_runtime_instruction(
+                        decomposition_instruction,
+                        source="runtime_query_decomposition",
+                    ),
+                ]
+
+        supplied_external_builders_enabled = _supplied_external_sql_builders_enabled()
+        supplied_external_daily_report_sql = (
+            None
+            if is_stopped()
+            or state.api_results
+            or not supplied_external_builders_enabled
+            else build_supplied_external_daily_report_sql(
+                state.user_query, state.slot_values
+            )
+        )
+        if supplied_external_daily_report_sql:
+            state.sql_generation_reasoning = (
+                "用户已补充投放金额、PV、UV、下载点击UV，直接生成 Excel "
+                "综合日报同形 SQL：包含汇总行、日明细、内部指标和外部派生率。"
+            )
+            if state.template_decision:
+                state.template_decision["sql_source"] = "rendered_template"
+                state.template_decision["decision_reason"] = (
+                    "supplied_external_daily_report_sql_selected"
+                )
+            if state.semantic_plan is not None:
+                decision = state.semantic_plan.setdefault("decision", {})
+                reason_codes = decision.setdefault("reason_codes", [])
+                if "supplied_external_daily_report_sql_selected" not in reason_codes:
+                    reason_codes.append("supplied_external_daily_report_sql_selected")
+            state.api_results = [
+                build_ask_result(
+                    **{
+                        "sql": supplied_external_daily_report_sql,
+                        "type": "llm",
+                    }
+                )
+            ]
+
+        supplied_external_roi_sql = (
+            None
+            if is_stopped()
+            or state.api_results
+            or not supplied_external_builders_enabled
+            else build_supplied_external_roi_sql(state.user_query, state.slot_values)
+        )
+        if supplied_external_roi_sql:
+            state.sql_generation_reasoning = (
+                "用户已补充投放金额，直接生成 Excel ROI 回收表同形 SQL："
+                "列为日期/站点名称/所属渠道商/渠道名称/投放金额/用户类型/"
+                "累计1天/3天/.../360天，环比系数作为单独一行输出。"
+            )
+            if state.template_decision:
+                state.template_decision["sql_source"] = "rendered_template"
+                state.template_decision["decision_reason"] = (
+                    "supplied_external_roi_sql_selected"
+                )
+            if state.semantic_plan is not None:
+                decision = state.semantic_plan.setdefault("decision", {})
+                reason_codes = decision.setdefault("reason_codes", [])
+                if "supplied_external_roi_sql_selected" not in reason_codes:
+                    reason_codes.append("supplied_external_roi_sql_selected")
+            state.api_results = [
+                build_ask_result(
+                    **{
+                        "sql": supplied_external_roi_sql,
+                        "type": "llm",
+                    }
+                )
+            ]
+
         if (
             not is_stopped()
             and not state.api_results
@@ -5872,22 +7869,73 @@ class BaseFixedOrderAskRuntime:
             generation_sql_samples = list(state.sql_samples)
             while not is_stopped() and not state.api_results:
                 retry_as_reference = False
-                text_to_sql_generation_results = await self._toolset.generate_sql(
-                    query=state.user_query,
-                    contexts=state.table_ddls,
-                    sql_generation_reasoning=state.sql_generation_reasoning,
-                    histories=histories,
-                    runtime_scope_id=runtime_scope_id,
-                    sql_samples=generation_sql_samples,
-                    instructions=state.effective_instructions,
-                    has_calculated_field=has_calculated_field,
-                    has_metric=has_metric,
-                    has_json_field=has_json_field,
-                    sql_functions=sql_functions,
-                    use_dry_plan=use_dry_plan,
-                    allow_dry_plan_fallback=allow_dry_plan_fallback,
-                    sql_knowledge=sql_knowledge,
-                )
+                candidate_count = _sql_generation_candidate_count_for_state(state)
+                if candidate_count > 1:
+                    text_to_sql_generation_candidates = (
+                        await self._toolset.generate_sql_candidates(
+                            query=state.user_query,
+                            contexts=state.table_ddls,
+                            sql_generation_reasoning=state.sql_generation_reasoning,
+                            histories=histories,
+                            runtime_scope_id=runtime_scope_id,
+                            sql_samples=generation_sql_samples,
+                            instructions=state.effective_instructions,
+                            has_calculated_field=has_calculated_field,
+                            has_metric=has_metric,
+                            has_json_field=has_json_field,
+                            sql_functions=sql_functions,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_knowledge=sql_knowledge,
+                            candidate_count=candidate_count,
+                        )
+                    )
+                    (
+                        text_to_sql_generation_results,
+                        first_generation_invalid_result,
+                    ) = await self._toolset.select_best_sql_generation_result(
+                        text_to_sql_generation_candidates,
+                        runtime_scope_id=runtime_scope_id,
+                        template_sql=(
+                            _get_sample_value(generation_sql_samples[0], "sql")
+                            if generation_sql_samples
+                            else None
+                        ),
+                    )
+                    if text_to_sql_generation_results is None:
+                        text_to_sql_generation_results = {
+                            "post_process": {
+                                "valid_generation_result": {},
+                                "invalid_generation_result": first_generation_invalid_result
+                                or {},
+                            }
+                        }
+                    elif state.template_decision:
+                        execution_vote = text_to_sql_generation_results.get(
+                            "execution_vote"
+                        )
+                        if execution_vote:
+                            state.template_decision["execution_vote"] = execution_vote
+                            state.template_decision["sql_generation_strategy"] = (
+                                text_to_sql_generation_results.get("candidate_strategy")
+                            )
+                else:
+                    text_to_sql_generation_results = await self._toolset.generate_sql(
+                        query=state.user_query,
+                        contexts=state.table_ddls,
+                        sql_generation_reasoning=state.sql_generation_reasoning,
+                        histories=histories,
+                        runtime_scope_id=runtime_scope_id,
+                        sql_samples=generation_sql_samples,
+                        instructions=state.effective_instructions,
+                        has_calculated_field=has_calculated_field,
+                        has_metric=has_metric,
+                        has_json_field=has_json_field,
+                        sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
+                        sql_knowledge=sql_knowledge,
+                    )
 
                 if sql_valid_result := text_to_sql_generation_results["post_process"][
                     "valid_generation_result"
@@ -5945,19 +7993,33 @@ class BaseFixedOrderAskRuntime:
                             language=ask_request.configurations.language,
                         )
 
-                        sql_correction_results = await self._toolset.correct_sql(
+                        sql_correction_candidates = await self._toolset.correct_sql_candidates(
                             contexts=state.table_ddls,
                             instructions=state.effective_instructions,
-                            invalid_generation_result={
-                                "sql": original_sql,
-                                "error": sql_diagnosis_reasoning or state.error_message,
-                            },
+                            invalid_generation_results=_build_sql_correction_candidate_inputs(
+                                original_sql=original_sql,
+                                error_message=state.error_message,
+                                diagnosis_reasoning=sql_diagnosis_reasoning,
+                            ),
                             runtime_scope_id=runtime_scope_id,
                             use_dry_plan=use_dry_plan,
                             allow_dry_plan_fallback=allow_dry_plan_fallback,
                             sql_functions=sql_functions,
                             sql_knowledge=sql_knowledge,
                         )
+                        (
+                            sql_correction_results,
+                            first_failed_correction_result,
+                        ) = _select_best_sql_correction_result(
+                            sql_correction_candidates,
+                            original_sql=original_sql,
+                        )
+
+                        if not sql_correction_results:
+                            failed_dry_run_result = first_failed_correction_result
+                            if not failed_dry_run_result:
+                                break
+                            continue
 
                         if valid_generation_result := sql_correction_results[
                             "post_process"
@@ -6018,6 +8080,13 @@ class BaseFixedOrderAskRuntime:
                         failed_dry_run_result = sql_correction_results["post_process"][
                             "invalid_generation_result"
                         ]
+
+                        # The multi-candidate selector should only return a selected
+                        # result when it is valid. This fallback keeps the previous
+                        # retry behavior if the selector contract is changed later.
+                        if failed_dry_run_result:
+                            continue
+                        break
 
                 if retry_as_reference:
                     continue
@@ -6120,25 +8189,6 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     trace_id=trace_id,
                     is_followup=is_followup,
                 )
-                self._sync_semantic_plan_state(state, histories=histories)
-                self._apply_policy_state(
-                    state,
-                    request_policy=getattr(ask_request, "ask_policy", None),
-                )
-                missing_slot_result = await self._maybe_handle_missing_slot_rule(
-                    state=state,
-                    query_id=ask_request.query_id,
-                    histories=histories,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
-                    is_stopped=is_stopped,
-                    set_result=set_result,
-                    results=results,
-                    orchestrator=orchestrator,
-                )
-                if missing_slot_result is not None:
-                    return missing_slot_result
-
                 state.api_results = await self._toolset.retrieve_historical_question(
                     query=state.user_query,
                     retrieval_scope_id=retrieval_scope_id,
@@ -6149,46 +8199,12 @@ class LegacyFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     state.ask_path = "historical"
                     state.sql_generation_reasoning = ""
                 else:
-                    (
-                        retrieval_query,
-                        state.sql_samples,
-                        state.instructions,
-                    ) = await self._retrieve_guidance_candidates(
-                        query=state.user_query,
+                    await self._prepare_guidance_state(
+                        state,
+                        ask_request=ask_request,
                         histories=histories,
                         retrieval_scope_id=retrieval_scope_id,
                     )
-                    state.sql_samples = rerank_sql_samples(
-                        retrieval_query,
-                        state.sql_samples,
-                        histories=histories,
-                    )
-                    inactive_template_sample = None
-                    state.sql_samples, inactive_template_sample = (
-                        filter_active_sql_samples(state.sql_samples)
-                    )
-                    state.template_decision = build_template_decision(
-                        state.sql_samples,
-                        state.user_query,
-                        histories=histories,
-                        inactive_sample=inactive_template_sample,
-                    )
-                    self._sync_template_decision_state_metrics(state)
-                    self._sync_semantic_plan_state(state, histories=histories)
-                    await self._maybe_enhance_semantic_plan_state(
-                        state,
-                        histories=histories,
-                        configuration=ask_request.configurations,
-                    )
-                    self._apply_policy_state(
-                        state,
-                        request_policy=getattr(ask_request, "ask_policy", None),
-                    )
-                    state.effective_instructions = [
-                        *state.instructions,
-                        *build_template_instruction(state.template_decision),
-                        *extract_skill_instructions(ask_request.skills),
-                    ]
 
                     missing_source_result = (
                         await self._maybe_handle_missing_source_rule(
@@ -6343,60 +8359,12 @@ class DeepAgentsFixedOrderAskRuntime(BaseFixedOrderAskRuntime):
                     trace_id=trace_id,
                     is_followup=is_followup,
                 )
-                self._sync_semantic_plan_state(state, histories=histories)
-                self._apply_policy_state(
+                await self._prepare_guidance_state(
                     state,
-                    request_policy=getattr(ask_request, "ask_policy", None),
-                )
-                missing_slot_result = await self._maybe_handle_missing_slot_rule(
-                    state=state,
-                    query_id=ask_request.query_id,
-                    histories=histories,
-                    trace_id=trace_id,
-                    is_followup=is_followup,
-                    is_stopped=is_stopped,
-                    set_result=set_result,
-                    results=results,
-                    orchestrator=orchestrator,
-                )
-                if missing_slot_result is not None:
-                    return missing_slot_result
-
-                (
-                    retrieval_query,
-                    state.sql_samples,
-                    state.instructions,
-                ) = await self._retrieve_guidance_candidates(
-                    query=state.user_query,
+                    ask_request=ask_request,
                     histories=histories,
                     retrieval_scope_id=retrieval_scope_id,
                 )
-                state.sql_samples = rerank_sql_samples(
-                    retrieval_query,
-                    state.sql_samples,
-                    histories=histories,
-                )
-                state.template_decision = build_template_decision(
-                    state.sql_samples,
-                    state.user_query,
-                    histories=histories,
-                )
-                self._sync_template_decision_state_metrics(state)
-                self._sync_semantic_plan_state(state, histories=histories)
-                await self._maybe_enhance_semantic_plan_state(
-                    state,
-                    histories=histories,
-                    configuration=ask_request.configurations,
-                )
-                self._apply_policy_state(
-                    state,
-                    request_policy=getattr(ask_request, "ask_policy", None),
-                )
-                state.effective_instructions = [
-                    *state.instructions,
-                    *build_template_instruction(state.template_decision),
-                    *extract_skill_instructions(ask_request.skills),
-                ]
 
                 missing_source_result = await self._maybe_handle_missing_source_rule(
                     state=state,

@@ -414,6 +414,11 @@ export type RecommendationQuestionsInput = {
   // Optional max number of categories (default: 3)
   maxCategories?: number;
   regenerate?: boolean; // Optional regenerate questions (default: false)
+  // Optional SQL validation for each recommended question.
+  // Thread-level recommendation chips only draft questions back to the composer,
+  // so callers can disable validation to avoid extra LLM SQL-generation calls.
+  validateSql?: boolean;
+  allowDataPreview?: boolean;
   // Optional configuration settings
   configuration?: ProjectConfigurations;
 };

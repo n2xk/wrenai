@@ -321,9 +321,7 @@ async def test_ask_service_carries_resolved_slots_between_clarification_turns():
         },
         "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
     }
-    ask_service._ask_results["query-carry"] = AskResultResponse(
-        status="understanding"
-    )
+    ask_service._ask_results["query-carry"] = AskResultResponse(status="understanding")
 
     ask_request = AskRequest(
         query="D7",
@@ -351,6 +349,52 @@ async def test_ask_service_carries_resolved_slots_between_clarification_turns():
             "end_date": "2026-04-07",
         },
         "n_days": "7",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ask_service_resumes_external_dependency_clarification():
+    tool_router = SimpleNamespace(
+        run_ask=AsyncMock(return_value={"metadata": {"ask_path": "nl2sql"}})
+    )
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+    ask_service._clarification_sessions["clarify-external"] = {
+        "status": "needs_clarification",
+        "clarification_session_id": "clarify-external",
+        "original_question": "统计渠道990011的ROI",
+        "pending_slots": ["external_dependency:ad_spend"],
+        "resolved_slots": {
+            "tenant_plat_id": "990001",
+            "channel_id": "990011",
+        },
+        "expires_at": (datetime.now(UTC) + timedelta(minutes=5)).isoformat(),
+    }
+    ask_service._ask_results["query-external"] = AskResultResponse(
+        status="understanding"
+    )
+
+    ask_request = AskRequest(
+        query="date,channel_id,ad_spend\n2026-04-01,990011,1000",
+        mdl_hash="mdl-1",
+        clarification_session_id="clarify-external",
+    )
+    ask_request.query_id = "query-external"
+
+    await ask_service.ask(
+        ask_request,
+        service_metadata={"pipes_metadata": {}, "service_version": "test"},
+    )
+
+    routed_request = tool_router.run_ask.await_args.kwargs["ask_request"]
+    assert "统计渠道990011的ROI" in routed_request.query
+    assert "外部数据=" in routed_request.query
+    assert routed_request.slot_values["external_dependencies"] == {
+        "ad_spend": "date,channel_id,ad_spend\n2026-04-01,990011,1000"
     }
 
 
@@ -391,3 +435,16 @@ async def test_ask_service_does_not_resume_expired_clarification_session():
     assert routed_request.query == "990001"
     assert routed_request.slot_values == {}
     assert "clarify-expired" not in ask_service._clarification_sessions
+
+
+def test_ask_service_default_cache_ttl_matches_settings_default():
+    tool_router = SimpleNamespace(run_ask=AsyncMock(return_value={}))
+    ask_service = AskService(
+        {},
+        deepagents_orchestrator=SimpleNamespace(),
+        legacy_ask_tool=SimpleNamespace(),
+        tool_router=tool_router,
+    )
+
+    assert ask_service._ask_results.ttl == 3600
+    assert ask_service._clarification_sessions.ttl == 3600

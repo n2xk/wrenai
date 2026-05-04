@@ -37,6 +37,7 @@ class PostRequest(BaseRequest):
     max_categories: int = 3
     regenerate: bool = False
     allow_data_preview: bool = True
+    validate_sql: bool = True
 
 
 class PostResponse(BaseModel):

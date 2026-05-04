@@ -196,6 +196,44 @@ describe('dashboardQueryControls', () => {
     );
   });
 
+  it('detects shared Trino DATE_ADD windows across multiple date fields', () => {
+    const sql =
+      'SELECT * FROM players p JOIN deposits d ON d.player_id = p.id JOIN bets b ON b.player_id = p.id ' +
+      "WHERE p.create_time >= '2026-04-01' AND p.create_time < DATE_ADD('day', 1, DATE '2026-04-07') " +
+      "AND d.callback_time >= '2026-04-01' AND d.callback_time < DATE_ADD('day', 1, DATE '2026-04-07') " +
+      "AND b.settle_time >= '2026-04-01' AND b.settle_time < DATE_ADD('day', 1, DATE '2026-04-07')";
+    const candidate = detectDashboardTimeFilterCandidate(sql, 'UTC');
+
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        field: 'p.create_time',
+        originalStartDate: '2026-04-01',
+        originalEndDate: '2026-04-08',
+        windowDays: 7,
+        sqlBinding: expect.objectContaining({
+          kind: 'gte_lt',
+          startLiteral: '2026-04-01',
+          endLiteral: '2026-04-07',
+          endLiteralOffsetDays: 1,
+        }),
+      }),
+    );
+
+    const queryControls = buildDashboardQueryControls({
+      candidate: candidate!,
+      mode: 'rolling_window',
+      anchor: 'last_complete_day',
+    });
+
+    const compiledSql = compileDashboardItemSql({
+      sql,
+      queryControls,
+      now: new Date('2026-05-01T12:00:00.000Z'),
+    });
+    expect(compiledSql.match(/'2026-04-24'/g)).toHaveLength(3);
+    expect(compiledSql.match(/DATE '2026-04-30'/g)).toHaveLength(3);
+  });
+
   it('keeps SQL unchanged for fixed controls', () => {
     const sql =
       "SELECT * FROM orders WHERE order_date BETWEEN '2026-04-03' AND '2026-04-07'";
@@ -264,14 +302,38 @@ describe('dashboardQueryControls', () => {
     ).toBeNull();
   });
 
-  it('safely declines unsupported or ambiguous date ranges', () => {
-    expect(
-      detectDashboardTimeFilterCandidate(
-        "SELECT * FROM orders WHERE order_date BETWEEN '2026-04-03' AND '2026-04-07' AND created_at BETWEEN '2026-04-03' AND '2026-04-07'",
-        'UTC',
-      ),
-    ).toBeNull();
+  it('reuses the deterministic path when multiple date fields share the same window', () => {
+    const sql =
+      "SELECT * FROM orders WHERE order_date BETWEEN '2026-04-03' AND '2026-04-07' AND created_at BETWEEN '2026-04-03' AND '2026-04-07'";
+    const candidate = detectDashboardTimeFilterCandidate(sql, 'UTC');
 
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        field: 'order_date',
+        originalStartDate: '2026-04-03',
+        originalEndDate: '2026-04-07',
+        windowDays: 5,
+      }),
+    );
+
+    const queryControls = buildDashboardQueryControls({
+      candidate: candidate!,
+      mode: 'rolling_window',
+      anchor: 'last_complete_day',
+    });
+
+    expect(
+      compileDashboardItemSql({
+        sql,
+        queryControls,
+        now: new Date('2026-05-01T12:00:00.000Z'),
+      }),
+    ).toBe(
+      "SELECT * FROM orders WHERE order_date BETWEEN '2026-04-26' AND '2026-04-30' AND created_at BETWEEN '2026-04-26' AND '2026-04-30'",
+    );
+  });
+
+  it('safely declines unsupported or ambiguous date ranges', () => {
     expect(
       detectDashboardTimeFilterCandidate(
         "SELECT * FROM orders WHERE order_date >= '2026-04-03' AND created_at < '2026-04-08'",

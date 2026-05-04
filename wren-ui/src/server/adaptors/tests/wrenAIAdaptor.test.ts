@@ -48,6 +48,8 @@ describe('WrenAIAdaptor', () => {
       previousQuestions: ['What is sales by region?'],
       maxQuestions: 5,
       maxCategories: 3,
+      validateSql: false,
+      allowDataPreview: false,
       configuration: {
         language: 'English',
       },
@@ -74,6 +76,8 @@ describe('WrenAIAdaptor', () => {
           previous_questions: mockInput.previousQuestions,
           max_questions: mockInput.maxQuestions,
           max_categories: mockInput.maxCategories,
+          validate_sql: false,
+          allow_data_preview: false,
           configuration: mockInput.configuration,
         },
       );

@@ -331,9 +331,7 @@ class SQLGenPostProcessor:
                 "type": (
                     "TIME_OUT"
                     if error_message.startswith("Request timed out")
-                    else "DRY_PLAN"
-                    if use_dry_plan
-                    else "DRY_RUN"
+                    else "DRY_PLAN" if use_dry_plan else "DRY_RUN"
                 ),
                 "error": error_message,
                 "correlation_id": "",
@@ -375,9 +373,11 @@ class SQLGenPostProcessor:
                 else:
                     invalid_generation_result = {
                         "sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_PLAN",
+                        "type": (
+                            "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_PLAN"
+                        ),
                         "error": error_message,
                         "correlation_id": "",
                     }
@@ -418,9 +418,11 @@ class SQLGenPostProcessor:
                     invalid_generation_result = {
                         "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else "DRY_RUN",
+                        "type": (
+                            "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else "DRY_RUN"
+                        ),
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
@@ -466,9 +468,11 @@ class SQLGenPostProcessor:
                     invalid_generation_result = {
                         "sql": addition.get("error_sql", generation_result),
                         "original_sql": generation_result,
-                        "type": "TIME_OUT"
-                        if error_message.startswith("Request timed out")
-                        else preview_data_status,
+                        "type": (
+                            "TIME_OUT"
+                            if error_message.startswith("Request timed out")
+                            else preview_data_status
+                        ),
                         "error": error_message,
                         "correlation_id": addition.get("correlation_id", ""),
                     }
@@ -526,8 +530,10 @@ _DEFAULT_TEXT_TO_SQL_RULES = """
 - DON'T USE '.' in column/table alias, replace '.' with '_' in column/table alias.
 - DON'T USE "FILTER(WHERE <expression>)" clause in the generated SQL query.
 - DON'T USE "EXTRACT(EPOCH FROM <expression>)" clause in the generated SQL query.
-- DON'T USE "EXTRACT()" function with INTERVAL data types as arguments
-- DON'T USE INTERVAL or generate INTERVAL-like expression in the generated SQL query.
+- DON'T USE "EXTRACT()" function with INTERVAL data types as arguments.
+- Do not invent standalone INTERVAL literals. Use only the date arithmetic syntax
+  explicitly allowed by the active dialect section below (for example MySQL/TiDB
+  may use DATE_ADD(<date_expr>, INTERVAL <n> DAY)).
 - DON'T USE "TO_CHAR" function in the generated SQL query.
 - Aggregate functions are not allowed in the WHERE clause. Instead, they belong in the HAVING clause, which is used to filter after aggregation.
 - You can only add "ORDER BY" and "LIMIT" to the final "UNION" result.
@@ -812,7 +818,7 @@ def get_text_to_sql_rules(
     if sql_knowledge is not None:
         return _with_data_source_specific_rules(
             _extract_from_sql_knowledge(
-            sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
+                sql_knowledge, "text_to_sql_rule", _DEFAULT_TEXT_TO_SQL_RULES
             ),
             data_source,
         )

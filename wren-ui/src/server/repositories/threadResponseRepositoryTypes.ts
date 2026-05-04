@@ -46,6 +46,8 @@ export interface ThreadResponseChartDetail {
       name: string;
       type?: string | null;
     }>;
+    customInstruction?: string | null;
+    chartRequestQuestion?: string | null;
     lastErrorCode?: string | null;
     lastErrorMessage?: string | null;
     submittedAt?: string | null;

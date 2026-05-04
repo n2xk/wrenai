@@ -81,6 +81,25 @@ export const ensureDashboardForWorkspaceScope = async (
   return dashboard;
 };
 
+export const ensureCurrentDashboardForWorkspaceScope = async (
+  ctx: IContext,
+): Promise<Dashboard> => {
+  const runtimeIdentity = getCurrentPersistedWorkspaceIdentity(ctx);
+  const bridgeProjectId = resolvePersistedProjectBridgeId(runtimeIdentity);
+  const binding = getDashboardRuntimeBinding(runtimeIdentity);
+  const dashboard =
+    (await ctx.dashboardService.getCurrentDashboardForScope(
+      bridgeProjectId,
+      binding,
+    )) || (await ctx.dashboardService.initDashboard(bridgeProjectId, binding));
+
+  if (!dashboard) {
+    throw new Error('Dashboard not found.');
+  }
+
+  return dashboard;
+};
+
 export const ensureCurrentDashboardForScope = async (
   ctx: IContext,
   dashboardId?: number | null,

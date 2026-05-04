@@ -8,6 +8,7 @@ import {
 import {
   Dashboard,
   DashboardItemLayout,
+  DashboardItemType,
   IDashboardItemRepository,
   IDashboardRepository,
 } from '@server/repositories';
@@ -190,25 +191,31 @@ export const createScopedDashboard = async (
 export const calculateDashboardNewLayout = async (
   dashboardItemRepository: IDashboardItemRepository,
   dashboardId: number,
+  itemType?: DashboardItemType,
 ): Promise<DashboardItemLayout> => {
   const dashboardItems = await dashboardItemRepository.findAllBy({
     dashboardId,
   });
+  const h = itemType === DashboardItemType.NUMBER ? 1 : 3;
   const allLayouts = dashboardItems.map((item) => item.layout);
-  if (allLayouts.length === 0) return { x: 0, y: 0, w: 3, h: 2 };
+  if (allLayouts.length === 0) return { x: 0, y: 0, w: 3, h };
 
   const columnCount = 6;
   const halfLayoutX = columnCount / 2;
   const maxY = Math.max(...allLayouts.map((layout) => layout.y));
 
   const latestLayout = allLayouts.filter((layout) => layout.y === maxY);
+  const latestRowHeight = Math.max(
+    ...latestLayout.map((layout) => layout.h || h),
+    h,
+  );
   const isNextRow =
     latestLayout.reduce((acc, layout) => acc + layout.x + layout.w, 0) >
     halfLayoutX;
 
   const x = isNextRow ? 0 : halfLayoutX;
-  const y = isNextRow ? maxY + 2 : maxY;
-  return { x, y, w: 3, h: 2 };
+  const y = isNextRow ? maxY + latestRowHeight : maxY;
+  return { x, y, w: 3, h };
 };
 
 export const toUtcDashboardSchedule = (

@@ -16,6 +16,7 @@ from src.pipelines.generation.intent_classification import (
     table_retrieval as intent_table_retrieval,
 )
 from src.pipelines.retrieval.db_schema_retrieval import (
+    _extract_keyword_table_candidates,
     dbschema_retrieval as ask_dbschema_retrieval,
 )
 from src.pipelines.retrieval.db_schema_retrieval import (
@@ -103,6 +104,17 @@ def test_build_runtime_scope_filters_wraps_legacy_project_field_once():
             {"field": "project_id", "operator": "==", "value": "deploy-1"},
         ],
     }
+
+
+def test_keyword_table_candidates_include_llm_schema_linked_table_names():
+    assert _extract_keyword_table_candidates(
+        "统计首存用户",
+        schema_linking_entities={
+            "table_names": ["tidb_business_demo_dwd_order_deposit"],
+            "column_names": ["player_id"],
+            "business_terms": ["首存"],
+        },
+    ) == ["tidb_business_demo_dwd_order_deposit"]
 
 
 def test_build_runtime_scope_filters_uses_or_for_multiple_scope_ids():
@@ -219,8 +231,73 @@ async def test_ask_table_retrieval_preserves_type_and_scope_filters():
                     }
                 ],
             ),
-        }
+        },
+        {
+            "query_embedding": [],
+            "filters": build_runtime_scope_filters(
+                "deploy-1",
+                conditions=[
+                    {
+                        "field": "type",
+                        "operator": "==",
+                        "value": "TABLE_DESCRIPTION",
+                    },
+                    {"field": "name", "operator": "in", "value": ["orders"]},
+                ],
+            ),
+        },
     ]
+
+
+@pytest.mark.asyncio
+async def test_ask_table_retrieval_unions_keyword_table_matches_before_vector_docs():
+    vector_doc = _table_description_document("semantic_vector_match")
+    exact_doc = _table_description_document("dwd_order_deposit")
+
+    class KeywordAwareRetriever(MockRetriever):
+        async def run(self, query_embedding=None, filters=None) -> dict:
+            self.calls.append(
+                {
+                    "query_embedding": query_embedding,
+                    "filters": filters,
+                }
+            )
+            if query_embedding:
+                return {"documents": [vector_doc]}
+            return {"documents": [exact_doc]}
+
+    retriever = KeywordAwareRetriever()
+
+    result = await ask_table_retrieval(
+        embedding={"embedding": [0.1, 0.2]},
+        runtime_scope_id=" deploy-1 ",
+        tables=[],
+        table_retriever=retriever,
+        query="查 dwd_order_deposit 表昨天成功充值笔数",
+    )
+
+    assert [document.meta["name"] for document in result["documents"]] == [
+        "dwd_order_deposit",
+        "semantic_vector_match",
+    ]
+    assert retriever.calls[1] == {
+        "query_embedding": [],
+        "filters": build_runtime_scope_filters(
+            "deploy-1",
+            conditions=[
+                {
+                    "field": "type",
+                    "operator": "==",
+                    "value": "TABLE_DESCRIPTION",
+                },
+                {
+                    "field": "name",
+                    "operator": "in",
+                    "value": ["dwd_order_deposit"],
+                },
+            ],
+        ),
+    }
 
 
 @pytest.mark.asyncio

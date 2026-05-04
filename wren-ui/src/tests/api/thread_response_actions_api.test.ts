@@ -180,6 +180,33 @@ describe('pages/api/v1/thread-responses/[...path] route', () => {
       expect.objectContaining({ workspaceId: 'ws-1' }),
       expect.objectContaining({ language: expect.any(String) }),
       'scope-1',
+      undefined,
+    );
+  });
+
+  it('passes chart regenerate instructions through the REST endpoint', async () => {
+    const handler = (
+      await import('../../pages/api/v1/thread-responses/[...path]')
+    ).default;
+    const req = createReq({
+      query: { path: ['101', 'generate-chart'] },
+      body: { customInstruction: '为折线图添加数据标签' },
+    });
+    const res = createRes();
+
+    mockGenerateThreadResponseChartScoped.mockResolvedValue({
+      ...responsePayload,
+      chartDetail: { queryId: 'chart-1', status: 'FETCHING' },
+    });
+
+    await handler(req, res);
+
+    expect(mockGenerateThreadResponseChartScoped).toHaveBeenCalledWith(
+      101,
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+      expect.objectContaining({ language: expect.any(String) }),
+      'scope-1',
+      '为折线图添加数据标签',
     );
   });
 

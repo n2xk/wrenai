@@ -27,6 +27,19 @@ describe('DashboardService', () => {
         layout: { x: 0, y: 0, w: 3, h: 4 },
       },
     );
+    mockDashboardItemRepository.updateOne.mockResolvedValue({
+      id: 88,
+      dashboardId: 7,
+      type: 'BAR',
+      detail: {
+        sql: 'select 1',
+        chartSchema: { mark: 'bar' },
+        sourceResponseId: 62,
+        sourceThreadId: 50,
+        sourceQuestion: '统计 990001 平台下各渠道的折扣比例，并生成柱状图',
+      },
+      layout: { x: 0, y: 0, w: 3, h: 4 },
+    });
 
     const result = await dashboardService.createDashboardItem({
       dashboardId: 7,
@@ -42,10 +55,21 @@ describe('DashboardService', () => {
       mockDashboardItemRepository.findByDashboardIdAndSourceResponseId,
     ).toHaveBeenCalledWith(7, 62, 'BAR');
     expect(mockDashboardItemRepository.createOne).not.toHaveBeenCalled();
+    expect(mockDashboardItemRepository.updateOne).toHaveBeenCalledWith(88, {
+      detail: expect.objectContaining({
+        sql: 'select 1',
+        chartSchema: { mark: 'bar' },
+        sourceResponseId: 62,
+        sourceThreadId: 50,
+        sourceQuestion: '统计 990001 平台下各渠道的折扣比例，并生成柱状图',
+      }),
+    });
     expect(result).toEqual(
       expect.objectContaining({
         id: 88,
         dashboardId: 7,
+        alreadyExists: true,
+        updatedChartDetail: true,
       }),
     );
   });
@@ -86,6 +110,7 @@ describe('DashboardService', () => {
     expect(mockDashboardItemRepository.createOne).toHaveBeenCalledWith(
       expect.objectContaining({
         dashboardId: 7,
+        layout: { x: 0, y: 0, w: 3, h: 3 },
         detail: expect.objectContaining({
           sqlMode: 'dialect',
           runtimeIdentity: {
@@ -147,6 +172,7 @@ describe('DashboardService', () => {
 
     expect(mockDashboardItemRepository.createOne).toHaveBeenCalledWith(
       expect.objectContaining({
+        layout: { x: 0, y: 0, w: 3, h: 3 },
         detail: expect.objectContaining({
           queryControls: expect.objectContaining({
             version: 'dashboard-query-controls-v1',
@@ -202,11 +228,12 @@ describe('DashboardService', () => {
       dashboardId: 7,
       type: 'LINE',
       detail: {
-        sql: "select * from orders where order_date between '2026-04-01' and '2026-04-05'",
+        sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+        chartSchema: { mark: 'line' },
         queryControls,
         sourceResponseId: 62,
         sourceThreadId: 50,
-        sourceQuestion: '统计销售趋势',
+        sourceQuestion: '统计 04-03 到 04-07 的销售趋势',
       },
       layout: { x: 0, y: 0, w: 3, h: 4 },
     });
@@ -225,16 +252,19 @@ describe('DashboardService', () => {
     expect(mockDashboardItemRepository.createOne).not.toHaveBeenCalled();
     expect(mockDashboardItemRepository.updateOne).toHaveBeenCalledWith(88, {
       detail: expect.objectContaining({
+        sql: "select * from orders where order_date between '2026-04-03' and '2026-04-07'",
+        chartSchema: { mark: 'line' },
         queryControls,
         sourceResponseId: 62,
         sourceThreadId: 50,
-        sourceQuestion: '统计销售趋势',
+        sourceQuestion: '统计 04-03 到 04-07 的销售趋势',
       }),
     });
     expect(result).toEqual(
       expect.objectContaining({
         alreadyExists: true,
         updatedQueryControls: true,
+        updatedChartDetail: true,
         detail: expect.objectContaining({ queryControls }),
       }),
     );
@@ -254,6 +284,19 @@ describe('DashboardService', () => {
         layout: { x: 0, y: 0, w: 3, h: 4 },
       });
     mockDashboardItemRepository.findAllBy.mockResolvedValue([]);
+    mockDashboardItemRepository.updateOne.mockResolvedValue({
+      id: 89,
+      dashboardId: 7,
+      type: 'BAR',
+      detail: {
+        sql: 'select 1',
+        chartSchema: { mark: 'bar' },
+        sourceResponseId: 62,
+        sourceThreadId: 50,
+        sourceQuestion: '统计 990001 平台下各渠道的折扣比例，并生成柱状图',
+      },
+      layout: { x: 0, y: 0, w: 3, h: 4 },
+    });
     mockDashboardItemRepository.createOne.mockRejectedValue(
       Object.assign(new Error('duplicate key value'), {
         code: '23505',

@@ -5,6 +5,7 @@ import {
 import type {
   AdjustThreadResponseChartInput,
   CreateThreadResponseInput,
+  GenerateThreadResponseChartInput,
   ThreadResponse,
 } from '@/types/home';
 
@@ -166,11 +167,18 @@ export const triggerThreadResponseAnswer = async (
 export const triggerThreadResponseChart = async (
   selector: ClientRuntimeScopeSelector,
   responseId: number,
+  data?: GenerateThreadResponseChartInput,
 ) => {
   const response = await fetch(
     buildGenerateThreadResponseChartUrl(responseId, selector),
     {
       method: 'POST',
+      ...(data
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          }
+        : {}),
     },
   );
 

@@ -155,6 +155,49 @@ describe('chart render helpers', () => {
     });
   });
 
+  it('prepares layered line charts without injecting an invalid top-level mark', () => {
+    const result = prepareChartSpecForRender({
+      spec: {
+        mark: { type: 'bar' },
+        encoding: {},
+        layer: [
+          {
+            mark: { type: 'line', point: true },
+            encoding: {
+              x: { field: 'month', type: 'temporal' },
+              y: { field: 'sales', type: 'quantitative' },
+            },
+          },
+          {
+            mark: { type: 'text' },
+            encoding: {
+              x: { field: 'month', type: 'temporal' },
+              y: { field: 'sales', type: 'quantitative' },
+              text: { field: 'sales', type: 'quantitative', format: '.2f' },
+            },
+          },
+        ],
+      } as any,
+      values,
+      options: {
+        hideTitle: true,
+      },
+    }) as any;
+
+    expect(result).toMatchObject({
+      title: null,
+      layer: [
+        { mark: expect.objectContaining({ type: 'line' }) },
+        { mark: expect.objectContaining({ type: 'text' }) },
+      ],
+      data: {
+        values,
+      },
+    });
+    expect(result.mark).toBeUndefined();
+    expect(result.encoding).toBeUndefined();
+  });
+
   it('coerces folded quantitative source fields from numeric-like strings', () => {
     const result = prepareChartSpecForRender({
       spec: {

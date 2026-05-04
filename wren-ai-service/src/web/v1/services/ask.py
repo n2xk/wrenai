@@ -1,5 +1,4 @@
 import logging
-import re
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Literal, Optional
 
@@ -13,12 +12,12 @@ from src.core import (
     MixedAnswerComposer,
     ToolRouter,
 )
+from src.core.slot_extractor import extract_slot_values_from_clarification_reply
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
 from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
-DATE_PATTERN = re.compile(r"(20\d{2}-\d{2}-\d{2})")
 AskPath = Literal[
     "historical",
     "sql_pairs",
@@ -33,6 +32,22 @@ AskPath = Literal[
 class AskHistory(BaseModel):
     sql: str
     question: str
+    resolved_slots: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("resolved_slots", "resolvedSlots"),
+    )
+    template_id: Optional[str | int] = Field(
+        default=None,
+        validation_alias=AliasChoices("template_id", "templateId"),
+    )
+    template_mode: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("template_mode", "templateMode"),
+    )
+    semantic_plan_summary: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("semantic_plan_summary", "semanticPlanSummary"),
+    )
 
 
 class AskSkillCandidate(BaseModel):
@@ -307,7 +322,7 @@ class AskService:
         mixed_answer_composer: Optional[MixedAnswerComposer] = None,
         tool_router: Optional[ToolRouter] = None,
         maxsize: int = 1_000_000,
-        ttl: int = 120,
+        ttl: int = 3600,
     ):
         self._pipelines = pipelines
         self._ask_runtime_mode = ask_runtime_mode
@@ -374,61 +389,12 @@ class AskService:
         pending_slots: list[str],
         base_slot_values: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        query = ask_request.query or ""
-        slot_values = {
-            **dict(base_slot_values or {}),
-            **dict(ask_request.slot_values or {}),
-        }
-        if "tenant_plat_id" in pending_slots and "tenant_plat_id" not in slot_values:
-            match = re.search(
-                r"(?:租户平台|平台|tenant_plat_id)\s*[:：#]?\s*([0-9]{4,})",
-                query,
-                flags=re.IGNORECASE,
-            )
-            if not match and "channel_id" not in pending_slots:
-                match = re.search(r"([0-9]{4,})", query)
-            if match:
-                slot_values["tenant_plat_id"] = match.group(1)
-        if "channel_id" in pending_slots and "channel_id" not in slot_values:
-            match = re.search(
-                r"(?:渠道|channel[_\s-]?id)\s*[:：#]?\s*([0-9]{3,})",
-                query,
-                flags=re.IGNORECASE,
-            )
-            if not match and "tenant_plat_id" not in pending_slots:
-                match = re.search(r"([0-9]{3,})", query)
-            if match:
-                slot_values["channel_id"] = match.group(1)
-        dates = DATE_PATTERN.findall(query)
-        if "date_range" in pending_slots and "date_range" not in slot_values:
-            if len(dates) >= 2:
-                slot_values["date_range"] = {
-                    "start_date": dates[0],
-                    "end_date": dates[1],
-                }
-            elif len(dates) == 1:
-                slot_values["date_range"] = {"date": dates[0]}
-        if (
-            "cohort_start_date" in pending_slots
-            and "cohort_start_date" not in slot_values
-            and dates
-        ):
-            slot_values["cohort_start_date"] = dates[0]
-        if (
-            "cohort_end_date" in pending_slots
-            and "cohort_end_date" not in slot_values
-            and len(dates) >= 2
-        ):
-            slot_values["cohort_end_date"] = dates[1]
-        if "metric_focus" in pending_slots and "metric_focus" not in slot_values:
-            metric_match = re.search(
-                r"(ROI|投放|回本|充值|存款|投注|流水|首存|首充|续存|留存|流量|综合日报)",
-                query,
-                flags=re.IGNORECASE,
-            )
-            if metric_match:
-                slot_values["metric_focus"] = metric_match.group(1)
-        return slot_values
+        return extract_slot_values_from_clarification_reply(
+            query=ask_request.query or "",
+            pending_slots=pending_slots,
+            base_slot_values=base_slot_values,
+            request_slot_values=ask_request.slot_values,
+        )
 
     def _format_slot_values_for_query(self, slot_values: dict[str, Any]) -> str:
         formatted_values: list[str] = []
@@ -453,6 +419,14 @@ class AskService:
                 formatted_values.append(f"首存cohort结束日期{value}")
             elif key == "metric_focus":
                 formatted_values.append(f"关注指标{value}")
+            elif key == "external_dependencies" and isinstance(value, dict):
+                formatted_values.append(
+                    "外部数据="
+                    + "；".join(
+                        f"{dependency_id}:{str(supply)[:120]}"
+                        for dependency_id, supply in value.items()
+                    )
+                )
             else:
                 formatted_values.append(f"{key}={value}")
         return "，".join(formatted_values)
@@ -479,9 +453,8 @@ class AskService:
         session = self._clarification_sessions.get(session_id)
         if not session and ask_request.clarification_state:
             request_session = ask_request.clarification_state
-            if (
-                str(request_session.get("clarification_session_id") or "")
-                == str(session_id)
+            if str(request_session.get("clarification_session_id") or "") == str(
+                session_id
             ):
                 session = request_session
         if not session:
@@ -625,8 +598,7 @@ class AskService:
             total_count=stats.total_count,
             executed_count=stats.executed_count,
             comparable_count=stats.comparable_count,
-            comparable_match_rate=stats.comparable_match_count
-            / comparable_denominator,
+            comparable_match_rate=stats.comparable_match_count / comparable_denominator,
             comparable_mismatch_rate=stats.comparable_mismatch_count
             / comparable_denominator,
             error_rate=stats.error_count / executed_denominator,
@@ -659,9 +631,9 @@ class AskService:
             trace_id=trace_id,
             histories=histories,
             runtime_scope_id=runtime_scope_id,
-            retrieval_scope_id=",".join(retrieval_scope_ids)
-            if retrieval_scope_ids
-            else None,
+            retrieval_scope_id=(
+                ",".join(retrieval_scope_ids) if retrieval_scope_ids else None
+            ),
             is_followup=is_followup,
             is_stopped=lambda: self._is_stopped(query_id, self._ask_results),
             set_result=lambda **payload: self._set_ask_result(query_id, **payload),
@@ -685,8 +657,8 @@ class AskService:
             if ask_path:
                 update_payload["ask_path"] = ask_path
             if template_decision:
-                update_payload["template_decision"] = AskTemplateDecision.model_validate(
-                    template_decision
+                update_payload["template_decision"] = (
+                    AskTemplateDecision.model_validate(template_decision)
                 )
             if semantic_plan:
                 update_payload["semantic_plan"] = semantic_plan

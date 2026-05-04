@@ -16,6 +16,7 @@ import {
 export type DashboardItemCreateResult = DashboardItem & {
   alreadyExists?: boolean;
   updatedQueryControls?: boolean;
+  updatedChartDetail?: boolean;
 };
 
 export interface CreateDashboardItemInput {

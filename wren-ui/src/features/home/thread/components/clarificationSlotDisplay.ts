@@ -12,6 +12,26 @@ const slotLabels: Record<string, string> = {
   channel_performance_context: '分析口径',
 };
 
+const externalDependencyLabels: Record<string, string> = {
+  ad_spend: '投放金额',
+  access_pv: '访问 PV',
+  access_uv: '访问 UV',
+  download_click_uv: '下载点击 UV',
+};
+
+export const getExternalDependencyIdFromSlot = (slot: string) => {
+  const prefixes = [
+    'external_dependency:',
+    'external_dependency.',
+    'external_dependencies.',
+  ];
+  const matchedPrefix = prefixes.find((prefix) => slot.startsWith(prefix));
+  return matchedPrefix ? slot.slice(matchedPrefix.length).trim() : '';
+};
+
+export const isExternalDependencySlot = (slot: string) =>
+  Boolean(getExternalDependencyIdFromSlot(slot));
+
 export const slotPlaceholders: Record<string, string> = {
   tenant_plat_id: '例如：990001',
   channel_id: '例如：990011',
@@ -27,7 +47,21 @@ export const slotPlaceholders: Record<string, string> = {
 };
 
 export const normalizeClarificationSlotLabel = (slot: string) =>
-  slotLabels[slot] || slot;
+  isExternalDependencySlot(slot)
+    ? externalDependencyLabels[getExternalDependencyIdFromSlot(slot)] ||
+      getExternalDependencyIdFromSlot(slot)
+    : slotLabels[slot] || slot;
+
+export const resolveClarificationSlotPlaceholder = (slot: string) => {
+  if (isExternalDependencySlot(slot)) {
+    return [
+      '可粘贴 CSV，例如：',
+      'date,channel_id,ad_spend,access_pv,access_uv,download_click_uv',
+      '2026-04-01,990011,1000,12000,3000,800',
+    ].join('\n');
+  }
+  return slotPlaceholders[slot] || '请输入补充信息';
+};
 
 const formatSlotValue = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -138,6 +172,9 @@ const coerceSingleSlotValue = (text: string, slot: string) => {
   if (!normalizedText) {
     return null;
   }
+  if (isExternalDependencySlot(slot)) {
+    return normalizedText.length <= 12000 ? normalizedText : null;
+  }
   if (/生成.*图表|推荐.*问题/i.test(normalizedText)) {
     return null;
   }
@@ -176,6 +213,10 @@ export const coerceClarificationSlotValuesFromText = ({
 
   if (Object.keys(explicitValues).length === slots.length) {
     return explicitValues;
+  }
+
+  if (slots.every(isExternalDependencySlot) && normalizedText.length <= 12000) {
+    return Object.fromEntries(slots.map((slot) => [slot, normalizedText]));
   }
 
   if (slots.length === 1) {

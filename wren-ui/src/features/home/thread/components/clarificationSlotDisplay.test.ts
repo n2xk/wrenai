@@ -103,4 +103,22 @@ describe('clarificationSlotDisplay', () => {
       }),
     ).toBeNull();
   });
+
+  it('coerces csv text into all pending external dependency slots', () => {
+    const csvText =
+      'date,channel_id,ad_spend,access_pv\n2026-04-01,990011,1000,12000';
+
+    expect(
+      coerceClarificationSlotValuesFromText({
+        pendingSlots: [
+          'external_dependency:ad_spend',
+          'external_dependency:access_pv',
+        ],
+        text: csvText,
+      }),
+    ).toEqual({
+      'external_dependency:ad_spend': csvText,
+      'external_dependency:access_pv': csvText,
+    });
+  });
 });

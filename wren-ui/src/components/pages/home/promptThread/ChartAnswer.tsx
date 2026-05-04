@@ -470,6 +470,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
     pinSubmitting ||
     createAndPinSubmitting ||
     pinProposalLoading;
+  const pinButtonLabel = pinProposalLoading
+    ? '识别日期范围...'
+    : messages.headerActions.pinDashboard;
 
   const resolvePinTimeFilter = async () => {
     if (detectedPinTimeFilter) {
@@ -483,6 +486,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
     }
 
     setPinProposalLoading(true);
+    const hideProposalLoading = appMessage.loading(
+      '正在识别图表日期范围...',
+      0,
+    ) as void | (() => void);
     try {
       const proposal = await proposeDashboardQueryControls(
         responseRuntimeSelector,
@@ -495,6 +502,9 @@ export default function ChartAnswer(props: AnswerResultProps) {
     } catch (_error) {
       return null;
     } finally {
+      if (typeof hideProposalLoading === 'function') {
+        hideProposalLoading();
+      }
       setPinProposalLoading(false);
     }
   };
@@ -653,10 +663,10 @@ export default function ChartAnswer(props: AnswerResultProps) {
     <ResultActionButton
       icon={<PushPinOutlined />}
       disabled={pinActionDisabled}
-      loading={pinSubmitting}
+      loading={pinSubmitting || pinProposalLoading}
       onClick={shouldUsePinPopover ? undefined : () => onPin()}
     >
-      {messages.headerActions.pinDashboard}
+      {pinButtonLabel}
     </ResultActionButton>
   );
 
@@ -766,7 +776,7 @@ export default function ChartAnswer(props: AnswerResultProps) {
               hideReloadAction
               onReload={onReload}
               onPin={onPin}
-              pinButtonLabel={messages.headerActions.pinDashboard}
+              pinButtonLabel={pinButtonLabel}
               pinDisabled={pinActionDisabled}
               pinPopoverContent={pinPopoverContent}
               pinPopoverOpen={

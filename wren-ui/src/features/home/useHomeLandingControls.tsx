@@ -348,9 +348,7 @@ export function useHomeLandingControls({
     }
 
     setSelectedKnowledgeBaseIds((previous) =>
-      previous.includes(knowledgeBaseId)
-        ? previous.filter((item) => item !== knowledgeBaseId)
-        : [...previous, knowledgeBaseId],
+      previous.includes(knowledgeBaseId) ? [] : [knowledgeBaseId],
     );
   }, []);
 

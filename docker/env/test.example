@@ -7,6 +7,15 @@ WREN_AI_SERVICE_HOST=127.0.0.1
 WREN_AI_SERVICE_PORT=5555
 PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai
 PYTHONUNBUFFERED=1
+# Enable deterministic external-dependency guard for TiDB regression business metrics.
+WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED=true
+# P3 ask-runtime features are enabled by default in code; keep explicit test
+# values here so PM2 test runs are reproducible and rate-limit friendly.
+WREN_SQL_GENERATION_CANDIDATE_COUNT=2
+WREN_SQL_CORRECTION_CANDIDATE_COUNT=2
+WREN_SQL_EXECUTION_VOTING_ENABLED=true
+WREN_QUERY_DECOMPOSITION_ENABLED=true
+WREN_SCHEMA_LINKING_ENTITY_EXTRACTION_ENABLED=true
 
 # Use the checked-in local AI config by default. If you need a different model
 # stack, set CONFIG_PATH in docker/env/test.local to an absolute path or a path

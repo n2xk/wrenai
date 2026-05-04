@@ -26,6 +26,7 @@ export type ChartSpecRecord = {
   title?: string | null;
   mark?: string | { type?: string; [key: string]: unknown };
   encoding?: EncodingSpec;
+  layer?: ChartSpecRecord[];
   data?: { values?: Record<string, unknown>[] };
   autosize?: { type: string; contains: string };
   params?: Array<Record<string, unknown>>;

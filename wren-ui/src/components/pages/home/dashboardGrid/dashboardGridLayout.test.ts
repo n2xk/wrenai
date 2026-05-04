@@ -25,15 +25,15 @@ describe('dashboard grid layout helpers', () => {
       resolveDashboardGridItemMinHeight({
         type: 'BAR',
       } as any),
-    ).toBe(2);
+    ).toBe(3);
     expect(
       resolveDashboardGridItemMinHeight({
         type: 'TABLE',
       } as any),
-    ).toBe(2);
+    ).toBe(3);
   });
 
-  it('preserves stored layout for a single dashboard item', () => {
+  it('keeps pinned charts readable even when a stored layout is shorter', () => {
     expect(
       resolveDashboardGridLayouts([
         {
@@ -53,12 +53,12 @@ describe('dashboard grid layout helpers', () => {
         x: 0,
         y: 0,
         w: 3,
-        h: 2,
+        h: 3,
       },
     ]);
   });
 
-  it('renders pinned chart cards at least two rows tall', () => {
+  it('renders pinned chart cards at least three rows tall', () => {
     expect(
       resolveDashboardGridLayouts([
         {
@@ -78,7 +78,7 @@ describe('dashboard grid layout helpers', () => {
         x: 0,
         y: 0,
         w: 3,
-        h: 2,
+        h: 3,
       },
     ]);
   });

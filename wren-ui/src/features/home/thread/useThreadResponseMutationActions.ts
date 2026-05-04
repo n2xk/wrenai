@@ -40,6 +40,11 @@ const CHART_BLOCKING_REASON_CODES = new Set([
 const EMPTY_RESULT_CHART_MESSAGE = '当前查询结果为空，暂时无法生成图表。';
 const DEFAULT_NON_CHARTABLE_MESSAGE = '当前结果暂时无法生成图表。';
 
+const buildChartGenerationRequestPayload = (options?: GenerateChartOptions) => {
+  const customInstruction = options?.question?.trim();
+  return customInstruction ? { customInstruction } : undefined;
+};
+
 const isKnownEmptyAnswerResult = (response?: ThreadResponse | null) =>
   Boolean(
     response?.answerDetail?.error?.code === 'EMPTY_RESULT_SET' ||
@@ -220,10 +225,18 @@ export function useThreadResponseMutationActions({
           openWorkbench: false,
         });
 
-        const nextResponse = await triggerThreadResponseChartRequest(
-          resolveResponseRuntimeScopeSelector(targetResponse),
-          targetResponse.id,
-        );
+        const chartGenerationPayload =
+          buildChartGenerationRequestPayload(options);
+        const nextResponse = chartGenerationPayload
+          ? await triggerThreadResponseChartRequest(
+              resolveResponseRuntimeScopeSelector(targetResponse),
+              targetResponse.id,
+              chartGenerationPayload,
+            )
+          : await triggerThreadResponseChartRequest(
+              resolveResponseRuntimeScopeSelector(targetResponse),
+              targetResponse.id,
+            );
         upsertThreadResponse(nextResponse);
         startThreadResponsePolling(nextResponse.id);
       } catch (error) {

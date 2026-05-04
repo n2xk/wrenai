@@ -1,0 +1,5 @@
+test_id,category,target,operation,precondition,expected_result,pass_criteria,source_doc
+KBI01,知识库导入异常,格式错误文档拦截,"导入缺少 id/title/content 的分析规则或业务词典文档",使用隔离知识库或导入异常专项知识库；不要在正式回归知识库中污染数据,导入失败并提示缺失字段；不产生半成品 instruction/sql_pair/business_term 记录,UI/API 返回可理解错误；导入前后五类知识资产计数不增加；deploy 不进入 SUCCESS 假象,问数回归测试计划.md
+KBI02,知识库导入异常,重复导入幂等或明确冲突,"连续两次导入同一条 SQL 模板/业务词典/分析规则",使用同一隔离知识库；第一次导入成功并记录资产 id,第二次导入不会产生重复运行时资产；若产品选择冲突策略则必须阻止并提示已存在,列表和 API 中同一业务 id 只有一条 active 记录；diagnostics 不出现重复 instruction 竞争,问数回归测试计划.md
+KBI03,知识库导入异常,删除被引用资产后的降级,"删除或停用一条已被 SQL 模板 relatedRules/relatedBusinessTerms 引用的分析规则或业务词典后再问相应用例",仅在隔离知识库执行；先记录删除前问数可通过证据,系统不崩溃；问数可降级为普通 SQL/参考模板/低置信度提示；diagnostics 能说明引用缺失或知识资产不可用,不出现 500/卡死；不会继续宣称已使用被删除资产；最终报告标记为降级或治理缺口,问数回归测试计划.md
+KBI04,知识库导入异常,外部依赖 validation 异常拦截,"导入缺少 requiredGrain 或 validation.required_columns 的 external_dependency 文档",使用隔离知识库；外部依赖 tab 可操作,导入失败或保存为 draft/inactive；运行时不把异常外部依赖作为可用阻断策略,错误提示指出缺少 requiredGrain/required_columns；问数 diagnostics 不出现结构不完整的 external_dependency,问数回归测试计划.md

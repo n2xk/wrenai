@@ -121,6 +121,42 @@ const countUniqueCategories = (
   return uniq(values.map((row) => row[categoryField])).length;
 };
 
+const isLayeredChartSpec = (spec?: ChartRenderSpec | null) => {
+  const layers = spec?.layer;
+  return Array.isArray(layers) && layers.length > 0;
+};
+
+const normalizeLayeredSpecForRender = (
+  spec: ChartRenderSpec,
+  options: Pick<ChartRenderOptions, 'donutInner' | 'hideLegend'>,
+) => {
+  spec.layer = (spec.layer || []).map((layer) => {
+    const nextLayer = cloneChartSpec(layer) || {};
+    nextLayer.mark = normalizeMarkSpec(nextLayer.mark, {
+      donutInner: options.donutInner,
+    });
+    nextLayer.encoding = nextLayer.encoding || {};
+    ensureColorFallback(nextLayer.encoding);
+    ensureEncodingTitles(nextLayer.encoding);
+    ensureBarEncodingDefaults(
+      getMarkType(nextLayer.mark)?.toLowerCase() || null,
+      nextLayer.encoding,
+    );
+    if (options.hideLegend && nextLayer.encoding?.color) {
+      nextLayer.encoding.color = {
+        ...nextLayer.encoding.color,
+        legend: null,
+      };
+    }
+    return nextLayer;
+  });
+
+  if (!spec.encoding || Object.keys(spec.encoding).length === 0) {
+    delete spec.encoding;
+  }
+  delete spec.mark;
+};
+
 const filterTopCategories = (
   values: Record<string, unknown>[],
   encoding?: EncodingSpec,
@@ -168,7 +204,9 @@ export const prepareChartSpecForRender = ({
     serverShaped: options?.serverShaped ?? false,
   };
 
-  const categoryCount = countUniqueCategories(values, clonedSpec.encoding);
+  const categoryCount = isLayeredChartSpec(clonedSpec)
+    ? 0
+    : countUniqueCategories(values, clonedSpec.encoding);
   if (
     !renderOptions.serverShaped &&
     categoryCount > renderOptions.categoriesLimit &&
@@ -198,21 +236,32 @@ export const prepareChartSpecForRender = ({
   clonedSpec.autosize = clonedSpec.autosize || {
     ...DEFAULT_CANONICAL_AUTOSIZE,
   };
-  clonedSpec.mark = normalizeMarkSpec(clonedSpec.mark, {
-    donutInner: renderOptions.donutInner,
-  });
-  clonedSpec.encoding = clonedSpec.encoding || {};
-  ensureColorFallback(clonedSpec.encoding);
-  ensureEncodingTitles(clonedSpec.encoding);
-  ensureBarEncodingDefaults(
-    getMarkType(clonedSpec.mark)?.toLowerCase() || null,
-    clonedSpec.encoding,
-  );
+  if (isLayeredChartSpec(clonedSpec)) {
+    normalizeLayeredSpecForRender(clonedSpec, {
+      donutInner: renderOptions.donutInner,
+      hideLegend: renderOptions.hideLegend,
+    });
+  } else {
+    clonedSpec.mark = normalizeMarkSpec(clonedSpec.mark, {
+      donutInner: renderOptions.donutInner,
+    });
+    clonedSpec.encoding = clonedSpec.encoding || {};
+    ensureColorFallback(clonedSpec.encoding);
+    ensureEncodingTitles(clonedSpec.encoding);
+    ensureBarEncodingDefaults(
+      getMarkType(clonedSpec.mark)?.toLowerCase() || null,
+      clonedSpec.encoding,
+    );
+  }
 
   if (renderOptions.hideTitle) {
     (clonedSpec as any).title = null;
   }
-  if (renderOptions.hideLegend && clonedSpec.encoding?.color) {
+  if (
+    !isLayeredChartSpec(clonedSpec) &&
+    renderOptions.hideLegend &&
+    clonedSpec.encoding?.color
+  ) {
     clonedSpec.encoding.color = {
       ...clonedSpec.encoding.color,
       legend: null,
@@ -221,11 +270,13 @@ export const prepareChartSpecForRender = ({
 
   clonedSpec.width = clonedSpec.width ?? DEFAULT_CANONICAL_DIMENSION;
   clonedSpec.height = clonedSpec.height ?? DEFAULT_CANONICAL_DIMENSION;
-  const hoverDefaults = ensureHoverDefaults({
-    encoding: clonedSpec.encoding,
-    params: clonedSpec.params,
-  });
-  clonedSpec.params = hoverDefaults.params;
+  if (!isLayeredChartSpec(clonedSpec)) {
+    const hoverDefaults = ensureHoverDefaults({
+      encoding: clonedSpec.encoding || {},
+      params: clonedSpec.params,
+    });
+    clonedSpec.params = hoverDefaults.params;
+  }
   return clonedSpec as TopLevelSpec;
 };
 
@@ -243,9 +294,16 @@ export const resolvePreferredRenderer = ({
   if (preferredRenderer) {
     return preferredRenderer;
   }
-  const markType = getMarkType(
-    (spec as ChartRenderSpec | null)?.mark,
-  )?.toLowerCase();
+  const renderSpec = spec as ChartRenderSpec | null;
+  const markType =
+    getMarkType(renderSpec?.mark)?.toLowerCase() ||
+    (Array.isArray(renderSpec?.layer)
+      ? getMarkType(
+          renderSpec?.layer.find(
+            (layer) => getMarkType(layer.mark)?.toLowerCase() !== 'text',
+          )?.mark,
+        )?.toLowerCase()
+      : null);
   const pointCount = values?.length || 0;
   if (markType === 'line' || markType === 'area') {
     return pointCount > 120 || isPinned ? 'canvas' : 'svg';

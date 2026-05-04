@@ -1,5 +1,7 @@
 import ast
 import logging
+import os
+import re
 import sys
 from typing import Any, Optional
 
@@ -25,6 +27,54 @@ from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
+
+TABLE_IDENTIFIER_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_])([A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)?)(?![A-Za-z0-9_])"
+)
+TABLE_IDENTIFIER_PREFIXES = (
+    "ads_",
+    "dim_",
+    "dwd_",
+    "dws_",
+    "fact_",
+    "ods_",
+    "tidb_",
+)
+
+
+def _env_flag_enabled(name: str, default: bool = True) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+schema_linking_entity_system_prompt = """
+### TASK ###
+Extract schema-linking entities from the user's text-to-SQL question.
+
+Return only JSON. Do not generate SQL.
+
+Entities should help schema retrieval:
+- table_names: explicit or strongly implied physical/logical table names.
+- column_names: explicit or strongly implied column names.
+- business_terms: business concepts or metric names that should influence table retrieval.
+
+Use conservative extraction. If uncertain, put the phrase in business_terms instead
+of inventing a table or column.
+
+### FINAL ANSWER FORMAT ###
+{
+  "table_names": ["..."],
+  "column_names": ["..."],
+  "business_terms": ["..."]
+}
+"""
+
+schema_linking_entity_user_prompt_template = """
+### QUESTION ###
+{{ question }}
+"""
 
 
 table_columns_selection_system_prompt = """
@@ -124,40 +174,210 @@ def _build_view_ddl(content: dict) -> str:
 
 ## Start of Pipeline
 @observe(capture_input=False, capture_output=False)
-async def embedding(query: str, embedder: Any, histories: list[AskHistory]) -> dict:
+async def schema_linking_entities(
+    query: str,
+    histories: list[AskHistory],
+    schema_linking_entity_generator: Any,
+    schema_linking_entity_prompt_builder: PromptBuilder,
+) -> dict[str, Any]:
+    if not query or not _env_flag_enabled(
+        "WREN_SCHEMA_LINKING_ENTITY_EXTRACTION_ENABLED",
+        True,
+    ):
+        return {}
+
+    previous_query_summaries = (
+        [history.question for history in histories] if histories else []
+    )
+    combined_query = "\n".join([*previous_query_summaries, query])
+    try:
+        prompt = schema_linking_entity_prompt_builder.run(question=combined_query).get(
+            "prompt"
+        )
+        response = await schema_linking_entity_generator(
+            prompt=clean_up_new_lines(prompt or "")
+        )
+        raw_reply = (response.get("replies") or ["{}"])[0]
+        entities = orjson.loads(raw_reply)
+        return {
+            "table_names": [
+                str(value).strip()
+                for value in entities.get("table_names", [])
+                if str(value).strip()
+            ],
+            "column_names": [
+                str(value).strip()
+                for value in entities.get("column_names", [])
+                if str(value).strip()
+            ],
+            "business_terms": [
+                str(value).strip()
+                for value in entities.get("business_terms", [])
+                if str(value).strip()
+            ],
+        }
+    except Exception as exc:
+        logger.warning(
+            "Schema-linking entity extraction failed; falling back to keyword/vector retrieval: %s",
+            exc,
+            exc_info=True,
+        )
+        return {}
+
+
+@observe(capture_input=False, capture_output=False)
+async def embedding(
+    query: str,
+    embedder: Any,
+    histories: list[AskHistory],
+    schema_linking_entities: dict[str, Any],
+) -> dict:
     if query:
         if histories:
             previous_query_summaries = [history.question for history in histories]
         else:
             previous_query_summaries = []
 
-        query = "\n".join(previous_query_summaries) + "\n" + query
+        entity_terms = []
+        for key in ("table_names", "column_names", "business_terms"):
+            entity_terms.extend(schema_linking_entities.get(key) or [])
+        entity_suffix = (
+            "\nSchema linking entities: " + ", ".join(dict.fromkeys(entity_terms))
+            if entity_terms
+            else ""
+        )
+
+        query = "\n".join(previous_query_summaries) + "\n" + query + entity_suffix
 
         return await embedder.run(query)
     else:
         return {}
 
 
+def _extract_keyword_table_candidates(
+    query: str | None,
+    *,
+    histories: list[AskHistory] | None = None,
+    tables: list[str] | None = None,
+    schema_linking_entities: dict[str, Any] | None = None,
+) -> list[str]:
+    candidates: list[str] = []
+
+    def add_candidate(value: Any) -> None:
+        raw_value = str(value or "").strip().strip('`"[]')
+        if not raw_value:
+            return
+        for candidate in (raw_value, raw_value.split(".")[-1]):
+            normalized_candidate = candidate.strip().strip('`"[]')
+            if normalized_candidate and normalized_candidate not in candidates:
+                candidates.append(normalized_candidate)
+
+    for table in tables or []:
+        add_candidate(table)
+    for table in (schema_linking_entities or {}).get("table_names") or []:
+        add_candidate(table)
+
+    texts = [query or ""]
+    for history in histories or []:
+        if isinstance(history, dict):
+            history_question = history.get("question")
+        else:
+            history_question = getattr(history, "question", None)
+        if history_question:
+            texts.append(str(history_question))
+    for text in texts:
+        for match in TABLE_IDENTIFIER_PATTERN.finditer(text):
+            identifier = match.group(1)
+            bare_identifier = identifier.split(".")[-1]
+            if "_" not in bare_identifier:
+                continue
+            if not bare_identifier.lower().startswith(TABLE_IDENTIFIER_PREFIXES):
+                continue
+            add_candidate(identifier)
+
+    return candidates
+
+
+def _merge_table_documents(*document_groups: list[Document] | None) -> list[Document]:
+    merged_documents: list[Document] = []
+    seen_names: set[str] = set()
+    for documents in document_groups:
+        for document in documents or []:
+            table_name = str(document.meta.get("name") or "")
+            if not table_name:
+                try:
+                    table_name = str(
+                        ast.literal_eval(document.content).get("name") or ""
+                    )
+                except Exception:
+                    table_name = document.content
+            normalized_name = table_name.lower()
+            if normalized_name in seen_names:
+                continue
+            seen_names.add(normalized_name)
+            merged_documents.append(document)
+    return merged_documents
+
+
 @observe(capture_input=False)
 async def table_retrieval(
     embedding: dict,
     runtime_scope_id: str,
-    tables: list[str],
+    tables: list[str] | None,
     table_retriever: Any,
+    query: str = "",
+    histories: Optional[list[AskHistory]] = None,
+    schema_linking_entities: Optional[dict[str, Any]] = None,
 ) -> dict:
+    tables = tables or []
     conditions = [
         {"field": "type", "operator": "==", "value": "TABLE_DESCRIPTION"},
     ]
+    keyword_table_candidates = _extract_keyword_table_candidates(
+        query,
+        histories=histories,
+        tables=tables,
+        schema_linking_entities=schema_linking_entities,
+    )
 
     if embedding:
-        return await table_retriever.run(
+        vector_result = await table_retriever.run(
             query_embedding=embedding.get("embedding"),
             filters=build_runtime_scope_filters(
                 runtime_scope_id, conditions=conditions
             ),
         )
+        if not keyword_table_candidates:
+            return vector_result
+
+        keyword_result = await table_retriever.run(
+            query_embedding=[],
+            filters=build_runtime_scope_filters(
+                runtime_scope_id,
+                conditions=[
+                    *conditions,
+                    {
+                        "field": "name",
+                        "operator": "in",
+                        "value": keyword_table_candidates,
+                    },
+                ],
+            ),
+        )
+        return {
+            "documents": _merge_table_documents(
+                keyword_result.get("documents"),
+                vector_result.get("documents"),
+            )
+        }
     else:
-        conditions.append({"field": "name", "operator": "in", "value": tables})
+        conditions.append(
+            {
+                "field": "name",
+                "operator": "in",
+                "value": keyword_table_candidates or tables,
+            }
+        )
 
         return await table_retriever.run(
             query_embedding=[],
@@ -325,9 +545,10 @@ async def filter_columns_in_tables(
     prompt: dict, table_columns_selection_generator: Any, generator_name: str
 ) -> dict:
     if prompt:
-        return await table_columns_selection_generator(
-            prompt=prompt.get("prompt")
-        ), generator_name
+        return (
+            await table_columns_selection_generator(prompt=prompt.get("prompt")),
+            generator_name,
+        )
     else:
         return {}, generator_name
 
@@ -432,12 +653,28 @@ class RetrievalResults(BaseModel):
     results: list[MatchingTable]
 
 
+class SchemaLinkingEntities(BaseModel):
+    table_names: list[str] = []
+    column_names: list[str] = []
+    business_terms: list[str] = []
+
+
 RETRIEVAL_MODEL_KWARGS = {
     "response_format": {
         "type": "json_schema",
         "json_schema": {
             "name": "retrieval_schema",
             "schema": RetrievalResults.model_json_schema(),
+        },
+    }
+}
+
+SCHEMA_LINKING_ENTITY_MODEL_KWARGS = {
+    "response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "schema_linking_entities",
+            "schema": SchemaLinkingEntities.model_json_schema(),
         },
     }
 }
@@ -467,9 +704,16 @@ class DbSchemaRetrieval(BasicPipeline):
                 system_prompt=table_columns_selection_system_prompt,
                 generation_kwargs=RETRIEVAL_MODEL_KWARGS,
             ),
+            "schema_linking_entity_generator": llm_provider.get_generator(
+                system_prompt=schema_linking_entity_system_prompt,
+                generation_kwargs=SCHEMA_LINKING_ENTITY_MODEL_KWARGS,
+            ),
             "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=table_columns_selection_user_prompt_template
+            ),
+            "schema_linking_entity_prompt_builder": PromptBuilder(
+                template=schema_linking_entity_user_prompt_template
             ),
         }
 

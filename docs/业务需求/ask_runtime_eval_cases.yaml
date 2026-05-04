@@ -1,0 +1,63 @@
+# 问数 runtime 结构化离线断言
+#
+# 这些用例不调用 LLM / UI，不替代 `问数回归测试计划.md` 的严格 UI E2E。
+# 目的：把 P0/P1/P2/P3 中最容易回归的策略边界变成可重复 smoke：
+# - 澄清路由；
+# - inactive 模板生命周期；
+# - 配置化外部依赖阻断；
+# - 外部补数 required columns / grain 校验；
+# - Policy as Code 缺槽位判定；
+# - 结构化 diagnostics 指标输出。
+#
+# 执行：
+#   cd wren-ai-service
+#   poetry run python ../docs/业务需求/verify_ask_runtime_eval_cases.py
+
+cases:
+  - case_id: P0_CLARIFY_TENANT
+    kind: missing_tenant_clarification
+    query: 统计渠道990011在2026-04-01到2026-04-03首充用户
+    expected_route: clarification_required
+    expected_missing_slots:
+      - tenant_plat_id
+
+  - case_id: P0_INACTIVE_TEMPLATE_FALLBACK
+    kind: inactive_template_fallback
+    query: 首存金额分桶
+    expected_fallback_reason: inactive_template
+
+  - case_id: P2_CONFIGURED_EXTERNAL_BLOCK
+    kind: configured_external_block
+    query: 按渠道计算 ROI
+    expected_external_dependencies:
+      - ad_spend
+
+  - case_id: P2_EXTERNAL_SUPPLY_REJECTS_MISSING_COLUMNS
+    kind: external_supply_rejects_missing_columns
+    query: 按渠道计算 ROI
+    expected_external_dependencies:
+      - ad_spend
+
+  - case_id: P2_EXTERNAL_SUPPLY_ACCEPTS_REQUIRED_COLUMNS
+    kind: external_supply_accepts_required_columns
+    query: 按渠道计算 ROI
+    expected_external_dependencies:
+      - ad_spend
+
+  - case_id: P2_POLICY_REQUIRED_SLOT
+    kind: policy_required_slot
+    query: 统计渠道990011首充用户
+    expected_missing_slots:
+      - tenant_plat_id
+
+  - case_id: P2_SEMANTIC_PLAN_ROUTE_GUARD
+    kind: semantic_plan_route_guard
+    query: 统计渠道990011首充用户
+    expected_route: clarification_required
+    expected_missing_slots:
+      - tenant_plat_id
+
+  - case_id: P1_TEMPLATE_CONFIDENCE_SOURCE_ABLATION
+    kind: template_confidence_ablation
+    query: 统计租户平台990001渠道990011在2026-04-01到2026-04-03充值金额
+    expected_score_drop_min: 0.25

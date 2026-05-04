@@ -30,7 +30,7 @@ export default function ChartAnswerPinModal({
 }) {
   const [dashboardName, setDashboardName] = useState('');
   const [timeFilterMode, setTimeFilterMode] =
-    useState<DashboardTimeFilterMode>('rolling_window');
+    useState<DashboardTimeFilterMode>('fixed');
   const [timeFilterAnchor, setTimeFilterAnchor] =
     useState<DashboardTimeFilterAnchor>('last_complete_day');
   const inputRef = useRef<InputRef>(null);
@@ -38,7 +38,7 @@ export default function ChartAnswerPinModal({
   useEffect(() => {
     if (!open) {
       setDashboardName('');
-      setTimeFilterMode('rolling_window');
+      setTimeFilterMode('fixed');
       setTimeFilterAnchor('last_complete_day');
       return;
     }

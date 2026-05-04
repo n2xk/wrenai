@@ -812,6 +812,41 @@ async def test_question_recommendation_accepts_legacy_list_normalized_payload():
 
 
 @pytest.mark.asyncio
+async def test_question_recommendation_can_skip_sql_validation_for_fast_ui_chips():
+    service = make_question_recommendation_service()
+    event_id = "recommendation-fast-chips"
+    service[event_id] = QuestionRecommendation.Event(event_id=event_id)
+    request = QuestionRecommendation.Request.model_validate(
+        {
+            "event_id": event_id,
+            "mdl": '{"models":[{"name":"orders"}]}',
+            "runtimeIdentity": {
+                "workspaceId": "workspace-1",
+                "knowledgeBaseId": "kb-1",
+                "deployHash": "deploy-1",
+            },
+            "validate_sql": False,
+            "max_questions": 1,
+            "max_categories": 1,
+        }
+    )
+
+    result = await service.recommend(request)
+    resource = result["resource"]
+
+    assert resource.status == "finished"
+    assert "销售" in resource.response["questions"]
+    assert (
+        resource.response["questions"]["销售"][0]["question"]
+        == "本月 GMV 是多少"
+    )
+    assert resource.response["questions"]["销售"][0]["sql"] == ""
+    assert service._pipelines["sql_generation"].run.await_count == 0
+    assert service._pipelines["sql_pairs_retrieval"].run.await_count == 0
+    assert service._pipelines["instructions_retrieval"].run.await_count == 0
+
+
+@pytest.mark.asyncio
 async def test_instructions_index_delete_use_runtime_deploy_hash_when_project_id_is_missing():
     pipeline = CleanablePipelineStub()
     service = InstructionsService({"instructions_indexing": pipeline})

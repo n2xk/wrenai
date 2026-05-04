@@ -214,6 +214,7 @@ class QuestionRecommendation:
         max_categories: int = 3
         regenerate: bool = False
         allow_data_preview: bool = True
+        validate_sql: bool = True
 
     async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
@@ -224,6 +225,15 @@ class QuestionRecommendation:
             questions = normalized
         else:
             questions = []
+        if not request.get("validate_sql", True):
+            self._store_unvalidated_questions(
+                questions,
+                request["event_id"],
+                request["max_questions"],
+                request["max_categories"],
+            )
+            return
+
         validation_tasks = [
             self._validate_question(
                 question,
@@ -237,6 +247,51 @@ class QuestionRecommendation:
         ]
 
         await asyncio.gather(*validation_tasks, return_exceptions=True)
+
+    def _store_unvalidated_questions(
+        self,
+        questions: list,
+        request_id: str,
+        max_questions: int,
+        max_categories: int,
+    ):
+        current = self._cache[request_id]
+        grouped_questions = current.response.setdefault("questions", {})
+
+        for candidate in questions:
+            if isinstance(candidate, str):
+                candidate = {"question": candidate}
+            elif not isinstance(candidate, dict):
+                continue
+
+            candidate_question = (
+                candidate.get("question")
+                or candidate.get("prompt")
+                or candidate.get("label")
+            )
+            if not candidate_question:
+                continue
+
+            category = candidate.get("category") or "related_question"
+            if (
+                category not in grouped_questions
+                and len(grouped_questions) >= max_categories
+            ):
+                continue
+
+            category_questions = grouped_questions.setdefault(category, [])
+            if len(category_questions) >= max_questions:
+                continue
+
+            category_questions.append(
+                {
+                    **candidate,
+                    "question": candidate_question,
+                    "label": candidate.get("label") or candidate_question,
+                    "prompt": candidate.get("prompt") or candidate_question,
+                    "sql": candidate.get("sql") or "",
+                }
+            )
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
@@ -280,6 +335,7 @@ class QuestionRecommendation:
                 "runtime_scope_id": runtime_scope_id,
                 "event_id": input.event_id,
                 "allow_data_preview": input.allow_data_preview,
+                "validate_sql": input.validate_sql,
             }
 
             await self._recommend(request)

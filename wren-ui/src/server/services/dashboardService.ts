@@ -64,13 +64,6 @@ const isUniqueConstraintViolation = (error: unknown, constraintName: string) =>
   (!(error as { constraint?: unknown }).constraint ||
     (error as { constraint?: unknown }).constraint === constraintName);
 
-const markExistingDashboardItem = (
-  item: DashboardItem,
-): DashboardItemCreateResult => ({
-  ...item,
-  alreadyExists: true,
-});
-
 const toDashboardItemRuntimeIdentity = (
   runtimeIdentity?: CreateDashboardItemInput['sourceRuntimeIdentity'],
 ) => {
@@ -94,6 +87,23 @@ const toDashboardItemRuntimeIdentity = (
     deployHash: normalizedRuntimeIdentity.deployHash ?? null,
   };
 };
+
+const buildDashboardItemDetail = (
+  input: CreateDashboardItemInput,
+): DashboardItem['detail'] => ({
+  sql: input.sql,
+  sqlMode: input.sqlMode,
+  chartSchema: input.chartSchema,
+  renderHints: input.renderHints,
+  canonicalizationVersion: input.canonicalizationVersion ?? null,
+  chartDataProfile: input.chartDataProfile || undefined,
+  validationErrors: input.validationErrors || [],
+  queryControls: input.queryControls || undefined,
+  runtimeIdentity: toDashboardItemRuntimeIdentity(input.sourceRuntimeIdentity),
+  sourceResponseId: input.sourceResponseId ?? null,
+  sourceThreadId: input.sourceThreadId ?? null,
+  sourceQuestion: input.sourceQuestion ?? null,
+});
 
 export class DashboardService implements IDashboardService {
   private dashboardItemRepository: DashboardServiceDependencies['dashboardItemRepository'];
@@ -551,23 +561,29 @@ export class DashboardService implements IDashboardService {
 
   private async markOrUpdateExistingDashboardItem(
     item: DashboardItem,
-    queryControls?: CreateDashboardItemInput['queryControls'],
+    input: CreateDashboardItemInput,
   ): Promise<DashboardItemCreateResult> {
-    if (!queryControls) {
-      return markExistingDashboardItem(item);
-    }
-
+    const nextDetail = buildDashboardItemDetail(input);
     const updatedItem = await this.dashboardItemRepository.updateOne(item.id, {
       detail: {
         ...item.detail,
-        queryControls,
+        ...nextDetail,
+        queryControls:
+          input.queryControls !== undefined
+            ? input.queryControls
+            : item.detail.queryControls,
+        runtimeIdentity:
+          nextDetail.runtimeIdentity !== undefined
+            ? nextDetail.runtimeIdentity
+            : item.detail.runtimeIdentity,
       },
     });
 
     return {
       ...updatedItem,
       alreadyExists: true,
-      updatedQueryControls: true,
+      updatedQueryControls: input.queryControls !== undefined,
+      updatedChartDetail: true,
     };
   }
 
@@ -590,7 +606,7 @@ export class DashboardService implements IDashboardService {
       if (existingDashboardItem) {
         return await this.markOrUpdateExistingDashboardItem(
           existingDashboardItem,
-          input.queryControls,
+          input,
         );
       }
     }
@@ -598,26 +614,14 @@ export class DashboardService implements IDashboardService {
     const layout = await calculateDashboardNewLayout(
       this.dashboardItemRepository,
       input.dashboardId,
+      input.type,
     );
     try {
       return await this.dashboardItemRepository.createOne({
         dashboardId: input.dashboardId,
         type: input.type,
         detail: {
-          sql: input.sql,
-          sqlMode: input.sqlMode,
-          chartSchema: input.chartSchema,
-          renderHints: input.renderHints,
-          canonicalizationVersion: input.canonicalizationVersion ?? null,
-          chartDataProfile: input.chartDataProfile || undefined,
-          validationErrors: input.validationErrors || [],
-          queryControls: input.queryControls || undefined,
-          runtimeIdentity: toDashboardItemRuntimeIdentity(
-            input.sourceRuntimeIdentity,
-          ),
-          sourceResponseId: input.sourceResponseId ?? null,
-          sourceThreadId: input.sourceThreadId ?? null,
-          sourceQuestion: input.sourceQuestion ?? null,
+          ...buildDashboardItemDetail(input),
         },
         layout,
       });
@@ -638,7 +642,7 @@ export class DashboardService implements IDashboardService {
         if (existingDashboardItem) {
           return await this.markOrUpdateExistingDashboardItem(
             existingDashboardItem,
-            input.queryControls,
+            input,
           );
         }
       }

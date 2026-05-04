@@ -889,3 +889,17 @@ CREATE TABLE `bds_bet_order_detail` (
   KEY `idx_modify_time` (`modify_time`),
   KEY `idx_third_order_no_and_game_line_id` (`third_order_no`,`game_line_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+
+CREATE TABLE `marketing_external_metrics_daily` (
+  `biz_date` date NOT NULL COMMENT '业务日期',
+  `tenant_plat_id` bigint(20) NOT NULL COMMENT '商户平台ID, @link tenant_plat.id',
+  `channel_id` bigint(20) NOT NULL COMMENT '渠道ID, @link channel.id',
+  `ad_spend` decimal(19,4) DEFAULT NULL COMMENT '投放金额 / 买量成本',
+  `access_pv` bigint(20) DEFAULT NULL COMMENT '访问PV',
+  `access_uv` bigint(20) DEFAULT NULL COMMENT '访问UV',
+  `download_click_uv` bigint(20) DEFAULT NULL COMMENT '下载点击UV',
+  `source_name` varchar(64) NOT NULL DEFAULT 'full_regression_sample' COMMENT '外部数据来源标识',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '导入时间',
+  PRIMARY KEY (`biz_date`,`tenant_plat_id`,`channel_id`),
+  KEY `idx_external_metrics_channel_date` (`tenant_plat_id`,`channel_id`,`biz_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地FULL回归外部投放与流量指标样例表';

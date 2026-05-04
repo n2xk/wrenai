@@ -263,7 +263,7 @@ export const detectDashboardTimeFilterCandidate = (
     }
   }
 
-  return candidates.length === 1 ? candidates[0] : null;
+  return resolveDetectedTimeFilterCandidate(candidates);
 };
 
 const isDashboardTimeFilterAiProposal = (
@@ -505,33 +505,104 @@ const hasOrderedSqlDateLiterals = ({
   return Boolean(endMatch);
 };
 
+const getCandidateDateWindowKey = (candidate: DashboardTimeFilterCandidate) =>
+  JSON.stringify({
+    endLiteral: candidate.sqlBinding.endLiteral,
+    endLiteralOffsetDays: candidate.sqlBinding.endLiteralOffsetDays || 0,
+    kind: candidate.sqlBinding.kind,
+    originalEndDate: candidate.originalEndDate,
+    originalStartDate: candidate.originalStartDate,
+    startLiteral: candidate.sqlBinding.startLiteral,
+    timezone: candidate.timezone,
+    windowDays: candidate.windowDays,
+  });
+
+const resolveDetectedTimeFilterCandidate = (
+  candidates: DashboardTimeFilterCandidate[],
+) => {
+  if (candidates.length <= 1) {
+    return candidates[0] || null;
+  }
+
+  const firstCandidateKey = getCandidateDateWindowKey(candidates[0]);
+  return candidates.every(
+    (candidate) => getCandidateDateWindowKey(candidate) === firstCandidateKey,
+  )
+    ? candidates[0]
+    : null;
+};
+
 const applyDateToSqlLiteral = (literal: string, replacementDate: string) =>
   literal.replace(/^\d{4}-\d{2}-\d{2}/, replacementDate);
 
-const replaceFirstQuotedLiteral = ({
-  literal,
+const replaceQuotedLiteralMatch = ({
+  match,
   replacement,
   sql,
-  startIndex = 0,
 }: {
-  literal: string;
+  match: RegExpExecArray;
   replacement: string;
   sql: string;
-  startIndex?: number;
+}) =>
+  `${sql.slice(0, match.index)}${match[1]}${replacement}${match[1]}${sql.slice(
+    match.index + match[0].length,
+  )}`;
+
+const replaceOrderedQuotedLiteralPairs = ({
+  endLiteral,
+  endReplacement,
+  sql,
+  startLiteral,
+  startReplacement,
+}: {
+  endLiteral: string;
+  endReplacement: string;
+  sql: string;
+  startLiteral: string;
+  startReplacement: string;
 }) => {
-  const match = findQuotedLiteral({ literal, sql, startIndex });
-  if (!match) {
-    return { replaced: false, sql, endIndex: startIndex };
+  let nextSql = sql;
+  let searchIndex = 0;
+  let replaced = false;
+
+  while (searchIndex < nextSql.length) {
+    const startMatch = findQuotedLiteral({
+      literal: startLiteral,
+      sql: nextSql,
+      startIndex: searchIndex,
+    });
+    if (!startMatch) {
+      break;
+    }
+
+    const endMatch = findQuotedLiteral({
+      literal: endLiteral,
+      sql: nextSql,
+      startIndex: startMatch.index + startMatch[0].length,
+    });
+    if (!endMatch) {
+      break;
+    }
+
+    const endReplacementText = `${endMatch[1]}${endReplacement}${endMatch[1]}`;
+    const startReplacementText = `${startMatch[1]}${startReplacement}${startMatch[1]}`;
+    const startDelta = startReplacementText.length - startMatch[0].length;
+
+    nextSql = replaceQuotedLiteralMatch({
+      match: endMatch,
+      replacement: endReplacement,
+      sql: nextSql,
+    });
+    nextSql = replaceQuotedLiteralMatch({
+      match: startMatch,
+      replacement: startReplacement,
+      sql: nextSql,
+    });
+    searchIndex = endMatch.index + startDelta + endReplacementText.length;
+    replaced = true;
   }
 
-  const nextSql = `${sql.slice(0, match.index)}${match[1]}${replacement}${
-    match[1]
-  }${sql.slice(match.index + match[0].length)}`;
-  return {
-    replaced: true,
-    sql: nextSql,
-    endIndex: match.index + replacement.length + 2,
-  };
+  return replaced ? nextSql : sql;
 };
 
 export const compileDashboardItemSql = ({
@@ -555,31 +626,21 @@ export const compileDashboardItemSql = ({
 
     const window = calculateDashboardTimeFilterWindow(filter, now);
     const endLiteralOffsetDays = filter.sqlBinding.endLiteralOffsetDays || 0;
-    const startReplacement = replaceFirstQuotedLiteral({
+    return replaceOrderedQuotedLiteralPairs({
       sql: currentSql,
-      literal: filter.sqlBinding.startLiteral,
-      replacement: applyDateToSqlLiteral(
+      startLiteral: filter.sqlBinding.startLiteral,
+      endLiteral: filter.sqlBinding.endLiteral,
+      startReplacement: applyDateToSqlLiteral(
         filter.sqlBinding.startLiteral,
         window.startDate,
       ),
-    });
-    if (!startReplacement.replaced) {
-      return currentSql;
-    }
-
-    const endReplacement = replaceFirstQuotedLiteral({
-      sql: startReplacement.sql,
-      literal: filter.sqlBinding.endLiteral,
-      replacement: applyDateToSqlLiteral(
+      endReplacement: applyDateToSqlLiteral(
         filter.sqlBinding.endLiteral,
         endLiteralOffsetDays
           ? addDaysToIsoDate(window.endDate, -endLiteralOffsetDays)
           : window.endDate,
       ),
-      startIndex: startReplacement.endIndex,
     });
-
-    return endReplacement.replaced ? endReplacement.sql : currentSql;
   }, sql);
 };
 

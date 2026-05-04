@@ -518,7 +518,11 @@ async def test_deepagents_reranks_game_type_templates_ahead_of_generic_segment_t
 
 
 @pytest.mark.asyncio
-async def test_deepagents_routes_missing_external_source_questions_to_general():
+async def test_deepagents_routes_missing_external_source_questions_to_general(
+    monkeypatch,
+):
+    monkeypatch.setenv("WREN_LEGACY_EXTERNAL_DEPENDENCY_FALLBACK_ENABLED", "1")
+
     pipelines = make_pipelines(
         instructions_documents=[{"instruction": "已有缺失数据源规则"}],
     )

@@ -17,7 +17,7 @@ export const resolveDashboardGridWidth = (containerWidth: number) =>
   Math.max(containerWidth, 0);
 
 export const resolveDashboardGridItemMinHeight = (item: DashboardGridItem) =>
-  item.type === DashboardItemType.NUMBER ? 1 : 2;
+  item.type === DashboardItemType.NUMBER ? 1 : 3;
 
 export const resolveDashboardGridLayouts = (items: DashboardGridItem[]) =>
   items.map((item) => getLayoutToGrid(item));

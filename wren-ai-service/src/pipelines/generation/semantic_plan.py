@@ -60,11 +60,26 @@ SQL: {{ history.sql }}
 {% endfor %}
 {% endif %}
 
-{% if instructions %}
-### BUSINESS INSTRUCTIONS ###
-{% for instruction in instructions %}
+{% if instructions.business_glossary or instructions.query_rules or instructions.context_notes %}
+### USER INSTRUCTIONS ###
+{% if instructions.business_glossary %}
+#### BUSINESS GLOSSARY ####
+{% for instruction in instructions.business_glossary %}
 {{ loop.index }}. {{ instruction }}
 {% endfor %}
+{% endif %}
+{% if instructions.query_rules %}
+#### QUERY RULES ####
+{% for instruction in instructions.query_rules %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
+{% if instructions.context_notes %}
+#### CONTEXT NOTES ####
+{% for instruction in instructions.context_notes %}
+{{ loop.index }}. {{ instruction }}
+{% endfor %}
+{% endif %}
 {% endif %}
 
 {% if deterministic_plan %}
@@ -186,7 +201,10 @@ def prompt(
         query=query,
         histories=histories or [],
         sql_samples=sql_samples or [],
-        instructions=construct_instructions(instructions=instructions),
+        instructions=construct_instructions(
+            instructions=instructions,
+            group_by_asset_type=True,
+        ),
         deterministic_plan=deterministic_plan or {},
         language=(configuration.language if configuration else None) or "English",
     )

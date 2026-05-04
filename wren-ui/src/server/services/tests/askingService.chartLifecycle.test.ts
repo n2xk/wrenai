@@ -58,6 +58,7 @@ describe('AskingService', () => {
         runtimeIdentity,
         { language: 'English' },
         'scope-1',
+        '为折线图添加数据标签',
       );
 
       expect(service.wrenAIAdaptor.generateChart).toHaveBeenCalledWith(
@@ -72,6 +73,7 @@ describe('AskingService', () => {
               ['B', 2],
             ],
           }),
+          customInstruction: '为折线图添加数据标签',
           runtimeScopeId: 'scope-1',
           runtimeIdentity: canonicalRuntimeIdentity,
         }),
@@ -90,6 +92,8 @@ describe('AskingService', () => {
                 { name: 'category', type: 'string' },
                 { name: 'value', type: 'number' },
               ],
+              customInstruction: '为折线图添加数据标签',
+              chartRequestQuestion: 'chart it',
             }),
             thinking: expect.objectContaining({
               currentStepKey: 'chart.chart_type_selected',

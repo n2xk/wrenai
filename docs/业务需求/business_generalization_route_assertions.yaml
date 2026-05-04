@@ -114,3 +114,37 @@ cases:
     diagnostics_must_include:
       - semantic_plan
       - template_decision
+
+  - case_id: RANK01
+    forbidden_templates:
+      - T09
+    diagnostics_must_include:
+      - template_decision
+
+  - case_id: RANK02
+    forbidden_templates:
+      - T01
+    diagnostics_must_include:
+      - template_decision
+
+  - case_id: RANK03
+    forbidden_templates:
+      - T03
+    diagnostics_must_include:
+      - template_decision
+
+  - case_id: RANK04
+    forbidden_templates:
+      - T09
+    diagnostics_must_include:
+      - template_decision
+
+  - case_id: RANK05
+    expected_route: normal_text_to_sql
+    forbid_hard_template: true
+    forbidden_templates:
+      - T01
+      - T03
+      - T08
+    diagnostics_must_include:
+      - template_decision

@@ -10,6 +10,22 @@ ROOT = Path(__file__).resolve().parent
 SOURCE = ROOT / "数据报表表结构Design_with_comments（4.15 v1.2）.sql"
 TARGET = ROOT / "local_tidb_schema.sql"
 
+FULL_REGRESSION_EXTERNAL_DDL = """
+CREATE TABLE `marketing_external_metrics_daily` (
+  `biz_date` date NOT NULL COMMENT '业务日期',
+  `tenant_plat_id` bigint(20) NOT NULL COMMENT '商户平台ID, @link tenant_plat.id',
+  `channel_id` bigint(20) NOT NULL COMMENT '渠道ID, @link channel.id',
+  `ad_spend` decimal(19,4) DEFAULT NULL COMMENT '投放金额 / 买量成本',
+  `access_pv` bigint(20) DEFAULT NULL COMMENT '访问PV',
+  `access_uv` bigint(20) DEFAULT NULL COMMENT '访问UV',
+  `download_click_uv` bigint(20) DEFAULT NULL COMMENT '下载点击UV',
+  `source_name` varchar(64) NOT NULL DEFAULT 'full_regression_sample' COMMENT '外部数据来源标识',
+  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '导入时间',
+  PRIMARY KEY (`biz_date`,`tenant_plat_id`,`channel_id`),
+  KEY `idx_external_metrics_channel_date` (`tenant_plat_id`,`channel_id`,`biz_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='本地FULL回归外部投放与流量指标样例表';
+"""
+
 
 def build_local_schema(raw_sql: str) -> tuple[str, int, int]:
     # The source document ends with an ES mapping JSON block. Local TiDB import
@@ -34,7 +50,11 @@ def build_local_schema(raw_sql: str) -> tuple[str, int, int]:
         "-- Local TiDB variant: partition clauses, TTL hints, and trailing ES mapping are removed.\n\n"
     )
 
-    return header + raw_sql, partition_count, ttl_count
+    return (
+        header + raw_sql + "\n" + FULL_REGRESSION_EXTERNAL_DDL.strip() + "\n",
+        partition_count,
+        ttl_count,
+    )
 
 
 def main() -> None:

@@ -109,6 +109,11 @@ export type AdjustThreadResponseChartInput = {
   yAxis?: string | null;
 };
 
+export type GenerateThreadResponseChartInput = {
+  customInstruction?: string | null;
+  question?: string | null;
+};
+
 export type ResultQuestion = {
   category: string;
   question: string;
@@ -426,6 +431,8 @@ export type ThreadResponseChartDetail = {
       name: string;
       type?: string | null;
     }> | null;
+    customInstruction?: string | null;
+    chartRequestQuestion?: string | null;
     lastErrorCode?: string | null;
     lastErrorMessage?: string | null;
     submittedAt?: string | null;

@@ -50,7 +50,9 @@ esac
 ensure_started_or_restart() {
   local app="$1"
   if pm2 describe "${app}" >/dev/null 2>&1; then
-    pm2 restart "${app}" --update-env
+    # Restart through the ecosystem file, not by process name only, so changes
+    # in docker/env/test.local and docker/pm2.test.config.cjs are applied.
+    pm2 restart "${PM2_CONFIG}" --only "${app}" --update-env
   else
     pm2 start "${PM2_CONFIG}" --only "${app}" --update-env
   fi
