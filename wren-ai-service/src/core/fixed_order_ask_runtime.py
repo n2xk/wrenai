@@ -27,15 +27,21 @@ from src.core.ask_runtime_patterns import (
 from src.core.ask_runtime_patterns import (
     load_regex_pattern_config as _load_regex_pattern_config,
 )
-from src.core.slot_extractor import (
-    DATE_PATTERN,
-    extract_channel_ids as _shared_extract_channel_ids,
-    extract_date_range as _shared_extract_date_range,
-    extract_tenant_plat_ids as _shared_extract_tenant_plat_ids,
-    normalize_question_skeleton,
-)
 from src.core.mixed_answer_composer import MixedAnswerComposer
 from src.core.pipeline import BasicPipeline
+from src.core.slot_extractor import (
+    DATE_PATTERN,
+    normalize_question_skeleton,
+)
+from src.core.slot_extractor import (
+    extract_channel_ids as _shared_extract_channel_ids,
+)
+from src.core.slot_extractor import (
+    extract_date_range as _shared_extract_date_range,
+)
+from src.core.slot_extractor import (
+    extract_tenant_plat_ids as _shared_extract_tenant_plat_ids,
+)
 from src.pipelines.common import retrieve_data_source
 
 logger = logging.getLogger("wren-ai-service")
@@ -307,6 +313,16 @@ SQL_GENERATION_STRATEGY_HINTS = (
         "先按 QUERY DECOMPOSITION PLAN 拆成 CTE：基础过滤、业务 cohort/TOPN 分层、"
         "聚合指标、最终宽表/明细输出，然后组合成一条 SQL。",
     ),
+    (
+        "business_guard_first",
+        "优先满足业务护栏：租户/渠道/日期/分层/外部输入等已解析 slot 必须进入 WHERE、JOIN "
+        "或 inline CTE；不要为了让 SQL 更短而丢失业务过滤条件。",
+    ),
+    (
+        "result_consistency_first",
+        "优先生成结果可执行、行列稳定、便于 execution vote 比对的 SQL；最终 SELECT "
+        "必须保留用户要求的粒度和对账列，避免输出解释性常量表。",
+    ),
 )
 
 
@@ -328,12 +344,21 @@ def _execution_voting_enabled() -> bool:
 
 
 def _sql_generation_candidate_count() -> int:
-    raw_value = os.getenv("WREN_SQL_GENERATION_CANDIDATE_COUNT", "3")
+    raw_value = os.getenv("WREN_SQL_GENERATION_CANDIDATE_COUNT", "5")
     try:
         parsed_value = int(raw_value)
     except (TypeError, ValueError):
-        parsed_value = 3
+        parsed_value = 5
     return max(1, min(parsed_value, len(SQL_GENERATION_STRATEGY_HINTS)))
+
+
+def _sql_execution_preview_limit() -> int:
+    raw_value = os.getenv("WREN_SQL_EXECUTION_PREVIEW_LIMIT", "20")
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        parsed_value = 20
+    return max(1, min(parsed_value, 200))
 
 
 def _query_complexity_features(
@@ -380,66 +405,141 @@ def build_query_decomposition_plan(
     semantic_plan: Optional[dict[str, Any]] = None,
     table_names: Optional[Sequence[str]] = None,
 ) -> dict[str, Any]:
+    def build_step(
+        *,
+        name: str,
+        instruction: str,
+        outputs: Sequence[str],
+        depends_on: Sequence[str] = (),
+        validations: Sequence[str] = (),
+    ) -> dict[str, Any]:
+        return {
+            "name": name,
+            "instruction": instruction,
+            "depends_on": list(depends_on),
+            "outputs": list(outputs),
+            "validations": list(validations),
+            "cte_required": True,
+        }
+
     features = _query_complexity_features(
         query,
         semantic_plan=semantic_plan,
         table_names=table_names,
     )
     enabled = _query_decomposition_enabled() and len(features) >= 2
-    steps: list[dict[str, str]] = []
+    steps: list[dict[str, Any]] = []
     if enabled:
         steps.append(
-            {
-                "name": "base_scope",
-                "instruction": "先建立基础数据范围 CTE：租户、渠道、日期、状态等过滤条件必须集中处理。",
-            }
+            build_step(
+                name="base_scope",
+                instruction="先建立基础数据范围 CTE：租户、渠道、日期、状态等过滤条件必须集中处理。",
+                outputs=["scoped rows", "business keys", "date/channel/tenant filters"],
+                validations=[
+                    "resolved tenant/channel/date slots are present when available",
+                    "status filters use the business-valid states from retrieved schema/templates",
+                ],
+            )
         )
         if "cohort" in features:
             steps.append(
-                {
-                    "name": "cohort_users",
-                    "instruction": "单独建立首存/首充 cohort CTE，保留 cohort 日期、玩家、渠道和租户字段。",
-                }
+                build_step(
+                    name="cohort_users",
+                    instruction="单独建立首存/首充 cohort CTE，保留 cohort 日期、玩家、渠道和租户字段。",
+                    depends_on=["base_scope"],
+                    outputs=["player_id", "cohort_date", "tenant/channel keys"],
+                    validations=[
+                        "cohort date is derived from first successful deposit/recharge",
+                        "cohort CTE does not multiply users before aggregation",
+                    ],
+                )
             )
         if "topn_segment" in features:
             steps.append(
-                {
-                    "name": "segment_users",
-                    "instruction": "单独建立 TOPN / 非 TOPN 分层 CTE，后续指标必须按该分层 JOIN 或聚合。",
-                }
+                build_step(
+                    name="segment_users",
+                    instruction="单独建立 TOPN / 非 TOPN 分层 CTE，后续指标必须按该分层 JOIN 或聚合。",
+                    depends_on=["base_scope"],
+                    outputs=["player_id", "user_segment", "rank/order metric"],
+                    validations=[
+                        "TOPN and NON_TOPN are mutually exclusive",
+                        "ranking order and tie breaker are explicit",
+                    ],
+                )
             )
         if "external_metric" in features:
             steps.append(
-                {
-                    "name": "external_metrics",
-                    "instruction": "外部补充数据只从用户提供的 inline CTE 或已配置依赖进入，不得编造外部物理表。",
-                }
+                build_step(
+                    name="external_metrics",
+                    instruction="外部补充数据只从用户提供的 inline CTE 或已配置依赖进入，不得编造外部物理表。",
+                    depends_on=["base_scope"],
+                    outputs=["external grain keys", "supplied metric columns"],
+                    validations=[
+                        "external metrics use supplied_external_* CTE or configured dependency only",
+                        "joins use declared grain keys and preserve internal rows with LEFT JOIN when optional",
+                    ],
+                )
             )
         steps.append(
-            {
-                "name": "metric_aggregation",
-                "instruction": "按目标 grain 聚合内部指标；派生指标在最终 SELECT 中统一计算。",
-            }
+            build_step(
+                name="metric_aggregation",
+                instruction="按目标 grain 聚合内部指标；派生指标在最终 SELECT 中统一计算。",
+                depends_on=[
+                    step["name"]
+                    for step in steps
+                    if step["name"] in {"base_scope", "cohort_users", "segment_users"}
+                ],
+                outputs=["target grain", "base metrics", "audit counts"],
+                validations=[
+                    "GROUP BY exactly matches requested grain before final pivot",
+                    "ratio denominators use NULLIF or equivalent zero guard",
+                ],
+            )
         )
         if "wide_excel_shape" in features:
             steps.append(
-                {
-                    "name": "final_pivot",
-                    "instruction": "需要 Excel 同形宽表时，用条件聚合生成固定列；汇总行必须与明细行口径一致。",
-                }
+                build_step(
+                    name="final_pivot",
+                    instruction="需要 Excel 同形宽表时，用条件聚合生成固定列；汇总行必须与明细行口径一致。",
+                    depends_on=["metric_aggregation"],
+                    outputs=["fixed output columns", "summary/detail rows"],
+                    validations=[
+                        "fixed columns appear in the requested Excel order",
+                        "summary rows are composed from the same metric_aggregation CTE",
+                    ],
+                )
             )
         else:
             steps.append(
-                {
-                    "name": "final_select",
-                    "instruction": "最终 SELECT 只输出用户请求的维度、指标和必要对账列。",
-                }
+                build_step(
+                    name="final_select",
+                    instruction="最终 SELECT 只输出用户请求的维度、指标和必要对账列。",
+                    depends_on=["metric_aggregation"],
+                    outputs=["requested dimensions", "requested metrics", "audit columns"],
+                    validations=[
+                        "no unrequested high-cardinality fields are leaked",
+                        "ORDER BY is stable when result is a report/table",
+                    ],
+                )
             )
 
     return {
         "enabled": enabled,
         "features": features,
         "steps": steps,
+        "strategy": "structured_cte_dag" if enabled else "single_sql",
+        "required_ctes": [step["name"] for step in steps if step.get("cte_required")],
+        "composer": {
+            "mode": "single_sql_with_named_ctes" if enabled else "direct_single_sql",
+            "final_step": steps[-1]["name"] if steps else None,
+        },
+        "validation_checks": list(
+            dict.fromkeys(
+                validation
+                for step in steps
+                for validation in (step.get("validations") or [])
+            )
+        ),
     }
 
 
@@ -447,12 +547,19 @@ def _format_query_decomposition_instruction(plan: dict[str, Any]) -> str:
     if not plan.get("enabled"):
         return ""
     lines = [
-        "QUERY DECOMPOSITION PLAN：该问题较复杂，生成 SQL 时必须先拆解再组合。",
+        "QUERY DECOMPOSITION PLAN：该问题较复杂，生成 SQL 时必须按结构化 CTE DAG 先拆解再组合。",
         f"复杂度特征：{', '.join(plan.get('features') or [])}",
+        "要求：每个步骤优先落成同名 CTE；最终 SELECT 只从最后一个聚合/透视步骤输出。",
         "推荐 CTE / 生成步骤：",
     ]
     for index, step in enumerate(plan.get("steps") or [], start=1):
-        lines.append(f"{index}. {step.get('name')}: {step.get('instruction')}")
+        depends_on = ", ".join(step.get("depends_on") or []) or "无"
+        outputs = ", ".join(step.get("outputs") or []) or "未指定"
+        validations = "; ".join(step.get("validations") or []) or "按业务口径自检"
+        lines.append(
+            f"{index}. {step.get('name')}: {step.get('instruction')} "
+            f"依赖：{depends_on}；输出：{outputs}；校验：{validations}"
+        )
     return "\n".join(lines)
 
 
@@ -552,18 +659,221 @@ def _execution_signature_key(signature: dict[str, Any]) -> str:
     )
 
 
+def _build_sql_candidate_fingerprint(sql: Optional[str]) -> dict[str, Any]:
+    core_signature = build_sql_core_signature(sql)
+    return {
+        "ctes": core_signature.get("ctes") or [],
+        "source_tables": core_signature.get("source_tables") or [],
+        "group_by": core_signature.get("group_by") or [],
+        "aggregates": core_signature.get("aggregates") or {},
+        "join_count": core_signature.get("join_count") or 0,
+        "case_count": core_signature.get("case_count") or 0,
+        "window_count": core_signature.get("window_count") or 0,
+        "order_count": core_signature.get("order_count") or 0,
+    }
+
+
+def _sql_candidate_fingerprint_key(sql: Optional[str]) -> str:
+    fingerprint = _build_sql_candidate_fingerprint(sql)
+    return repr(
+        (
+            tuple(fingerprint.get("ctes") or []),
+            tuple(fingerprint.get("source_tables") or []),
+            tuple(fingerprint.get("group_by") or []),
+            tuple(sorted((fingerprint.get("aggregates") or {}).items())),
+            fingerprint.get("join_count"),
+            fingerprint.get("case_count"),
+            fingerprint.get("window_count"),
+            fingerprint.get("order_count"),
+        )
+    )
+
+
+def _collect_semantic_plan_slot_values(
+    semantic_plan: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    if not isinstance(semantic_plan, dict):
+        return {}
+
+    slot_values: dict[str, Any] = {}
+    filters = semantic_plan.get("filters")
+    if isinstance(filters, dict):
+        slot_values.update(
+            {key: value for key, value in filters.items() if value not in (None, "")}
+        )
+
+    for container_key in ("resolved_slots", "decision"):
+        container = semantic_plan.get(container_key)
+        if not isinstance(container, dict):
+            continue
+        resolved_slots = (
+            container.get("resolved_slots")
+            if container_key == "decision"
+            else container
+        )
+        if not isinstance(resolved_slots, dict):
+            continue
+        for key, raw_value in resolved_slots.items():
+            value = raw_value.get("value") if isinstance(raw_value, dict) else raw_value
+            if value not in (None, ""):
+                slot_values[key] = value
+
+    return slot_values
+
+
+def _sql_contains_literal(sql: Optional[str], value: Any) -> bool:
+    if value in (None, ""):
+        return True
+    normalized_sql = _normalize_sql_for_signature(sql)
+    normalized_value = str(value).strip().strip("'\"").lower()
+    if not normalized_value:
+        return True
+    return normalized_value in normalized_sql
+
+
+def _build_business_guard_check(
+    name: str,
+    passed: bool,
+    *,
+    weight: float,
+    detail: str = "",
+) -> dict[str, Any]:
+    return {
+        "name": name,
+        "passed": bool(passed),
+        "weight": weight,
+        "detail": detail,
+    }
+
+
+def _score_sql_business_guards(
+    *,
+    sql: Optional[str],
+    semantic_plan: Optional[dict[str, Any]] = None,
+    query_decomposition: Optional[dict[str, Any]] = None,
+    template_sql: Optional[str] = None,
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    slot_values = _collect_semantic_plan_slot_values(semantic_plan)
+    required_slot_keys = [
+        "tenant_plat_id",
+        "channel_id",
+        "start_date",
+        "end_date",
+        "biz_date",
+    ]
+    for slot_key in required_slot_keys:
+        if slot_key not in slot_values:
+            continue
+        value = slot_values.get(slot_key)
+        checks.append(
+            _build_business_guard_check(
+                f"slot:{slot_key}",
+                _sql_contains_literal(sql, value),
+                weight=1.0,
+                detail=str(value),
+            )
+        )
+
+    features = set((query_decomposition or {}).get("features") or [])
+    fingerprint = _build_sql_candidate_fingerprint(sql)
+    ctes = set(fingerprint.get("ctes") or [])
+
+    if "topn_segment" in features:
+        checks.append(
+            _build_business_guard_check(
+                "feature:topn_segment",
+                fingerprint.get("window_count", 0) > 0
+                or bool(re.search(r"\b(row_number|rank|dense_rank)\s*\(", sql or "", re.I)),
+                weight=1.25,
+                detail="requires explicit TOP/NON_TOP segmentation",
+            )
+        )
+    if "cohort" in features:
+        checks.append(
+            _build_business_guard_check(
+                "feature:cohort",
+                bool(re.search(r"首存|first|cohort|deposit|callback_time", sql or "", re.I)),
+                weight=1.0,
+                detail="requires cohort/first-deposit scope",
+            )
+        )
+    if "wide_excel_shape" in features:
+        checks.append(
+            _build_business_guard_check(
+                "feature:wide_excel_shape",
+                fingerprint.get("case_count", 0) > 0
+                or bool(re.search(r"\bpivot\b|\bunion\s+all\b", sql or "", re.I)),
+                weight=0.75,
+                detail="requires fixed wide report columns or summary/detail rows",
+            )
+        )
+    if "multi_table" in features:
+        checks.append(
+            _build_business_guard_check(
+                "feature:multi_table",
+                fingerprint.get("join_count", 0) > 0
+                or len(fingerprint.get("source_tables") or []) >= 2,
+                weight=0.75,
+                detail="requires multi-table composition",
+            )
+        )
+
+    required_ctes = list((query_decomposition or {}).get("required_ctes") or [])
+    if required_ctes:
+        present_cte_count = sum(1 for cte_name in required_ctes if cte_name in ctes)
+        checks.append(
+            _build_business_guard_check(
+                "decomposition:cte_coverage",
+                present_cte_count == len(required_ctes),
+                weight=1.5,
+                detail=f"{present_cte_count}/{len(required_ctes)} required CTE names present",
+            )
+        )
+
+    if template_sql:
+        checks.append(
+            _build_business_guard_check(
+                "template:core_preserved",
+                is_template_core_preserved(template_sql, sql),
+                weight=1.5,
+                detail="protected template core should be preserved when template guided",
+            )
+        )
+
+    max_score = sum(float(check.get("weight") or 0) for check in checks)
+    passed_score = sum(
+        float(check.get("weight") or 0) for check in checks if check.get("passed")
+    )
+    failed_checks = [check for check in checks if not check.get("passed")]
+    normalized_score = passed_score / max_score if max_score > 0 else 1.0
+    return {
+        "score": passed_score,
+        "max_score": max_score,
+        "normalized_score": normalized_score,
+        "failed_count": len(failed_checks),
+        "checks": checks,
+    }
+
+
 def _score_sql_generation_candidate(
     *,
     sql: str,
     candidate_index: int,
     execution_success: bool,
     execution_vote_count: int,
+    canonical_vote_count: int = 0,
+    business_guard: Optional[dict[str, Any]] = None,
     template_sql: Optional[str] = None,
 ) -> float:
     score = 0.0
     if execution_success:
         score += 2.0
     score += execution_vote_count * 0.5
+    score += max(0, canonical_vote_count - 1) * 0.25
+    if business_guard:
+        score += float(business_guard.get("normalized_score") or 0) * 1.5
+        score -= float(business_guard.get("failed_count") or 0) * 0.25
     if template_sql:
         score += SequenceMatcher(
             None,
@@ -6063,7 +6373,7 @@ class NL2SQLToolset:
         *,
         sql: str,
         runtime_scope_id: Optional[str],
-        limit: int = 20,
+        limit: Optional[int] = None,
     ) -> dict[str, Any]:
         sql_generation_pipeline = self._pipelines.get(
             "followup_sql_generation"
@@ -6082,7 +6392,7 @@ class NL2SQLToolset:
                 session,
                 runtime_scope_id=runtime_scope_id,
                 dry_run=False,
-                limit=limit,
+                limit=limit or _sql_execution_preview_limit(),
                 sql_mode="dialect",
             )
         return {
@@ -6099,6 +6409,8 @@ class NL2SQLToolset:
         *,
         runtime_scope_id: Optional[str],
         template_sql: Optional[str] = None,
+        semantic_plan: Optional[dict[str, Any]] = None,
+        query_decomposition: Optional[dict[str, Any]] = None,
     ) -> tuple[Optional[dict[str, Any]], Optional[dict[str, Any]]]:
         first_invalid_result: Optional[dict[str, Any]] = None
         valid_candidates: list[dict[str, Any]] = []
@@ -6123,9 +6435,6 @@ class NL2SQLToolset:
         if not valid_candidates:
             return None, first_invalid_result
 
-        if len(valid_candidates) == 1:
-            return valid_candidates[0], first_invalid_result
-
         preview_results = await asyncio.gather(
             *[
                 self.preview_sql_execution(
@@ -6142,8 +6451,9 @@ class NL2SQLToolset:
             return_exceptions=True,
         )
         vote_counts: dict[str, int] = {}
+        canonical_counts: dict[str, int] = {}
         preview_metadata: list[dict[str, Any]] = []
-        for preview_result in preview_results:
+        for index, preview_result in enumerate(preview_results):
             if isinstance(preview_result, Exception):
                 metadata = {
                     "success": False,
@@ -6159,10 +6469,19 @@ class NL2SQLToolset:
             )
             if key:
                 vote_counts[key] = vote_counts.get(key, 0) + 1
+            candidate_sql = str(
+                (valid_candidates[index].get("post_process") or {})
+                .get("valid_generation_result", {})
+                .get("sql")
+                or ""
+            )
+            canonical_key = _sql_candidate_fingerprint_key(candidate_sql)
+            canonical_counts[canonical_key] = canonical_counts.get(canonical_key, 0) + 1
             preview_metadata.append(metadata)
 
         best_result: Optional[dict[str, Any]] = None
         best_score = float("-inf")
+        candidate_diagnostics: list[dict[str, Any]] = []
         for index, candidate in enumerate(valid_candidates):
             valid_generation_result = (candidate.get("post_process") or {}).get(
                 "valid_generation_result",
@@ -6175,23 +6494,69 @@ class NL2SQLToolset:
                 if metadata.get("success")
                 else ""
             )
+            canonical_fingerprint = _build_sql_candidate_fingerprint(sql)
+            canonical_key = _sql_candidate_fingerprint_key(sql)
+            business_guard = _score_sql_business_guards(
+                sql=sql,
+                semantic_plan=semantic_plan,
+                query_decomposition=query_decomposition,
+                template_sql=template_sql,
+            )
             score = _score_sql_generation_candidate(
                 sql=sql,
                 candidate_index=int(candidate.get("candidate_index") or index),
                 execution_success=bool(metadata.get("success")),
                 execution_vote_count=vote_counts.get(signature_key, 0),
+                canonical_vote_count=canonical_counts.get(canonical_key, 0),
+                business_guard=business_guard,
                 template_sql=template_sql,
             )
             candidate["execution_vote"] = {
                 "success": bool(metadata.get("success")),
                 "vote_count": vote_counts.get(signature_key, 0),
+                "canonical_vote_count": canonical_counts.get(canonical_key, 0),
                 "signature": metadata.get("signature") or {},
+                "canonical_fingerprint": canonical_fingerprint,
+                "business_guard": business_guard,
                 "error": metadata.get("error") or "",
                 "score": score,
             }
+            candidate_diagnostics.append(
+                {
+                    "candidate_index": int(candidate.get("candidate_index") or index),
+                    "strategy": candidate.get("candidate_strategy"),
+                    "execution_success": bool(metadata.get("success")),
+                    "execution_vote_count": vote_counts.get(signature_key, 0),
+                    "canonical_vote_count": canonical_counts.get(canonical_key, 0),
+                    "business_guard_score": business_guard.get("normalized_score"),
+                    "business_guard_failed_count": business_guard.get("failed_count"),
+                    "score": score,
+                    "signature": metadata.get("signature") or {},
+                    "canonical_fingerprint": canonical_fingerprint,
+                    "error": metadata.get("error") or "",
+                }
+            )
             if best_result is None or score > best_score:
                 best_score = score
                 best_result = candidate
+
+        diagnostics = {
+            "enabled": True,
+            "candidate_count": len(generation_results),
+            "valid_candidate_count": len(valid_candidates),
+            "previewed_candidate_count": len(preview_metadata),
+            "execution_vote_groups": len(vote_counts),
+            "canonical_vote_groups": len(canonical_counts),
+            "selected_candidate_index": (
+                best_result.get("candidate_index") if best_result else None
+            ),
+            "selected_strategy": (
+                best_result.get("candidate_strategy") if best_result else None
+            ),
+            "candidates": candidate_diagnostics,
+        }
+        if best_result is not None:
+            best_result["execution_voting"] = diagnostics
 
         return best_result, first_invalid_result
 
@@ -7901,6 +8266,8 @@ class BaseFixedOrderAskRuntime:
                             if generation_sql_samples
                             else None
                         ),
+                        semantic_plan=state.semantic_plan,
+                        query_decomposition=state.query_decomposition,
                     )
                     if text_to_sql_generation_results is None:
                         text_to_sql_generation_results = {
@@ -7910,15 +8277,27 @@ class BaseFixedOrderAskRuntime:
                                 or {},
                             }
                         }
-                    elif state.template_decision:
+                    else:
                         execution_vote = text_to_sql_generation_results.get(
                             "execution_vote"
                         )
-                        if execution_vote:
+                        if execution_vote and state.template_decision:
                             state.template_decision["execution_vote"] = execution_vote
                             state.template_decision["sql_generation_strategy"] = (
                                 text_to_sql_generation_results.get("candidate_strategy")
                             )
+                        execution_voting = text_to_sql_generation_results.get(
+                            "execution_voting"
+                        )
+                        if execution_voting:
+                            if state.template_decision:
+                                state.template_decision["execution_voting"] = (
+                                    execution_voting
+                                )
+                            if state.semantic_plan is not None:
+                                state.semantic_plan["execution_voting"] = (
+                                    execution_voting
+                                )
                 else:
                     text_to_sql_generation_results = await self._toolset.generate_sql(
                         query=state.user_query,

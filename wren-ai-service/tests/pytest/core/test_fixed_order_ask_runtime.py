@@ -5,11 +5,13 @@ from src.core.fixed_order_ask_runtime import (
     AskExecutionState,
     BaseFixedOrderAskRuntime,
     NL2SQLToolset,
+    _build_execution_result_signature,
+    _build_sql_candidate_fingerprint,
     _build_sql_correction_candidate_inputs,
     _can_retry_template_core_rejection_as_reference,
-    _build_execution_result_signature,
-    _semantic_metric_patterns,
+    _score_sql_business_guards,
     _select_best_sql_correction_result,
+    _semantic_metric_patterns,
     _supplied_external_sql_builders_enabled,
     build_minimal_semantic_plan,
     build_query_decomposition_plan,
@@ -2828,6 +2830,139 @@ def test_query_decomposition_plan_for_complex_roi_topn_question():
         "metric_aggregation",
         "final_pivot",
     ]
+    assert plan["strategy"] == "structured_cte_dag"
+    assert plan["composer"] == {
+        "mode": "single_sql_with_named_ctes",
+        "final_step": "final_pivot",
+    }
+    assert plan["required_ctes"] == [
+        "base_scope",
+        "cohort_users",
+        "segment_users",
+        "external_metrics",
+        "metric_aggregation",
+        "final_pivot",
+    ]
+    assert any("GROUP BY" in check for check in plan["validation_checks"])
+
+
+def test_sql_candidate_business_guard_scores_required_slots_and_decomposition_ctes():
+    sql = """
+    WITH base_scope AS (
+      SELECT * FROM dwd_order_deposit
+      WHERE tenant_plat_id = 990001
+        AND channel_id = 990011
+        AND callback_time >= '2026-04-01'
+        AND callback_time < DATE_ADD('2026-04-07', INTERVAL 1 DAY)
+    ),
+    segment_users AS (
+      SELECT player_id, ROW_NUMBER() OVER (ORDER BY SUM(actual_amount) DESC) AS rn
+      FROM base_scope
+      GROUP BY player_id
+    ),
+    metric_aggregation AS (
+      SELECT channel_id, COUNT(*) AS cnt FROM base_scope GROUP BY channel_id
+    ),
+    final_select AS (
+      SELECT channel_id, cnt FROM metric_aggregation
+    )
+    SELECT * FROM final_select
+    """
+    semantic_plan = {
+        "filters": {
+            "tenant_plat_id": 990001,
+            "channel_id": 990011,
+            "start_date": "2026-04-01",
+            "end_date": "2026-04-07",
+        }
+    }
+    decomposition = {
+        "features": ["topn_segment"],
+        "required_ctes": [
+            "base_scope",
+            "segment_users",
+            "metric_aggregation",
+            "final_select",
+        ],
+    }
+
+    guard = _score_sql_business_guards(
+        sql=sql,
+        semantic_plan=semantic_plan,
+        query_decomposition=decomposition,
+    )
+
+    assert guard["failed_count"] == 0
+    assert guard["normalized_score"] == 1
+    fingerprint = _build_sql_candidate_fingerprint(sql)
+    assert fingerprint["window_count"] == 1
+    assert "dwd_order_deposit" in fingerprint["source_tables"]
+
+
+@pytest.mark.asyncio
+async def test_select_best_sql_generation_result_votes_by_execution_and_guards():
+    class VotingToolset(NL2SQLToolset):
+        async def preview_sql_execution(self, *, sql, runtime_scope_id, limit=None):
+            if "without_tenant" in sql:
+                return {
+                    "success": True,
+                    "result": {},
+                    "signature": _build_execution_result_signature(
+                        {"columns": [{"name": "cnt"}], "data": [{"cnt": 10}]}
+                    ),
+                    "error": "",
+                }
+            return {
+                "success": True,
+                "result": {},
+                "signature": _build_execution_result_signature(
+                    {"columns": [{"name": "cnt"}], "data": [{"cnt": 20}]}
+                ),
+                "error": "",
+            }
+
+    def candidate(index: int, strategy: str, sql: str) -> dict:
+        return {
+            "candidate_index": index,
+            "candidate_strategy": strategy,
+            "post_process": {
+                "valid_generation_result": {"sql": sql},
+                "invalid_generation_result": {},
+            },
+        }
+
+    weak_candidate = candidate(
+        0,
+        "template_first",
+        "SELECT COUNT(*) AS cnt FROM without_tenant",
+    )
+    guarded_candidate = candidate(
+        1,
+        "business_guard_first",
+        "SELECT COUNT(*) AS cnt FROM dwd_order_deposit WHERE tenant_plat_id = 990001",
+    )
+    equivalent_result_candidate = candidate(
+        2,
+        "result_consistency_first",
+        (
+            "SELECT COUNT(1) AS cnt FROM dwd_order_deposit "
+            "WHERE tenant_plat_id = 990001"
+        ),
+    )
+
+    best, first_invalid = await VotingToolset({}).select_best_sql_generation_result(
+        [weak_candidate, guarded_candidate, equivalent_result_candidate],
+        runtime_scope_id="kb-test",
+        semantic_plan={"filters": {"tenant_plat_id": 990001}},
+    )
+
+    assert first_invalid is None
+    assert best is guarded_candidate
+    assert best["execution_vote"]["vote_count"] == 2
+    assert best["execution_vote"]["business_guard"]["failed_count"] == 0
+    assert best["execution_voting"]["selected_strategy"] == "business_guard_first"
+    assert best["execution_voting"]["valid_candidate_count"] == 3
+    assert best["execution_voting"]["execution_vote_groups"] == 2
 
 
 def test_execution_result_signature_normalizes_preview_rows():
