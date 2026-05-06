@@ -139,5 +139,8 @@ setup-connection.png
 !wren-ai-service/tools/.env.example
 .omx/
 
+# Oversized warehouse export reference stays local; use generated/importable seed artifacts in git.
+docs/业务需求/seed_data_refer/saas_warehouse.sql
+
 # Generated from docs/业务需求/seed_data_refer when an operator wants a materialized local seed.
 docs/业务需求/local_tidb_seed.sql
