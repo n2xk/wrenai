@@ -13,6 +13,7 @@ pick_env_file() {
   case "${name}" in
     dev) explicit="${WREN_DOCKER_DEV_ENV_FILE:-}" ;;
     prod) explicit="${WREN_DOCKER_PROD_ENV_FILE:-}" ;;
+    demo) explicit="${WREN_DOCKER_DEMO_ENV_FILE:-}" ;;
     *) explicit="" ;;
   esac
 

@@ -13,6 +13,7 @@ type KnowledgeOverviewAssetsEmptyStateProps = {
   isSnapshotReadonlyKnowledgeBase: boolean;
   isKnowledgeMutationDisabled: boolean;
   historicalSnapshotReadonlyHint: string;
+  knowledgeMutationHint?: string | null;
   onOpenAssetWizard: () => void;
 };
 
@@ -21,6 +22,7 @@ export default function KnowledgeOverviewAssetsEmptyState({
   isSnapshotReadonlyKnowledgeBase,
   isKnowledgeMutationDisabled,
   historicalSnapshotReadonlyHint,
+  knowledgeMutationHint,
   onOpenAssetWizard,
 }: KnowledgeOverviewAssetsEmptyStateProps) {
   return (
@@ -35,7 +37,8 @@ export default function KnowledgeOverviewAssetsEmptyState({
             ? '系统样例已预置结构与问答配置，可直接浏览体验。'
             : isSnapshotReadonlyKnowledgeBase
               ? historicalSnapshotReadonlyHint
-              : '先添加资产，后续这里会展示表、视图与字段概览。'}
+              : knowledgeMutationHint ||
+                '先添加资产，后续这里会展示表、视图与字段概览。'}
         </Text>
         {!isKnowledgeMutationDisabled ? (
           <PrimaryBlackButton type="button" onClick={onOpenAssetWizard}>

@@ -1,119 +1,103 @@
-# WrenAI 本地源码快速恢复
+# WrenAI 本机开发测试快速恢复
 
 适合场景：
-- 你已经有一套可用的 infra 容器
-- 想最快恢复本地源码开发环境
-- 只需要最短命令顺序
 
-完整说明见：`docs/local-source-acceptance.md`
+- 想最快恢复当前本机开发测试环境
+- 需要跑问数、图表、看板、数据表等 UI E2E 验证
+- 需要使用 TiDB demo 和 PM2 管理的源码 UI / AI Service
+
+当前标准入口是 `test-env`。旧的 `dev-up.sh` 只保留为 dependency-only 高级入口，不再作为主开发路径。
+
+完整说明见：`docs/local-source-acceptance.md` 和 `docker/README.md`。
 
 ---
 
-## 1. 保留 infra，停旧应用容器
+## 1. 准备本地私密配置
 
 ```bash
-docker stop wren-ui wren-ai-service || true
-docker rm wren-ui wren-ai-service || true
-docker ps --format 'table {{.Names}}\t{{.Ports}}'
+cp docker/env/test.example docker/env/test.local
+# 编辑 docker/env/test.local，填 OPENROUTER_API_KEY / OPENAI_API_KEY 等
 ```
 
-确认至少还有这些 infra 端口：
-- PostgreSQL: `127.0.0.1:9432`
-- wren-engine: `127.0.0.1:8080`
-- ibis-server: `127.0.0.1:18000`
+`docker/env/test.local` 不提交。它会被 PM2 配置读取，用于 `test-ui` 和 `test-ai-service`。
 
 ---
 
-## 2. 起 wren-ui
+## 2. 启动本机开发测试环境
 
 ```bash
-cd /Users/liyi/Code/WrenAI/wren-ui
-yarn
-yarn dev -p 3001
+./docker/scripts/test-env-up.sh
 ```
 
----
+这会启动：
 
-## 3. 起 wren-ai-service
+- Docker：PostgreSQL、engine、ibis-server、Trino、TiDB demo
+- PM2：`test-ai-service`、`test-ui`
 
-```bash
-cd /Users/liyi/Code/WrenAI/wren-ai-service
-env \
-  WREN_AI_SERVICE_PORT=5555 \
-  WREN_AI_SERVICE_HOST=127.0.0.1 \
-  PG_CONN_STR='postgresql://postgres:postgres@127.0.0.1:9432/wrenai_acceptance' \
-  CONFIG_PATH=./config.local.yaml \
-  GENERATION_MODEL='openrouter/google/gemini-3.1-flash-lite-preview' \
-  OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
-  ASK_RUNTIME_MODE=deepagents \
-  SHOULD_FORCE_DEPLOY=1 \
-  WREN_ENGINE_PORT=8080 \
-  .venv/bin/python -m src.__main__
+默认访问：
+
+```text
+UI:          http://127.0.0.1:3002
+AI Service: http://127.0.0.1:5555
+TiDB demo:  127.0.0.1:4000
+PostgreSQL: 127.0.0.1:9432
+Engine:     127.0.0.1:8080
+Ibis:       127.0.0.1:8000
+Trino:      127.0.0.1:8081
 ```
 
 ---
 
-## 4. 快速健康检查
+## 3. 常用操作
 
 ```bash
-python - <<'PY'
-import requests
-print(requests.get('https://openrouter.ai/api/v1/models', timeout=15).status_code)
-PY
-```
+# 查看 Docker 依赖层
+./docker/scripts/ps.sh
 
-```bash
-cd /Users/liyi/Code/WrenAI/wren-ai-service
-.venv/bin/python - <<'PY'
-import asyncio, os
-from litellm import acompletion
-async def main():
-    r = await acompletion(
-        model='openrouter/google/gemini-3.1-flash-lite-preview',
-        api_base='https://openrouter.ai/api/v1',
-        api_key=os.environ['OPENROUTER_API_KEY'],
-        messages=[{'role':'user','content':'reply ok'}],
-        timeout=30,
-    )
-    print(bool(r))
-asyncio.run(main())
-PY
+# 查看 PM2 应用
+pm2 status test-ai-service test-ui
+
+# 重启 UI + AI Service
+./docker/scripts/test-apps-restart.sh all
+
+# 只重启 UI
+./docker/scripts/test-apps-restart.sh ui
+
+# 只重启 AI Service
+./docker/scripts/test-apps-restart.sh ai
+
+# 停止完整开发测试环境
+./docker/scripts/test-env-down.sh
 ```
 
 ---
 
-## 5. 快速验收
+## 4. 健康检查
+
+```bash
+curl http://127.0.0.1:5555/health
+```
+
+预期：
+
+```json
+{"status":"ok"}
+```
 
 打开：
 
 ```text
-http://127.0.0.1:3001/home?runtimeScopeId=4
+http://127.0.0.1:3002
 ```
-
-输入：
-
-```text
-Show total orders by status as a table
-```
-
-预期：
-- 跳转到 `/home/<threadId>?runtimeScopeId=4`
-- 页面正常显示 answer
-- 不出现 `Internal server error`
-- 不出现 `list index out of range`
 
 ---
 
-## 6. 如需查推荐问题
+## 5. 只启动依赖层（高级 / 诊断）
 
-### thread recommendation
-
-```bash
-curl 'http://127.0.0.1:3001/api/v1/thread-recommendation-questions/22?runtimeScopeId=4'
-```
-
-### project recommendation
+仅当你明确需要手动用 background terminal 启动 UI / AI Service 时才用：
 
 ```bash
-curl 'http://127.0.0.1:3001/api/v1/project-recommendation-questions?runtimeScopeId=4'
+./docker/scripts/dev-up.sh
 ```
+
+它只启动 PostgreSQL、engine、ibis-server、Trino，不启动 TiDB，也不启动 UI / AI Service。

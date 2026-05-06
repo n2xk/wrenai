@@ -38,6 +38,7 @@ describe('buildKnowledgeMainStageSectionProps', () => {
       isKnowledgeMutationDisabled: false,
       isReadonlyKnowledgeBase: false,
       isSnapshotReadonlyKnowledgeBase: false,
+      knowledgeMutationHint: null,
       modelingSummary: { modelCount: 1, relationCount: 2, viewCount: 3 },
       onChangeDetailTab: jest.fn(),
       onChangeFieldFilter: jest.fn(),

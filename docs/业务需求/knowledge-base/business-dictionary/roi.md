@@ -17,8 +17,11 @@ canonical_expression: SUM(revenue_amount) / NULLIF(ad_spend, 0)
 source_tables:
   - dwd_order_deposit
   - dwd_bet_order
+  - marketing_external_metrics_daily
 source_fields:
-  - revenue_amount
+  - dwd_order_deposit.amount
+  - dwd_bet_order.win_loss_amount
+  - marketing_external_metrics_daily.ad_spend
 related_rules:
   - R09
   - R13

@@ -30,8 +30,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY public ./public
 COPY src ./src
-COPY .eslintrc.json ./
-COPY .eslintignore ./
+COPY types ./types
+COPY eslint.config.mjs ./
 COPY .prettierrc ./
 COPY next.config.js ./
 COPY tsconfig.json ./
@@ -53,6 +53,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY migrations ./migrations
 COPY knexfile.js ./knexfile.js
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
 # Copy knex and its dependencies from builder to runner
 COPY --from=builder /app/node_modules/knex ./node_modules/knex
@@ -74,4 +75,4 @@ ENV PORT 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
-CMD yarn knex migrate:latest && HOSTNAME="0.0.0.0" node server.js
+CMD ["./docker-entrypoint.sh"]

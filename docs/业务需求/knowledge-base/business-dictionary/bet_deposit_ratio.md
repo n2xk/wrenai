@@ -13,12 +13,12 @@ aliases:
   - 投注/充值
   - 投注除以充值
 definition: 投注金额与存款金额的比率，应先汇总分子分母再相除
-canonical_expression: SUM(valid_amount) / NULLIF(SUM(deposit_amount), 0)
+canonical_expression: SUM(dwd_bet_order.valid_bet_amount) / NULLIF(SUM(dwd_order_deposit.amount), 0)
 source_tables:
   - dwd_bet_order
   - dwd_order_deposit
 source_fields:
-  - dwd_bet_order.valid_amount
+  - dwd_bet_order.valid_bet_amount
   - dwd_order_deposit.amount
 related_rules:
   - R07
@@ -60,7 +60,7 @@ supported_grains:
 ## 规范表达式
 
 ```sql
-SUM(valid_amount) / NULLIF(SUM(deposit_amount), 0)
+SUM(dwd_bet_order.valid_bet_amount) / NULLIF(SUM(dwd_order_deposit.amount), 0)
 ```
 
 ## Runtime 用途

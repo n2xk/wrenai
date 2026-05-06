@@ -60,7 +60,11 @@ describe('useKnowledgeWorkbenchContentData', () => {
     });
   });
 
-  const renderHookHarness = () => {
+  const renderHookHarness = (
+    overrides: Partial<
+      Parameters<typeof useKnowledgeWorkbenchContentData>[0]
+    > = {},
+  ) => {
     let current!: ReturnType<typeof useKnowledgeWorkbenchContentData>;
 
     const Harness = () => {
@@ -83,6 +87,7 @@ describe('useKnowledgeWorkbenchContentData', () => {
         handleConnectorLoadError: jest.fn(),
         hasRuntimeScope: true,
         initialKnowledgeSourceType: 'database',
+        isKnowledgeMutationDisabled: false,
         knowledgeOwner: 'owner',
         knowledgeSourceOptions: [
           {
@@ -97,6 +102,7 @@ describe('useKnowledgeWorkbenchContentData', () => {
         refetchRuntimeSelector: jest.fn(async () => undefined),
         runtimeSyncScopeKey: 'sync-key',
         runtimeTransitioning: false,
+        ...overrides,
       });
       return null;
     };
@@ -117,5 +123,17 @@ describe('useKnowledgeWorkbenchContentData', () => {
     expect(mockUseKnowledgeDiagramData).toHaveBeenCalled();
     expect(mockUseKnowledgeRuntimeDataSync).toHaveBeenCalled();
     expect(mockUseKnowledgeAssets).toHaveBeenCalled();
+  });
+
+  it('disables wizard continuation when there is no selected knowledge base', () => {
+    const hookValue = renderHookHarness({
+      activeKnowledgeBase: null,
+      activeKnowledgeRuntimeSelector: {
+        workspaceId: 'ws-1',
+      },
+      isKnowledgeMutationDisabled: true,
+    });
+
+    expect(hookValue.canContinueAssetWizard).toBe(false);
   });
 });

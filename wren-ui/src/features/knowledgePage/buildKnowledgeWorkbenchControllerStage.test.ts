@@ -39,6 +39,7 @@ describe('buildKnowledgeWorkbenchControllerStage', () => {
         canCreateKnowledgeBase: true,
         createKnowledgeBaseBlockedReason: null,
         displayKnowledgeName: 'Revenue',
+        hasActiveKnowledgeBase: true,
         isKnowledgeMutationDisabled: false,
         isReadonlyKnowledgeBase: false,
         isSnapshotReadonlyKnowledgeBase: false,

@@ -817,4 +817,85 @@ describe('TextBasedAnswerBackgroundTracker', () => {
       }),
     );
   });
+
+  it.each([
+    'connect ECONNREFUSED 127.0.0.1:8000',
+    '(2002, "Can\'t connect to server on \'host.docker.internal\' (115)")',
+    'write EPIPE',
+  ])(
+    'keeps transient SQL data connection failures pending for retry: %s',
+    async (errorMessage) => {
+      let intervalHandler: (() => Promise<void>) | undefined;
+      const setIntervalSpy = jest.spyOn(global, 'setInterval');
+      setIntervalSpy.mockImplementation(((handler: TimerHandler) => {
+        intervalHandler = handler as () => Promise<void>;
+        return 1 as any;
+      }) as any);
+
+      const wrenAIAdaptor = {
+        createTextBasedAnswer: jest.fn(),
+        getTextBasedAnswerResult: jest.fn(),
+      };
+      const threadResponseRepository = {
+        updateOne: jest.fn().mockResolvedValue({}),
+      };
+      const threadRepository = {
+        findOneBy: jest.fn(),
+      };
+      const projectService = {
+        getProjectById: jest.fn().mockResolvedValue({
+          id: 42,
+          language: 'EN',
+        }),
+      };
+      const deployService = {
+        getDeploymentByRuntimeIdentity: jest
+          .fn()
+          .mockResolvedValue({ projectId: 42, manifest: { models: [] } }),
+      };
+      const queryService = {
+        preview: jest.fn().mockRejectedValue(new Error(errorMessage)),
+      };
+
+      const tracker = new TextBasedAnswerBackgroundTracker({
+        wrenAIAdaptor: wrenAIAdaptor as any,
+        threadResponseRepository: threadResponseRepository as any,
+        threadRepository: threadRepository as any,
+        projectService: projectService as any,
+        deployService: deployService as any,
+        queryService: queryService as any,
+      });
+
+      tracker.addTask({
+        id: 88,
+        threadId: 5,
+        projectId: 42,
+        deployHash: 'deploy-1',
+        question: 'summarize it',
+        sql: 'select * from orders',
+        answerDetail: {
+          status: ThreadResponseAnswerStatus.NOT_STARTED,
+        },
+      } as any);
+
+      if (!intervalHandler) {
+        throw new Error('Interval handler was not registered');
+      }
+      await intervalHandler();
+      await flushBackgroundJobs();
+
+      expect(wrenAIAdaptor.createTextBasedAnswer).not.toHaveBeenCalled();
+      expect(threadResponseRepository.updateOne).toHaveBeenLastCalledWith(88, {
+        answerDetail: expect.objectContaining({
+          status: ThreadResponseAnswerStatus.FETCHING_DATA,
+          error: expect.objectContaining({
+            message: errorMessage,
+            retryable: true,
+            retryCount: 1,
+          }),
+        }),
+      });
+      expect(tracker.getTasks()[88]).toBeDefined();
+    },
+  );
 });

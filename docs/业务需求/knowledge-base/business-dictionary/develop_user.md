@@ -13,12 +13,11 @@ aliases:
   - 非当日注册首存
   - 非新客首存
 definition: 非注册当天完成首次成功存款的用户数
-canonical_expression: DATE(dim_player.register_time) <> DATE(dwd_order_deposit.callback_time) AND dwd_order_deposit.times = 1
+canonical_expression: DATE(dwd_order_deposit.regist_time) <> DATE(dwd_order_deposit.callback_time) AND dwd_order_deposit.times = 1
 source_tables:
-  - dim_player
   - dwd_order_deposit
 source_fields:
-  - dim_player.register_time
+  - dwd_order_deposit.regist_time
   - dwd_order_deposit.callback_time
   - dwd_order_deposit.times
 related_rules:
@@ -56,7 +55,7 @@ supported_grains:
 ## 规范表达式
 
 ```sql
-DATE(dim_player.register_time) <> DATE(dwd_order_deposit.callback_time) AND dwd_order_deposit.times = 1
+DATE(dwd_order_deposit.regist_time) <> DATE(dwd_order_deposit.callback_time) AND dwd_order_deposit.times = 1
 ```
 
 ## Runtime 用途

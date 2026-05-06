@@ -30,6 +30,7 @@ export type KnowledgeOverviewSectionArgs = Pick<
   | 'isKnowledgeMutationDisabled'
   | 'isReadonlyKnowledgeBase'
   | 'isSnapshotReadonlyKnowledgeBase'
+  | 'knowledgeMutationHint'
   | 'modelingSummary'
   | 'onChangeDetailTab'
   | 'onChangeFieldFilter'

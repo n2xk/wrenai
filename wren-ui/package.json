@@ -6,8 +6,8 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "TZ=UTC next dev",
-    "dev:3001": "PORT=3001 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC next dev",
+    "dev": "TZ=UTC next dev --webpack",
+    "dev:3001": "PORT=3001 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC next dev --webpack",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "TZ=UTC node .next/standalone/server.js",
     "lint": "yarn check-types && eslint --max-warnings=0 --ext .js,.jsx,.ts,.tsx src next.config.js",

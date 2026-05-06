@@ -29,8 +29,10 @@ import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
 import useAuthSession from '@/hooks/useAuthSession';
 import useProtectedRuntimeScopePage from '@/hooks/useProtectedRuntimeScopePage';
 import useRuntimeScopeNavigation from '@/hooks/useRuntimeScopeNavigation';
+import useRuntimeSelectorState from '@/hooks/useRuntimeSelectorState';
 import { resolveAbortSafeErrorMessage } from '@/utils/abort';
 import { getReferenceDisplayWorkspaceName } from '@/utils/referenceDemoKnowledge';
+import { refreshWorkspaceMutationState } from '@/utils/workspaceMutationRefresh';
 import {
   WORKSPACE_MEMBER_ROLE_OPTIONS,
   getWorkspaceRoleLabel,
@@ -97,6 +99,7 @@ type WorkspaceDetailPayload = {
 export default function ManagePlatformWorkspacesPage() {
   const runtimeScopePage = useProtectedRuntimeScopePage();
   const runtimeScopeNavigation = useRuntimeScopeNavigation();
+  const runtimeSelectorState = useRuntimeSelectorState();
   const authSession = useAuthSession();
   const showPlatformManagement = resolvePlatformManagementFromAuthSession(
     authSession.data,
@@ -266,7 +269,11 @@ export default function ManagePlatformWorkspacesPage() {
       message.success('工作空间已创建');
       workspaceForm.resetFields();
       setCreateModalOpen(false);
-      await refreshAll();
+      await refreshWorkspaceMutationState({
+        refreshLocalData: refreshAll,
+        refetchRuntimeSelectorState: runtimeSelectorState.refetch,
+        refreshAuthSession: authSession.refresh,
+      });
     } catch (createError: any) {
       if (createError?.errorFields) {
         return;
@@ -279,7 +286,12 @@ export default function ManagePlatformWorkspacesPage() {
         message.error(errorMessage);
       }
     }
-  }, [refreshAll, workspaceForm]);
+  }, [
+    authSession.refresh,
+    refreshAll,
+    runtimeSelectorState.refetch,
+    workspaceForm,
+  ]);
 
   const handleInviteMember = useCallback(async () => {
     if (!selectedWorkspaceId) {

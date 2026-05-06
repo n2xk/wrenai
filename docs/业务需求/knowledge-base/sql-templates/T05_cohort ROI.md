@@ -57,7 +57,7 @@ source_tables:
   - dwd_order_activity
   - dwd_order_promote_activity
   - dwd_order_add_or_sub
-  - 外部投放表
+  - marketing_external_metrics_daily
 parameters:
   - cohort_start_date
   - cohort_end_date
@@ -67,7 +67,7 @@ question_variants:
 source_documents:
   - 第一期数据报表需求V1.xlsx
   - 数据报表API对应SQL&DSL语句整理.xlsx
-  - 数据报表表结构Design_with_comments（4.15 v1.2）.sql
+  - 数据报表表结构Design_with_comments（5.5 v1.3）.sql
 ---
 
 # T05 cohort ROI
@@ -89,7 +89,7 @@ source_documents:
 - dwd_order_activity
 - dwd_order_promote_activity
 - dwd_order_add_or_sub
-- 外部投放表
+- marketing_external_metrics_daily（本地 FULL 回归外部指标样例表；生产仍按 external_dependency 补数）
 
 ## 参数
 
@@ -108,4 +108,5 @@ source_documents:
 ## 备注
 
 - 依赖投放金额源；未提供时只能输出累计收入，不能输出 ROI。
-- 当前缺少外部数据源或 SQL 化数据模型，暂不能形成可执行 SQL pair。
+- 本地 FULL 回归可使用 marketing_external_metrics_daily 样例表或对话补数。
+- 当前运行时仍按外部依赖追问/补数，不直接把占位模板作为 executable_template。

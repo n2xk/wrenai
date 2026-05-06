@@ -230,9 +230,7 @@ export class RuntimeScopeResolver implements IRuntimeScopeResolver {
     }
 
     const resolvedDeployHash =
-      selector.kbSnapshotId && kbSnapshot?.deployHash
-        ? kbSnapshot.deployHash
-        : selector.deployHash || kbSnapshot?.deployHash || null;
+      selector.deployHash || kbSnapshot?.deployHash || null;
     const shouldResolveDeployment = Boolean(
       resolvedDeployHash ||
       selector.kbSnapshotId ||

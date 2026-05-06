@@ -25,23 +25,24 @@ const selector = {
 
 const fullExternalDailyCsv = [
   'biz_date,tenant_plat_id,channel_id,ad_spend,access_pv,access_uv,download_click_uv',
-  '2026-04-01,990001,990011,1120,12530,3150,845',
-  '2026-04-02,990001,990011,1240,13060,3300,890',
-  '2026-04-03,990001,990011,1360,13590,3450,935',
-  '2026-04-04,990001,990011,1480,14120,3600,980',
-  '2026-04-05,990001,990011,1600,14650,3750,1025',
-  '2026-04-06,990001,990011,1720,15180,3900,1070',
+  '2026-04-10,72,1932,1120,12530,3150,845',
+  '2026-04-11,72,1932,1240,13060,3300,890',
+  '2026-04-12,72,1932,1360,13590,3450,935',
+  '2026-04-13,72,1932,1480,14120,3600,980',
+  '2026-04-14,72,1932,1600,14650,3750,1025',
+  '2026-04-15,72,1932,1720,15180,3900,1070',
+  '2026-04-16,72,1932,1840,15710,4050,1115',
 ].join('\n');
 
 const roiAdSpendCsv = [
   'date,channel_id,ad_spend',
-  '2026-04-01,990011,1120',
-  '2026-04-02,990011,1240',
-  '2026-04-03,990011,1360',
-  '2026-04-04,990011,1480',
-  '2026-04-05,990011,1600',
-  '2026-04-06,990011,1720',
-  '2026-04-07,990011,1840',
+  '2026-04-10,1932,1120',
+  '2026-04-11,1932,1240',
+  '2026-04-12,1932,1360',
+  '2026-04-13,1932,1480',
+  '2026-04-14,1932,1600',
+  '2026-04-15,1932,1720',
+  '2026-04-16,1932,1840',
 ].join('\n');
 
 const ft01Columns = [
@@ -109,7 +110,7 @@ const cases = [
   {
     testId: 'FT01-FULL-EXTERNAL',
     question:
-      '生成第一期综合日报表完整宽表：租户平台990001渠道990011在2026-04-01到2026-04-06每日综合日报，要求列名列序贴合Excel 综合日报表!A41:AG46，包含汇总行、投放金额、PV、UV、下载点击UV、UV下载率、UV注册率、首存成本、首存率、有效投注、会员输赢、杀率、合计优惠。',
+      '生成第一期综合日报表完整宽表：租户平台72渠道1932在2026-04-10到2026-04-16每日综合日报，要求列名列序贴合Excel 综合日报表!A41:AG46，包含汇总行、投放金额、PV、UV、下载点击UV、UV下载率、UV注册率、首存成本、首存率、有效投注、会员输赢、杀率、合计优惠。',
     slotValues: {
       'external_dependency:ad_spend': fullExternalDailyCsv,
       'external_dependency:access_pv': fullExternalDailyCsv,
@@ -117,23 +118,23 @@ const cases = [
       'external_dependency:download_click_uv': fullExternalDailyCsv,
     },
     expectedColumns: ft01Columns,
-    expectedRowCount: 7,
+    expectedRowCount: 8,
     sqlIncludes: [
       'external_metrics AS',
-      "DATE '2026-04-01' AS biz_date",
-      '990001 AS tenant_plat_id',
-      '990011 AS channel_id',
+      "DATE '2026-04-10' AS biz_date",
+      '72 AS tenant_plat_id',
+      '1932 AS channel_id',
       '1120 AS ad_spend',
       '12530 AS access_pv',
       '3150 AS access_uv',
       '845 AS download_click_uv',
     ],
-    previewIncludes: ['汇总', '2026-04-01', '2026-04-06'],
+    previewIncludes: ['汇总', '2026-04-10', '2026-04-16'],
   },
   {
     testId: 'FT02-FULL-EXTERNAL',
     question:
-      '生成第一期ROI回收表里的渠道整体ROI表：租户平台990001渠道990011首存日期2026-04-01到2026-04-07，输出Excel固定回收周期列D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360的ROI宽表和环比，贴合Excel ROI回收表!A11:V18。',
+      '生成第一期ROI回收表里的渠道整体ROI表：租户平台72渠道1932首存日期2026-04-10到2026-04-16，输出Excel固定回收周期列D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360的ROI宽表和环比，贴合Excel ROI回收表!A11:V18。',
     slotValues: {
       'external_dependency:ad_spend': roiAdSpendCsv,
     },
@@ -141,16 +142,16 @@ const cases = [
     expectedRowCount: 9,
     sqlIncludes: [
       'supplied_external_ad_spend AS',
-      "DATE '2026-04-01' AS biz_date",
-      '990011 AS channel_id',
+      "DATE '2026-04-10' AS biz_date",
+      '1932 AS channel_id',
       '1120 AS ad_spend',
     ],
-    previewIncludes: ['汇总', '全部用户', '环比系数', '2026-04-07'],
+    previewIncludes: ['汇总', '全部用户', '环比系数', '2026-04-16'],
   },
   {
     testId: 'FT04-FULL-EXTERNAL',
     question:
-      '生成第一期ROI回收表里的渠道TOP3 ROI表：租户平台990001渠道990011首存日期2026-04-01到2026-04-07，输出Excel固定回收周期列D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360的TOP3 ROI宽表和环比，贴合Excel ROI回收表!A32:V37。',
+      '生成第一期ROI回收表里的渠道TOP3 ROI表：租户平台72渠道1932首存日期2026-04-10到2026-04-16，输出Excel固定回收周期列D1/D3/D7/D15/D30/D60/D90/D120/D150/D180/D210/D240/D270/D300/D330/D360的TOP3 ROI宽表和环比，贴合Excel ROI回收表!A32:V37。',
     slotValues: {
       'external_dependency:ad_spend': roiAdSpendCsv,
     },
@@ -161,7 +162,7 @@ const cases = [
       'bet_rank <= 3',
       "'TOP3' AS user_type",
     ],
-    previewIncludes: ['汇总', 'TOP3', '环比系数', '2026-04-07'],
+    previewIncludes: ['汇总', 'TOP3', '环比系数', '2026-04-16'],
   },
 ];
 

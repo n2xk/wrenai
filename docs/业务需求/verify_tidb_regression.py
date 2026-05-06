@@ -25,15 +25,23 @@ PARTITION_TOKEN_RE = re.compile(r"\bPARTITION\b")
 TTL_TOKEN_RE = re.compile(r"\bTTL\b")
 
 COMMON_PARAMS = {
-    "tenant_plat_id": 990001,
-    "channel_id": 990011,
-    "start_date": "2026-04-01",
-    "end_date": "2026-04-07",
-    "cohort_start_date": "2026-04-01",
-    "cohort_end_date": "2026-04-03",
+    # 基于 seed_data_refer 的真实 v1.3 数据窗口：tenant_plat_id=72 / channel_id=1932
+    # 覆盖充值、提现、投注、首存 cohort、游戏类型分布与 TOP3/非TOP3 分层。
+    "tenant_plat_id": 72,
+    "channel_id": 1932,
+    "start_date": "2026-04-10",
+    "end_date": "2026-04-16",
+    "cohort_start_date": "2026-04-10",
+    "cohort_end_date": "2026-04-16",
     "top_n": 3,
     "n_days": 7,
     "period_days": 7,
+}
+
+T02_PARAMS = {
+    "tenant_plat_id": 1,
+    "configured_channel_id": 1867,
+    "unconfigured_channel_id": 1760,
 }
 
 TEMPLATE_FILES = {
@@ -139,6 +147,14 @@ def fetch_all(conn: pymysql.connections.Connection, sql: str) -> list[dict[str, 
 
 
 def check_schema(conn: pymysql.connections.Connection) -> CheckResult:
+    table_rows = fetch_all(
+        conn,
+        "SELECT table_name "
+        "FROM information_schema.tables "
+        "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' "
+        "ORDER BY table_name",
+    )
+    table_names = {row["table_name"] for row in table_rows}
     table_count = fetch_all(
         conn,
         "SELECT COUNT(*) AS table_count "
@@ -159,8 +175,12 @@ def check_schema(conn: pymysql.connections.Connection) -> CheckResult:
         create_rows[table_name] = fetch_all(conn, f"SHOW CREATE TABLE {table_name}")[0]["Create Table"]
 
     failures: list[str] = []
-    if table_count != 26:
-        failures.append(f"table_count={table_count}, expected=26")
+    if table_count != 27:
+        failures.append(f"table_count={table_count}, expected=27")
+    if "dim_vip" not in table_names:
+        failures.append("缺少 v1.3 VIP 维表 dim_vip")
+    if "vip" in table_names:
+        failures.append("不应再存在独立 vip 表，参考数据 vip 必须映射导入 dim_vip")
     if partitioned:
         failures.append(f"仍有分区表: {partitioned}")
     for table_name, ddl in create_rows.items():
@@ -175,7 +195,8 @@ def check_schema(conn: pymysql.connections.Connection) -> CheckResult:
     return CheckResult(
         "schema",
         True,
-        f"table_count=26, partitioned_tables=0, checked={','.join(create_rows)}",
+        f"table_count=27, dim_vip=present, vip=absent, "
+        f"partitioned_tables=0, checked={','.join(create_rows)}",
     )
 
 
@@ -226,12 +247,10 @@ def check_expected_rows(
 
 
 def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
-    """Validate the current TiDB demo seed against the active SQL-template shapes.
+    """Validate the active TiDB seed against v1.3 reference-data template shapes.
 
-    2026-05 templates T04/T08/T09/T10/T12/T13 have been productized into
-    Excel-like wide tables with Chinese output columns. This check intentionally
-    validates key business totals and row shapes instead of the old long-table
-    column names so it can be used as the pre-UI-regression seed smoke test.
+    Default parameters intentionally use real IDs/date windows from
+    docs/业务需求/seed_data_refer instead of the old 990001/990011 fixture.
     """
     checks: list[CheckResult] = [check_schema(conn)]
 
@@ -241,42 +260,48 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             fetch_all(conn, render_template_sql("T01", COMMON_PARAMS)),
             [
                 {
-                    "biz_date": "2026-04-01",
-                    "login_user_count": 3,
-                    "register_user_count": 2,
-                    "deposit_amount": Decimal("30"),
-                    "valid_bet_amount": Decimal("1300"),
-                    "win_loss_amount": Decimal("110"),
+                    "biz_date": "2026-04-10",
+                    "register_user_count": 11,
+                    "deposit_amount": Decimal("100.0000"),
+                    "valid_bet_amount": Decimal("3635.0000"),
+                    "win_loss_amount": Decimal("4644.9600"),
+                    "promotion_total_amount": Decimal("1075.0000"),
                 },
                 {
-                    "biz_date": "2026-04-02",
-                    "deposit_amount": Decimal("2080"),
-                    "first_deposit_amount": Decimal("2050"),
-                    "new_customer_deposit_amount": Decimal("2080"),
-                    "valid_bet_amount": Decimal("1800"),
+                    "biz_date": "2026-04-13",
+                    "deposit_user_count": 5,
+                    "deposit_amount": Decimal("1100.0000"),
+                    "withdrawal_amount": Decimal("3200.0000"),
+                    "valid_bet_amount": Decimal("7920.2000"),
+                    "task_amount": Decimal("3.1400"),
                 },
                 {
-                    "biz_date": "2026-04-06",
-                    "deposit_amount": Decimal("400"),
-                    "valid_bet_amount": Decimal("1100"),
-                    "win_loss_amount": Decimal("90"),
+                    "biz_date": "2026-04-16",
+                    "deposit_amount": Decimal("1000.0000"),
+                    "first_deposit_user_count": 3,
+                    "develop_user_count": 1,
+                    "valid_bet_amount": Decimal("400.0000"),
+                    "lottery_amount": Decimal("60.0000"),
                 },
             ],
             ("biz_date",),
             exact_keys=False,
-            expected_row_count=6,
+            expected_row_count=7,
         )
     )
 
     t02_rows: list[dict[str, Any]] = []
-    for channel_id in (990011, 990012):
+    for channel_id in (
+        T02_PARAMS["configured_channel_id"],
+        T02_PARAMS["unconfigured_channel_id"],
+    ):
         t02_rows.extend(
             fetch_all(
                 conn,
                 render_template_sql(
                     "T02",
                     {
-                        "tenant_plat_id": COMMON_PARAMS["tenant_plat_id"],
+                        "tenant_plat_id": T02_PARAMS["tenant_plat_id"],
                         "channel_id": channel_id,
                         "channel_partner_id": None,
                     },
@@ -289,19 +314,19 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             t02_rows,
             [
                 {
-                    "channel_id": 990011,
-                    "channel_name": "KB主渠道A",
-                    "channel_partner_id": 980021,
-                    "channel_partner_username": "partner_a",
-                    "report_percent": Decimal("90.0000"),
-                    "report_percent_ratio": Decimal("0.900000"),
+                    "channel_id": 1867,
+                    "channel_name": "呆萌吉祥坊",
+                    "channel_partner_id": None,
+                    "channel_partner_username": None,
+                    "report_percent": Decimal("100.0000"),
+                    "report_percent_ratio": Decimal("1.000000"),
                     "has_percent_config": 1,
                 },
                 {
-                    "channel_id": 990012,
-                    "channel_name": "KB对照渠道B",
-                    "channel_partner_id": 980022,
-                    "channel_partner_username": "partner_b",
+                    "channel_id": 1760,
+                    "channel_name": "本站",
+                    "channel_partner_id": 2711,
+                    "channel_partner_username": "sdeef234",
                     "report_percent": Decimal("100.0000"),
                     "report_percent_ratio": Decimal("1.000000"),
                     "has_percent_config": 0,
@@ -318,30 +343,23 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             fetch_all(conn, render_template_sql("T03", COMMON_PARAMS)),
             [
                 {
-                    "first_deposit_date": "2026-04-01",
-                    "player_id": 990101,
-                    "player_username": "kb_p01",
-                    "first_deposit_amount": Decimal("10"),
+                    "first_deposit_date": "2026-04-10",
+                    "player_id": 4543498,
+                    "player_username": "aaa124",
+                    "first_deposit_amount": Decimal("100.0000"),
                     "is_new_customer_first_deposit": 1,
                 },
                 {
-                    "first_deposit_date": "2026-04-02",
-                    "player_id": 990104,
-                    "player_username": "kb_p04",
-                    "first_deposit_amount": Decimal("2000"),
-                    "is_new_customer_first_deposit": 1,
-                },
-                {
-                    "first_deposit_date": "2026-04-03",
-                    "player_id": 990105,
-                    "player_username": "kb_p05",
-                    "first_deposit_amount": Decimal("88"),
+                    "first_deposit_date": "2026-04-13",
+                    "player_id": 4543588,
+                    "player_username": "demi1213621",
+                    "first_deposit_amount": Decimal("500.0000"),
                     "is_new_customer_first_deposit": 1,
                 },
             ],
             ("first_deposit_date", "player_id"),
             exact_keys=False,
-            expected_row_count=5,
+            expected_row_count=20,
         )
     )
 
@@ -351,31 +369,31 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             fetch_all(conn, render_template_sql("T04", COMMON_PARAMS)),
             [
                 {
-                    "日期": "2026-04-01",
+                    "日期": "2026-04-10",
                     "用户类型": "全部",
-                    "首存用户数": 2,
-                    "累计1天": Decimal("110.0000"),
-                    "3天": Decimal("235.0000"),
-                    "7天": Decimal("416.0000"),
+                    "首存用户数": 1,
+                    "累计1天": Decimal("0.5600"),
+                    "3天": Decimal("71.7600"),
+                    "7天": Decimal("71.7600"),
                 },
                 {
-                    "日期": "2026-04-02",
+                    "日期": "2026-04-13",
                     "用户类型": "TOP3",
                     "首存用户数": 1,
-                    "累计1天": Decimal("80.0000"),
-                    "7天": Decimal("120.0000"),
+                    "累计1天": Decimal("2480.0000"),
+                    "7天": Decimal("2480.0000"),
                 },
                 {
-                    "日期": "2026-04-02",
+                    "日期": "2026-04-15",
                     "用户类型": "非TOP3",
-                    "首存用户数": 1,
-                    "累计1天": Decimal("-30.0000"),
-                    "7天": Decimal("-30.0000"),
+                    "首存用户数": 5,
+                    "累计1天": Decimal("228.2000"),
+                    "7天": Decimal("686.4200"),
                 },
             ],
             ("日期", "用户类型"),
             exact_keys=False,
-            expected_row_count=7,
+            expected_row_count=15,
         )
     )
 
@@ -385,27 +403,28 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             fetch_all(conn, render_template_sql("T06", COMMON_PARAMS)),
             [
                 {
-                    "player_id": 990101,
-                    "total_valid_bet_amount": Decimal("3000"),
+                    "player_id": 4543567,
+                    "total_valid_bet_amount": Decimal("2000.0000"),
+                    "total_win_loss_amount": Decimal("5915.0000"),
                     "bet_rank": 1,
                     "user_segment": "TOP3",
                 },
                 {
-                    "player_id": 990103,
-                    "total_valid_bet_amount": Decimal("1500"),
+                    "player_id": 4543569,
+                    "total_valid_bet_amount": Decimal("1213.0000"),
                     "bet_rank": 3,
                     "user_segment": "TOP3",
                 },
                 {
-                    "player_id": 990105,
-                    "total_valid_bet_amount": Decimal("100"),
-                    "bet_rank": 5,
+                    "player_id": 4543665,
+                    "total_valid_bet_amount": Decimal("28.0000"),
+                    "bet_rank": 30,
                     "user_segment": "非TOP3",
                 },
             ],
             ("player_id",),
             exact_keys=False,
-            expected_row_count=5,
+            expected_row_count=30,
         )
     )
 
@@ -417,29 +436,25 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
                 {
                     "日期": "汇总",
                     "用户分层": "全部用户",
-                    "注册人数": 5,
-                    "首存人数": 5,
-                    "首存率": Decimal("1.0000"),
-                    "二存人数": Decimal("3"),
+                    "注册人数": 65,
+                    "首存人数": 20,
+                    "首存率": Decimal("0.3077"),
+                    "二存人数": Decimal("5"),
                     "三存人数": Decimal("2"),
-                },
-                {
-                    "日期": "汇总",
-                    "用户分层": "TOP3",
-                    "注册人数": 3,
-                    "首存人数": 3,
-                    "二存率": Decimal("1.0000"),
+                    "四存人数": Decimal("2"),
                 },
                 {
                     "日期": "汇总",
                     "用户分层": "非TOP3",
-                    "注册人数": 3,
-                    "首存人数": 2,
-                    "首存率": Decimal("0.6667"),
+                    "注册人数": 62,
+                    "首存人数": 20,
+                    "首存率": Decimal("0.3226"),
+                    "二存人数": Decimal("5"),
+                    "三存人数": Decimal("2"),
                 },
             ],
             ("日期", "用户分层"),
-            expected_row_count=3,
+            expected_row_count=2,
         )
     )
 
@@ -450,25 +465,27 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             [
                 {
                     "用户分层": "全部用户",
-                    "用户数": 5,
-                    "存款金额": Decimal("3248.0000"),
-                    "有效投注": Decimal("7300.0000"),
-                    "杀率": Decimal("0.079452"),
-                    "投充比": Decimal("2.247537"),
+                    "用户数": 38,
+                    "存款金额": Decimal("4300.0000"),
+                    "提现金额": Decimal("11000.0000"),
+                    "有效投注": Decimal("16225.2000"),
+                    "杀率": Decimal("1.285190"),
+                    "投充比": Decimal("3.773302"),
                 },
                 {
                     "用户分层": "TOP3",
                     "用户数": 3,
-                    "存款金额": Decimal("1160.0000"),
-                    "有效投注": Decimal("7000.0000"),
-                    "杀率": Decimal("0.085714"),
+                    "存款金额": Decimal("0"),
+                    "提现金额": Decimal("900.0000"),
+                    "有效投注": Decimal("4613.0000"),
+                    "杀率": Decimal("1.300889"),
                 },
                 {
                     "用户分层": "非TOP3",
-                    "用户数": 2,
-                    "存款金额": Decimal("2088.0000"),
-                    "有效投注": Decimal("300.0000"),
-                    "杀率": Decimal("-0.066667"),
+                    "用户数": 35,
+                    "存款金额": Decimal("4300.0000"),
+                    "有效投注": Decimal("11612.2000"),
+                    "投充比": Decimal("2.700512"),
                 },
             ],
             ("用户分层",),
@@ -485,28 +502,29 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
                 {
                     "日期": "汇总",
                     "用户类型": "全部",
-                    "用户人数": Decimal("5"),
-                    "首日杀率": Decimal("0.068000"),
-                    "首日投充比": Decimal("1.153137"),
+                    "用户人数": Decimal("20"),
+                    "首日杀率": Decimal("1.688032"),
+                    "2日杀率": Decimal("0.577947"),
+                    "首日投充比": Decimal("0.818049"),
                 },
                 {
-                    "日期": "2026-04-01",
-                    "用户类型": "全部",
-                    "用户人数": Decimal("2"),
-                    "首日杀率": Decimal("0.084615"),
-                    "首日投充比": Decimal("43.333333"),
+                    "日期": "汇总",
+                    "用户类型": "TOP3",
+                    "用户人数": Decimal("3"),
+                    "首日杀率": Decimal("2.231250"),
+                    "2日投充比": Decimal("9.150000"),
                 },
                 {
-                    "日期": "2026-04-02",
+                    "日期": "2026-04-15",
                     "用户类型": "非TOP3",
-                    "用户人数": Decimal("1"),
-                    "首日杀率": Decimal("-0.150000"),
-                    "首日投充比": Decimal("0.100000"),
+                    "用户人数": Decimal("5"),
+                    "首日杀率": Decimal("0.559203"),
+                    "2日投充比": Decimal("4.000000"),
                 },
             ],
             ("日期", "用户类型"),
             exact_keys=False,
-            expected_row_count=10,
+            expected_row_count=18,
         )
     )
 
@@ -516,23 +534,29 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             fetch_all(conn, render_template_sql("T11", COMMON_PARAMS)),
             [
                 {
-                    "game_type_id": 990032,
-                    "game_type_name": "体育",
-                    "bet_times": 6,
-                    "valid_bet_amount": Decimal("3900"),
-                    "kill_rate": Decimal("0.084615"),
+                    "dim_game_type_id": 4,
+                    "dim_game_type_name": "电子-老虎机",
+                    "bet_times": 153,
+                    "valid_bet_amount": Decimal("11712.0000"),
+                    "kill_rate": Decimal("1.829594"),
                 },
                 {
-                    "game_type_id": 990031,
-                    "game_type_name": "电子",
-                    "bet_times": 5,
-                    "valid_bet_amount": Decimal("1900"),
-                    "kill_rate": Decimal("0.073684"),
+                    "dim_game_type_id": 1,
+                    "dim_game_type_name": "捕鱼",
+                    "bet_times": 11,
+                    "valid_bet_amount": Decimal("2202.0000"),
+                    "kill_rate": Decimal("-0.142144"),
+                },
+                {
+                    "dim_game_type_id": 6,
+                    "dim_game_type_name": "电子棋牌",
+                    "bet_times": 13,
+                    "valid_bet_amount": Decimal("1295.2000"),
                 },
             ],
-            ("game_type_id",),
+            ("dim_game_type_id",),
             exact_keys=False,
-            expected_row_count=3,
+            expected_row_count=4,
         )
     )
 
@@ -544,21 +568,24 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
                 {
                     "用户分层": "所有用户",
                     "指标": "有效投注流水",
-                    "合计": Decimal("7300.000000"),
-                    "体育": Decimal("3900.000000"),
-                    "电子-老虎机": Decimal("1900.000000"),
+                    "合计": Decimal("16225.200000"),
+                    "捕鱼": Decimal("2202.000000"),
+                    "电子-老虎机": Decimal("11712.000000"),
+                    "电子棋牌": Decimal("1295.200000"),
                 },
                 {
                     "用户分层": "TOP3",
                     "指标": "有效投注流水",
-                    "合计": Decimal("7000.000000"),
-                    "体育": Decimal("3900.000000"),
+                    "合计": Decimal("4613.000000"),
+                    "捕鱼": Decimal("613.000000"),
+                    "电子-老虎机": Decimal("4000.000000"),
                 },
                 {
                     "用户分层": "非TOP3",
                     "指标": "有效投注流水",
-                    "合计": Decimal("300.000000"),
-                    "电子-老虎机": Decimal("300.000000"),
+                    "合计": Decimal("11612.200000"),
+                    "电子-老虎机": Decimal("7712.000000"),
+                    "电子棋牌": Decimal("1295.200000"),
                 },
             ],
             ("用户分层", "指标"),
@@ -574,27 +601,34 @@ def build_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
             [
                 {
                     "日期": "汇总",
-                    "首存用户数": 5,
-                    "10元": Decimal("1"),
-                    "20元": Decimal("1"),
-                    "50元": Decimal("1"),
-                    "2000元": Decimal("1"),
-                    "其他金额": Decimal("1"),
+                    "首存用户数": 20,
+                    "100元": Decimal("11"),
+                    "100元占比": Decimal("0.550000"),
+                    "200元": Decimal("7"),
+                    "500元": Decimal("2"),
                 },
                 {
-                    "日期": "2026-04-02",
-                    "首存用户数": 2,
-                    "50元": Decimal("1"),
-                    "2000元": Decimal("1"),
+                    "日期": "2026-04-13",
+                    "首存用户数": 5,
+                    "100元": Decimal("2"),
+                    "200元": Decimal("2"),
+                    "500元": Decimal("1"),
+                },
+                {
+                    "日期": "2026-04-16",
+                    "首存用户数": 3,
+                    "100元": Decimal("3"),
+                    "100元占比": Decimal("1.000000"),
                 },
             ],
             ("日期",),
             exact_keys=False,
-            expected_row_count=4,
+            expected_row_count=7,
         )
     )
 
     return checks
+
 
 def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[CheckResult]:
     checks: list[CheckResult] = []
@@ -606,7 +640,7 @@ def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[Che
                 conn,
                 "SELECT c.id, c.name, rpc.percent "
                 "FROM channel c "
-                "LEFT JOIN report_channel_data_percent_config rpc "
+                "LEFT JOIN dim_report_channel_data_percent_config rpc "
                 "  ON rpc.channel_id = c.id AND rpc.deleted = 0 "
                 "WHERE c.id IN (990013, 990014) "
                 "ORDER BY c.id",
@@ -841,7 +875,7 @@ def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[Che
                 "       SUM(regist_num) AS regist_sum, "
                 "       SUM(first_deposit_num) AS fd_sum, "
                 "       SUM(first_deposit_amount) AS fd_amt "
-                "FROM channel_player_statistics_of_day "
+                "FROM dim_channel_player_statistics_of_day "
                 "WHERE tenant_plat_id = 990001 "
                 "  AND biz_date >= '2026-04-08' "
                 "  AND biz_date < '2026-04-15' "
@@ -999,7 +1033,7 @@ def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[Che
                 "WHERE tenant_plat_id = 990001 AND bet_order_id BETWEEN 1008001 AND 1009300 "
                 "UNION ALL "
                 "SELECT 'cp_stats', COUNT(*) "
-                "FROM channel_player_statistics_of_day "
+                "FROM dim_channel_player_statistics_of_day "
                 "WHERE tenant_plat_id = 990001 AND biz_date >= '2026-04-15' "
                 "UNION ALL "
                 "SELECT 'relay', COUNT(*) "
@@ -1148,7 +1182,7 @@ def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[Che
                 "       MIN(DATE(biz_date)) AS min_day, "
                 "       MAX(DATE(biz_date)) AS max_day, "
                 "       COUNT(DISTINCT channel_id) AS channels "
-                "FROM channel_player_statistics_of_day "
+                "FROM dim_channel_player_statistics_of_day "
                 "WHERE tenant_plat_id = 990001 AND biz_date >= '2026-04-15'",
             ),
             [
@@ -1172,7 +1206,7 @@ def build_extended_seed_checks(conn: pymysql.connections.Connection) -> list[Che
                 "SELECT channel_id, COUNT(*) AS cnt, "
                 "       ROUND(SUM(first_deposit_amount), 2) AS fd_amt, "
                 "       SUM(first_deposit_num) AS fd_num "
-                "FROM channel_player_statistics_of_day "
+                "FROM dim_channel_player_statistics_of_day "
                 "WHERE tenant_plat_id = 990001 AND biz_date >= '2026-04-15' "
                 "GROUP BY channel_id "
                 "ORDER BY channel_id",
@@ -1214,7 +1248,7 @@ def main() -> int:
     parser.add_argument(
         "--extended-seed",
         action="store_true",
-        help="also validate the expanded seed layer (04-08+ channels, auxiliary tables, bulk data)",
+        help="also validate the optional legacy regression_fixture expanded layer (04-08+ channels, auxiliary tables, bulk data)",
     )
     args = parser.parse_args()
 

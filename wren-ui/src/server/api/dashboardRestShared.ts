@@ -46,15 +46,8 @@ const getCurrentPersistedWorkspaceIdentity = (ctx: IContext) => {
 };
 
 const shouldUseWorkspaceScopedDashboardRequest = (ctx: IContext) => {
-  const selector = ctx.runtimeScope?.selector;
-  if (!selector) {
-    return false;
-  }
-
-  return !(
-    selector.knowledgeBaseId ||
-    selector.kbSnapshotId ||
-    selector.deployHash
+  return Boolean(
+    ctx.runtimeScope?.workspace?.id || ctx.runtimeScope?.selector?.workspaceId,
   );
 };
 

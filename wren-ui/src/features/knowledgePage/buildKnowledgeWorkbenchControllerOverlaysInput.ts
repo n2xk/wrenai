@@ -26,6 +26,7 @@ export function buildKnowledgeWorkbenchControllerOverlaysInput({
       assetWizardStep: localState.assetWizardStep,
       onChangeAssetWizardStep: localState.setAssetWizardStep,
       activeKnowledgeBase: knowledgeState.activeKnowledgeBase ?? null,
+      isKnowledgeMutationDisabled: knowledgeState.isKnowledgeMutationDisabled,
       knowledgeBases: knowledgeState.knowledgeBases,
       sourceOptions: knowledgeState.knowledgeSourceOptions,
       selectedSourceType: contentData.selectedSourceType,

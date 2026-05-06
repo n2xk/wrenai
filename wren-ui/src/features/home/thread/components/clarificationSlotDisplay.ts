@@ -33,13 +33,13 @@ export const isExternalDependencySlot = (slot: string) =>
   Boolean(getExternalDependencyIdFromSlot(slot));
 
 export const slotPlaceholders: Record<string, string> = {
-  tenant_plat_id: '例如：990001',
-  channel_id: '例如：990011',
-  date_range: '例如：2026-04-01 到 2026-04-07',
-  start_date: '例如：2026-04-01',
-  end_date: '例如：2026-04-07',
-  cohort_start_date: '例如：2026-04-01',
-  cohort_end_date: '例如：2026-04-07',
+  tenant_plat_id: '例如：72',
+  channel_id: '例如：1932',
+  date_range: '例如：2026-04-10 到 2026-04-16',
+  start_date: '例如：2026-04-10',
+  end_date: '例如：2026-04-16',
+  cohort_start_date: '例如：2026-04-10',
+  cohort_end_date: '例如：2026-04-16',
   n_days: '例如：7 或 D7',
   period_days: '例如：7、30 或 D7',
   metric_focus: '例如：充值人数、充值金额、成功率',
@@ -57,7 +57,7 @@ export const resolveClarificationSlotPlaceholder = (slot: string) => {
     return [
       '可粘贴 CSV，例如：',
       'date,channel_id,ad_spend,access_pv,access_uv,download_click_uv',
-      '2026-04-01,990011,1000,12000,3000,800',
+      '2026-04-10,1932,1120,12000,3000,800',
     ].join('\n');
   }
   return slotPlaceholders[slot] || '请输入补充信息';

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { invalidateKnowledgeBaseList } from '@/utils/runtimePagePrefetch';
+import {
+  invalidateKnowledgeBaseList,
+  primeKnowledgeBaseList,
+} from '@/utils/runtimePagePrefetch';
 
 type KnowledgeBaseSwitchable = {
   id: string;
@@ -152,6 +155,10 @@ export default function useKnowledgeBaseSelection<
         }
         const payload = await fetchKnowledgeBases(knowledgeBasesUrl);
         const nextKnowledgeBases = Array.isArray(payload) ? payload : [];
+        primeKnowledgeBaseList({
+          url: knowledgeBasesUrl,
+          payload: nextKnowledgeBases,
+        });
         setKnowledgeBases((currentKnowledgeBases) =>
           resolveStableKnowledgeBaseList(
             currentKnowledgeBases,
@@ -280,7 +287,10 @@ export default function useKnowledgeBaseSelection<
       }
 
       if (
-        !shouldRouteSwitchKnowledgeBase(knowledgeBase, activeSwitchKnowledgeBaseId)
+        !shouldRouteSwitchKnowledgeBase(
+          knowledgeBase,
+          activeSwitchKnowledgeBaseId,
+        )
       ) {
         setPendingKnowledgeBaseId(null);
         setSelectedKnowledgeBaseId(knowledgeBase.id);

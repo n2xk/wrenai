@@ -24,6 +24,7 @@ export type KnowledgeWorkbenchContentDataArgs<
   >[0]['onLoadError'];
   hasRuntimeScope: boolean;
   initialKnowledgeSourceType?: string;
+  isKnowledgeMutationDisabled: boolean;
   knowledgeOwner?: string | null;
   knowledgeSourceOptions: Parameters<
     typeof useKnowledgeConnectors<TConnector>

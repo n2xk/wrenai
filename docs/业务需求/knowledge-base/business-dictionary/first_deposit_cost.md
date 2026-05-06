@@ -16,8 +16,10 @@ definition: 投放金额除以首存人数，依赖外部投放金额数据
 canonical_expression: ad_spend / NULLIF(first_deposit_user_count, 0)
 source_tables:
   - dwd_order_deposit
+  - marketing_external_metrics_daily
 source_fields:
   - dwd_order_deposit.player_id
+  - marketing_external_metrics_daily.ad_spend
 related_rules:
   - R13
 related_templates:

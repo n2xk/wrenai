@@ -49,7 +49,8 @@ export function useKnowledgeWorkbenchContentData<
       }),
     );
 
-  const effectiveCanContinueAssetWizard = canContinueAssetWizard;
+  const effectiveCanContinueAssetWizard =
+    !args.isKnowledgeMutationDisabled && canContinueAssetWizard;
 
   return {
     assets,

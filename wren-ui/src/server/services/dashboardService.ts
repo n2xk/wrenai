@@ -189,11 +189,26 @@ export class DashboardService implements IDashboardService {
     bridgeProjectId: number | null,
     binding?: DashboardRuntimeBinding,
   ): Promise<Dashboard> {
+    const scopedWorkspaceId = binding?.workspaceId || null;
     const scopedKnowledgeBaseId = binding?.knowledgeBaseId || null;
     if (scopedKnowledgeBaseId) {
       const scopedDashboards = await this.dashboardRepository.findAllBy({
         knowledgeBaseId: scopedKnowledgeBaseId,
       });
+      const scopedDashboard = resolveDefaultDashboard(scopedDashboards);
+      if (scopedDashboard) {
+        return await this.syncDashboardRuntimeBinding(
+          scopedDashboard.id,
+          binding || {},
+        );
+      }
+    }
+
+    if (scopedWorkspaceId && !scopedKnowledgeBaseId && bridgeProjectId == null) {
+      const scopedDashboards = await this.listWorkspaceDashboards(
+        scopedWorkspaceId,
+        bridgeProjectId,
+      );
       const scopedDashboard = resolveDefaultDashboard(scopedDashboards);
       if (scopedDashboard) {
         return await this.syncDashboardRuntimeBinding(

@@ -130,6 +130,65 @@ describe('pages/api/auth routes', () => {
     );
   });
 
+  it('falls back to the default workspace when persisted login workspace is stale', async () => {
+    const handler = (await import('../../pages/api/auth/login')).default;
+    const req = createReq({
+      method: 'POST',
+      body: {
+        email: 'member@example.com',
+        password: 'passw0rd',
+        workspaceId: 'stale-workspace',
+      },
+    });
+    const res = createRes();
+
+    mockLogin
+      .mockRejectedValueOnce(new Error('Active workspace membership is required'))
+      .mockResolvedValueOnce({
+        sessionToken: 'login-token',
+        user: {
+          id: 'user-1',
+          email: 'member@example.com',
+          isPlatformAdmin: false,
+          defaultWorkspaceId: 'workspace-default',
+        },
+        workspace: { id: 'workspace-default', name: 'Default' },
+        membership: { id: 'member-default', roleKey: 'member' },
+        actorClaims: {
+          workspaceId: 'workspace-default',
+          workspaceMemberId: 'member-default',
+          roleKeys: ['member'],
+          permissionScopes: [],
+          grantedActions: ['workspace.read'],
+          workspaceRoleSource: 'role_binding',
+          platformRoleKeys: [],
+          platformRoleSource: 'role_binding',
+          isPlatformAdmin: false,
+        },
+      });
+
+    await handler(req, res);
+
+    expect(mockLogin).toHaveBeenNthCalledWith(1, {
+      email: 'member@example.com',
+      password: 'passw0rd',
+      workspaceId: 'stale-workspace',
+    });
+    expect(mockLogin).toHaveBeenNthCalledWith(2, {
+      email: 'member@example.com',
+      password: 'passw0rd',
+      workspaceId: undefined,
+    });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.getHeader('Set-Cookie')).toContain('wren_session=login-token');
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        workspace: { id: 'workspace-default', name: 'Default' },
+        defaultWorkspaceId: 'workspace-default',
+      }),
+    );
+  });
+
   it('uses actorClaims instead of legacy user flags for platform admin session payloads', async () => {
     const handler = (await import('../../pages/api/auth/login')).default;
     const req = createReq({

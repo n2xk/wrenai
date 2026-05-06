@@ -1,4 +1,4 @@
-# 扩展种子对账结果（基于 `seed.sql` 的 04-08+ / 04-15+ 数据层）
+# 扩展种子对账结果（基于 `seed_data_local/regression_fixture.sql` 的 04-08+ / 04-15+ 数据层）
 
 ## 1. 用途
 
@@ -6,7 +6,7 @@
 
 它不再验证 11 个 SQL 模板的业务口径本身，而是验证：
 
-- `seed.sql` 里扩展出来的渠道、玩家、辅助事实表是否已经成功导入 TiDB
+- `seed_data_local/regression_fixture.sql` 里扩展出来的渠道、玩家、辅助事实表是否已经成功导入 TiDB
 - 多张事实表之间的主键/外键映射关系是否能对上
 - 高频大样本层是否已经把量级拉到千条以上，足以支撑问数联调
 
@@ -70,7 +70,7 @@
 | lottery | 2 |
 | vip_award | 6 |
 
-### 3.6 `channel_player_statistics_of_day`
+### 3.6 `dim_channel_player_statistics_of_day`
 
 | channel_id | row_cnt | min_day | max_day | regist_sum | first_deposit_sum | first_deposit_amt |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -208,7 +208,7 @@
 - 扩展渠道与配置
 - 扩展玩家及渠道归属
 - 扩展层登录/充值/提现/投注/奖励单
-- `channel_player_statistics_of_day`
+- `dim_channel_player_statistics_of_day`
 - 体育预测辅助表
 - 高频批量层的量级与表间关联
 

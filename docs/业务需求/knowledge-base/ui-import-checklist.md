@@ -339,7 +339,7 @@
 
 ### 4.7 最后用测试数据做验收
 
-- 造数：`../seed.sql`
+- 造数：`../seed_data_local/`
 - 执行说明：`../test-runbook.md`
 - 预期结果：`../expected-results.md`
 - Excel / CSV 核对：`../csv/`

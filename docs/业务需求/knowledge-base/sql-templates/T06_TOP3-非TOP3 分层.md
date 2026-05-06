@@ -52,6 +52,11 @@ business_signature:
     - 非TOP3
     - 前3
     - 游戏分层
+    - 用户分层
+    - 有效投注排名
+    - 投注流水排名
+    - 投注次数
+    - 输赢
   negative_cues:
     - ROI
     - 首存成本

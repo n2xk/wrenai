@@ -354,6 +354,28 @@ def test_supplied_external_roi_sql_supports_topn_roi_shape():
     assert "'TOP3' AS user_type" in sql
 
 
+def test_supplied_external_roi_sql_accepts_clarification_session_question_context():
+    sql = build_supplied_external_roi_sql(
+        "看这个渠道最近ROI怎么样（已补充：租户平台72）（已补充：租户平台72，渠道1932，"
+        "时间范围2026-04-10到2026-04-16）",
+        {
+            "external_dependency:ad_spend": (
+                "date,channel_id,ad_spend\n"
+                "2026-04-10,1932,1120\n"
+                "2026-04-13,1932,1480\n"
+                "2026-04-16,1932,1840"
+            )
+        },
+    )
+
+    assert sql is not None
+    assert "d.tenant_plat_id = 72" in sql
+    assert "d.channel_id = 1932" in sql
+    assert "ch.tenant_plat_id = 72" in sql
+    assert "supplied_external_ad_spend AS" in sql
+    assert "2026-04-16" in sql
+
+
 def test_filter_active_sql_samples_excludes_future_effective_templates():
     active_sample = {
         "id": "template-active",

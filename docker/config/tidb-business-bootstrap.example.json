@@ -1,0 +1,209 @@
+{
+  "common": {
+    "ui": {
+      "emailEnv": "WREN_BOOTSTRAP_EMAIL",
+      "passwordEnv": "WREN_BOOTSTRAP_PASSWORD",
+      "autoBootstrap": false
+    },
+    "workspace": {
+      "name": "saas业务空间",
+      "slug": "tidb-business"
+    },
+    "knowledgeBase": {
+      "name": "saas业务知识库",
+      "slug": "tidb-business-kb",
+      "description": "第一期数据报表需求的 saas 业务问数知识库。"
+    },
+    "tidbSeed": {
+      "enabled": false,
+      "enabledEnv": "TIDB_SEED_ENABLED",
+      "resetDatabase": false,
+      "resetDatabaseEnv": "TIDB_SEED_RESET_DATABASE",
+      "hostEnv": "TIDB_SEED_HOST",
+      "portEnv": "TIDB_SEED_PORT",
+      "userEnv": "TIDB_SEED_USER",
+      "passwordEnv": "TIDB_SEED_PASSWORD",
+      "databaseEnv": "TIDB_SEED_DATABASE",
+      "schemaFile": "docs/业务需求/local_tidb_schema.sql",
+      "seedFiles": [
+        "docs/业务需求/seed_data_local/regression_reference_window.sql",
+        "docs/业务需求/seed_data_local/external_metrics.sql"
+      ]
+    },
+    "tidbConnector": {
+      "displayName": "TiDB 业务数据源",
+      "hostEnv": "TIDB_CONNECTOR_HOST",
+      "portEnv": "TIDB_CONNECTOR_PORT",
+      "databaseEnv": "TIDB_CONNECTOR_DATABASE",
+      "userEnv": "TIDB_CONNECTOR_USER",
+      "passwordEnv": "TIDB_CONNECTOR_PASSWORD",
+      "sslEnv": "TIDB_CONNECTOR_SSL"
+    },
+    "modeling": {
+      "tablesFromSqlTemplates": false,
+      "tables": [
+        "tenant_plat",
+        "channel",
+        "dim_report_channel_data_percent_config",
+        "dim_player",
+        "dwd_player_login_log",
+        "dwd_order_deposit",
+        "dwd_order_withdrawal",
+        "dwd_bet_order",
+        "bds_bet_order_detail",
+        "dim_game_type",
+        "dim_game_line",
+        "dim_game_line_series",
+        "dwd_order_rebate",
+        "dwd_order_add_or_sub",
+        "dwd_order_activity",
+        "dwd_order_task",
+        "dwd_order_promote_activity",
+        "dwd_order_lottery",
+        "dwd_order_vip_award",
+        "dim_game",
+        "dim_vip",
+        "dim_channel_player_statistics_of_day"
+      ]
+    },
+    "knowledgeAssets": {
+      "enabled": true,
+      "manifest": "docs/业务需求/knowledge-base/import-manifest.sample.yaml",
+      "root": "",
+      "sqlTemplatesDir": "docs/业务需求/knowledge-base/sql-templates",
+      "askPolicyFile": "docs/业务需求/问数策略配置建议-2026-05-01.md"
+    },
+    "postImportGeneration": {
+      "suggestedQuestions": true,
+      "semanticDescriptions": true,
+      "relationships": true,
+      "semanticPrompt": "请使用中文业务口径生成简洁语义描述，保留原始字段含义和 TiDB 报表指标口径。"
+    },
+    "validation": {
+      "runCoreCases": true,
+      "saveDegradedTables": true,
+      "degradedTableCasesCsv": "docs/业务需求/csv/16_第一期Excel示例表格降级保存清单.csv",
+      "askTimeoutSeconds": 420,
+      "answerTimeoutSeconds": 420,
+      "answerPollIntervalSeconds": 2,
+      "answerGenerationTriggerAttempts": 2,
+      "max429Retries": 3,
+      "requestIntervalMs": [
+        1000,
+        3000
+      ],
+      "batchIntervalMs": [
+        5000,
+        10000
+      ],
+      "coreCases": [
+        {
+          "id": "T02",
+          "question": "查询租户平台1下渠道1867和1760的渠道商、渠道费率配置、折扣比例、rate_percent 和 has_percent_config，要求区分有配置和无配置渠道"
+        },
+        {
+          "id": "T01",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16的渠道日基础汇总综合日报，按天展示注册、登录、充值、提现、投注、输赢和优惠指标"
+        },
+        {
+          "id": "T03",
+          "question": "提取租户平台72下渠道1932首存日期在2026-04-10到2026-04-16的首存 cohort 用户清单，包含 player_id、首存金额、首存日期和是否新客"
+        },
+        {
+          "id": "T08",
+          "question": "统计租户平台72下渠道1932首存日期在2026-04-10到2026-04-16的首存 cohort 二存到六存人数、比例和人均金额"
+        },
+        {
+          "id": "T10",
+          "question": "输出租户平台72下渠道1932首存日期在2026-04-10到2026-04-16的首存用户 D1 到 D7 每日充值、提现、有效投注、输赢、杀率和投充比趋势"
+        },
+        {
+          "id": "T04",
+          "question": "统计租户平台72下渠道1932首存日期在2026-04-10到2026-04-16的首存 cohort 首存后 D1 到 D7 的每日渠道收入和累计渠道收入"
+        },
+        {
+          "id": "T06",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16按有效投注排名的 TOP3 与非TOP3 用户分层，输出 player_id、有效投注、输赢、投注次数和排名"
+        },
+        {
+          "id": "T09",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16所有用户、TOP3 和非TOP3 的充值、提现、有效投注、输赢、杀率和投充比"
+        },
+        {
+          "id": "T11",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16按 game_type_id 和游戏类型分组的下注次数、有效投注、均注金额、输赢、杀率和投注占比"
+        },
+        {
+          "id": "T12",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16 TOP3 与非TOP3 用户按 game_type_id 分组的有效投注、下注次数、输赢、杀率和投注占比"
+        },
+        {
+          "id": "T13",
+          "question": "统计租户平台72下渠道1932在2026-04-10到2026-04-16的首存金额分桶人数和占比，重点关注100元、200元、500元和其他桶"
+        }
+      ]
+    },
+    "report": {
+      "outputDir": "wren-ui/tmp/postdeploy-tidb-business-bootstrap"
+    }
+  },
+  "profiles": {
+    "demo": {
+      "ui": {
+        "baseUrl": "http://127.0.0.1:3001",
+        "autoBootstrap": true
+      },
+      "workspace": {
+        "name": "saas业务空间",
+        "slug": "tidb-business-demo"
+      },
+      "knowledgeBase": {
+        "name": "saas业务知识库",
+        "slug": "tidb-business-demo-kb"
+      },
+      "tidbSeed": {
+        "enabled": false,
+        "resetDatabase": false
+      }
+    },
+    "test": {
+      "ui": {
+        "baseUrl": "http://127.0.0.1:3002",
+        "autoBootstrap": true
+      },
+      "workspace": {
+        "name": "saas业务空间",
+        "slug": "tidb-business-test"
+      },
+      "knowledgeBase": {
+        "name": "saas业务知识库",
+        "slug": "tidb-business-test-kb"
+      },
+      "tidbSeed": {
+        "enabled": true,
+        "resetDatabase": true
+      }
+    },
+    "prod": {
+      "ui": {
+        "baseUrl": "http://127.0.0.1:3000",
+        "autoBootstrap": false
+      },
+      "workspace": {
+        "name": "saas业务空间",
+        "slug": "tidb-business"
+      },
+      "knowledgeBase": {
+        "name": "saas业务知识库",
+        "slug": "tidb-business-kb"
+      },
+      "tidbSeed": {
+        "enabled": false,
+        "resetDatabase": false
+      },
+      "validation": {
+        "saveDegradedTables": false
+      }
+    }
+  }
+}

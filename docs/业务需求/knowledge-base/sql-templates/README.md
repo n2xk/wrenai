@@ -75,8 +75,8 @@
 | T08 | 首存 cohort 续存 | `draft_sql` | `imported` | `first_deposit_date + channel_id` | [T08_首存 cohort 续存.md](./T08_首存%20cohort%20续存.md) |
 | T09 | 所有用户区间汇总 | `draft_sql` | `imported` | `time_range + user_segment` | [T09_所有用户区间汇总.md](./T09_所有用户区间汇总.md) |
 | T10 | 首存用户日龄趋势 | `draft_sql` | `imported` | `first_deposit_date + relative_day_no` | [T10_首存用户日龄趋势.md](./T10_首存用户日龄趋势.md) |
-| T11 | 按游戏类型分布 | `draft_sql` | `imported` | `game_type_id` | [T11_按游戏类型分布.md](./T11_按游戏类型分布.md) |
-| T12 | TOP3/5 游戏类型分层 | `draft_sql` | `imported` | `user_segment + game_type_id` | [T12_TOP3-5 游戏类型分层.md](./T12_TOP3-5%20游戏类型分层.md) |
+| T11 | 按游戏类型分布 | `draft_sql` | `imported` | `dim_game_type_id` | [T11_按游戏类型分布.md](./T11_按游戏类型分布.md) |
+| T12 | TOP3/5 游戏类型分层 | `draft_sql` | `imported` | `user_segment + dim_game_type_id` | [T12_TOP3-5 游戏类型分层.md](./T12_TOP3-5%20游戏类型分层.md) |
 | T13 | 首存金额分桶 | `draft_sql` | `imported` | `first_deposit_date + bucket_name` | [T13_首存金额分桶.md](./T13_首存金额分桶.md) |
 | T14 | 投放金额并表 | `blocked_missing_source` | `blocked` | `biz_date + channel_id` | [T14_投放金额并表.md](./T14_投放金额并表.md) |
 | T15 | 流量指标并表 | `blocked_missing_source` | `blocked` | `biz_date + channel_id` | [T15_流量指标并表.md](./T15_流量指标并表.md) |

@@ -4,6 +4,7 @@ import {
   resolvePersistableConnectorFieldNames,
   resolvePersistableConnectorTableName,
 } from './knowledgeAssetWizardPersistence';
+import { KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT } from '@/utils/knowledgeMutationGuard';
 
 const mockCreateModel = jest.fn();
 const mockUpdateModelMetadata = jest.fn();
@@ -137,6 +138,28 @@ describe('knowledgeAssetWizardPersistence', () => {
         }),
       }),
     );
+  });
+
+  it('rejects persistence when selector has no knowledge base', async () => {
+    await expect(
+      persistConnectorAssetDrafts({
+        assetDraftPreviews: [
+          {
+            connectorTableName: 'orders',
+            description: '订单模型',
+            fields: [{ fieldName: 'order_id' }],
+            name: '业务订单',
+            primaryKey: 'order_id',
+            sourceTableName: 'sales.orders',
+          },
+        ],
+        selector: {
+          workspaceId: 'ws-1',
+        },
+      }),
+    ).rejects.toThrow(KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT);
+    expect(mockCreateModel).not.toHaveBeenCalled();
+    expect(mockDeployCurrentRuntime).not.toHaveBeenCalled();
   });
 
   it('activates connector runtime before persisting multi-table imports', async () => {

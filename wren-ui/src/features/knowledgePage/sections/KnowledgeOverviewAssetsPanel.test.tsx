@@ -78,4 +78,20 @@ describe('KnowledgeOverviewAssetsPanel', () => {
     expect(html).toContain('系统样例已预置结构与问答配置，可直接浏览体验。');
     expect(html).not.toContain('knowledge-add-asset-card');
   });
+
+  it('renders mutation hint and hides add entry when no knowledge base is selected', () => {
+    const html = renderToStaticMarkup(
+      <KnowledgeOverviewAssetsPanel
+        {...baseProps()}
+        detailAssets={[]}
+        renderedDetailAssets={[]}
+        activeDetailAsset={null}
+        isKnowledgeMutationDisabled
+        knowledgeMutationHint="请先创建或选择知识库，再添加业务资产。"
+      />,
+    );
+
+    expect(html).toContain('请先创建或选择知识库，再添加业务资产。');
+    expect(html).not.toContain('添加资产');
+  });
 });

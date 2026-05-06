@@ -29,6 +29,7 @@ type KnowledgeOverviewSectionProps = {
   isSnapshotReadonlyKnowledgeBase: boolean;
   isKnowledgeMutationDisabled: boolean;
   historicalSnapshotReadonlyHint: string;
+  knowledgeMutationHint?: string | null;
   onOpenAssetWizard: () => void;
   onOpenAssetDetail: (asset: AssetView) => void;
   onCloseAssetDetail: () => void;
@@ -59,6 +60,7 @@ export default function KnowledgeOverviewSection({
   isSnapshotReadonlyKnowledgeBase,
   isKnowledgeMutationDisabled,
   historicalSnapshotReadonlyHint,
+  knowledgeMutationHint,
   onOpenAssetWizard,
   onOpenAssetDetail,
   onCloseAssetDetail,
@@ -90,6 +92,7 @@ export default function KnowledgeOverviewSection({
         isSnapshotReadonlyKnowledgeBase={isSnapshotReadonlyKnowledgeBase}
         isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
         historicalSnapshotReadonlyHint={historicalSnapshotReadonlyHint}
+        knowledgeMutationHint={knowledgeMutationHint}
         onOpenAssetWizard={onOpenAssetWizard}
         onOpenAssetDetail={onOpenAssetDetail}
       />

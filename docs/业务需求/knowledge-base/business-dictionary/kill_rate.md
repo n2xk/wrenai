@@ -13,12 +13,12 @@ aliases:
   - 输赢率
   - 用户输赢率
 definition: 平台输赢或用户输赢相对投注额的比率，必须保持收入/输赢口径一致
-canonical_expression: SUM(net_win_amount) / NULLIF(SUM(valid_amount), 0)
+canonical_expression: SUM(dwd_bet_order.win_loss_amount) / NULLIF(SUM(dwd_bet_order.valid_bet_amount), 0)
 source_tables:
   - dwd_bet_order
 source_fields:
-  - dwd_bet_order.valid_amount
-  - dwd_bet_order.net_win_amount
+  - dwd_bet_order.valid_bet_amount
+  - dwd_bet_order.win_loss_amount
 related_rules:
   - R08
 related_templates:
@@ -29,7 +29,7 @@ related_templates:
 features:
   - ratio
   - kill_rate
-  - game_type
+  - dim_game_type
 conflict_terms:
   - bet_deposit_ratio
   - roi
@@ -48,7 +48,7 @@ supported_grains:
   - biz_date
   - date_range
   - channel_id
-  - game_type_id
+  - dim_game_type_id
   - player_segment
 ---
 
@@ -61,7 +61,7 @@ supported_grains:
 ## 规范表达式
 
 ```sql
-SUM(net_win_amount) / NULLIF(SUM(valid_amount), 0)
+SUM(dwd_bet_order.win_loss_amount) / NULLIF(SUM(dwd_bet_order.valid_bet_amount), 0)
 ```
 
 ## Runtime 用途

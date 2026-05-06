@@ -16,10 +16,14 @@ aliases:
   - 下载点击UV
   - UV下载率
   - UV注册率
-definition: 访问、下载、注册等上游流量指标，当前依赖外部数据源补充
-canonical_expression: external traffic metrics by biz_date + channel_id
-source_tables: []
-source_fields: []
+definition: 访问、下载、注册等上游流量指标，生产运行时依赖外部数据源补充；本地 FULL 回归可使用 marketing_external_metrics_daily 样例表
+canonical_expression: marketing_external_metrics_daily by biz_date + tenant_plat_id + channel_id
+source_tables:
+  - marketing_external_metrics_daily
+source_fields:
+  - marketing_external_metrics_daily.access_pv
+  - marketing_external_metrics_daily.access_uv
+  - marketing_external_metrics_daily.download_click_uv
 related_rules:
   - R13
 related_templates:
@@ -55,7 +59,7 @@ supported_grains:
 ## 规范表达式
 
 ```sql
-external traffic metrics by biz_date + channel_id
+marketing_external_metrics_daily by biz_date + tenant_plat_id + channel_id
 ```
 
 ## Runtime 用途

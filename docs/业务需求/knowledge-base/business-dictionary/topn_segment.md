@@ -30,7 +30,7 @@ source_tables:
 source_fields:
   - dwd_bet_order.player_id
   - dwd_bet_order.game_type_id
-  - dwd_bet_order.valid_amount
+  - dwd_bet_order.valid_bet_amount
 related_rules:
   - R05
 related_templates:
@@ -60,7 +60,7 @@ required_slots:
 supported_grains:
   - date_range
   - player_id
-  - game_type_id
+  - dim_game_type_id
   - top_n
 ---
 

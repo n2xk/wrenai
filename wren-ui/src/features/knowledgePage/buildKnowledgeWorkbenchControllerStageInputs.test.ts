@@ -38,6 +38,7 @@ const baseArgs = {
     canCreateKnowledgeBase: true,
     createKnowledgeBaseBlockedReason: null,
     displayKnowledgeName: 'Revenue',
+    hasActiveKnowledgeBase: true,
     isKnowledgeMutationDisabled: false,
     isReadonlyKnowledgeBase: false,
     isSnapshotReadonlyKnowledgeBase: false,
@@ -137,6 +138,9 @@ describe('buildKnowledgeWorkbenchControllerStageInputs', () => {
     const mainStage = buildKnowledgeWorkbenchControllerMainStageInput(baseArgs);
     expect(mainStage.modelingWorkspaceKey).toBe('kb-1:snap-1:deploy-1');
     expect(mainStage.previewFieldCount).toBe(4);
+    expect(mainStage.onCreateKnowledgeBase).toBe(
+      baseArgs.actions.openCreateKnowledgeBaseModal,
+    );
   });
 
   it('builds overlays input lane', () => {

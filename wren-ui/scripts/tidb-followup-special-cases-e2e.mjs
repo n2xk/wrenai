@@ -24,9 +24,9 @@ const selector = {
 
 const adSpendCsv = [
   'date,channel_id,ad_spend',
-  '2026-04-01,990011,1000',
-  '2026-04-02,990011,2000',
-  '2026-04-03,990011,500',
+  '2026-04-10,1932,1120',
+  '2026-04-13,1932,1480',
+  '2026-04-16,1932,1840',
 ].join('\n');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -191,7 +191,7 @@ async function waitForChart(request, threadId, chartResponseId) {
 
 async function runRoute05(page, request) {
   const baseQuestion =
-    '统计租户平台990001下渠道990011在2026-04-01到2026-04-03首存cohort从D1到D7的ROI';
+    '统计租户平台72下渠道1932在2026-04-10到2026-04-16首存cohort从D1到D7的ROI';
   const base = await ask(page, request, baseQuestion);
   const follow = await ask(page, request, adSpendCsv, base.threadId);
   const finalSummary = summarizeAnswer(follow.response);
@@ -212,8 +212,8 @@ async function runRoute05(page, request) {
 
 async function runRoute13(page, request) {
   const q1 = '看这个渠道最近ROI怎么样';
-  const q2 = '租户平台990001';
-  const q3 = '渠道990011，2026-04-01到2026-04-03，首存后D7';
+  const q2 = '租户平台72';
+  const q3 = '渠道1932，2026-04-10到2026-04-16，首存后D7';
   const first = await ask(page, request, q1);
   const second = await ask(page, request, q2, first.threadId);
   const third = await ask(page, request, q3, first.threadId);
@@ -221,8 +221,8 @@ async function runRoute13(page, request) {
   const finalSummary = summarizeAnswer(final.response);
   const status =
     finalSummary.hasSql &&
-    /990001/.test(final.response.sql || '') &&
-    /990011/.test(final.response.sql || '') &&
+    /72/.test(final.response.sql || '') &&
+    /1932/.test(final.response.sql || '') &&
     /supplied_external_ad_spend|ad_spend/i.test(final.response.sql || '')
       ? 'PASS'
       : 'FAIL';
@@ -241,7 +241,7 @@ async function runRoute13(page, request) {
 
 async function runPx12(page, request) {
   const question =
-    '统计租户平台990001下渠道990011在2026-04-01到2026-04-07全部用户、TOP5和非TOP5的存款、有效投注、输赢、投充比和杀率';
+    '统计租户平台72下渠道1932在2026-04-10到2026-04-16全部用户、TOP5和非TOP5的存款、有效投注、输赢、投充比和杀率';
   const base = await ask(page, request, question);
   const chartCreated = await fetchJson(
     request,

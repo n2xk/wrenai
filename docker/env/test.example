@@ -1,4 +1,4 @@
-# PM2-managed local test/regression app environment.
+# PM2-managed local dev-test/regression app environment.
 # Copy this file to docker/env/test.local and fill provider keys there.
 # docker/env/*.local is ignored by git.
 
@@ -44,3 +44,20 @@ WREN_ENGINE_ENDPOINT=http://127.0.0.1:8080
 WREN_AI_ENDPOINT=http://127.0.0.1:5555
 IBIS_SERVER_ENDPOINT=http://127.0.0.1:8000
 TZ=UTC
+
+# Post-deploy TiDB business bootstrap. Copy to test.local and adjust if your TiDB demo is elsewhere.
+WREN_BOOTSTRAP_EMAIL=test@example.com
+WREN_BOOTSTRAP_PASSWORD=test-password-change-me
+TIDB_SEED_ENABLED=true
+TIDB_SEED_RESET_DATABASE=true
+TIDB_SEED_HOST=127.0.0.1
+TIDB_SEED_PORT=4000
+TIDB_SEED_USER=root
+TIDB_SEED_PASSWORD=
+TIDB_SEED_DATABASE=tidb_business_demo
+TIDB_CONNECTOR_HOST=tidb-demo
+TIDB_CONNECTOR_PORT=4000
+TIDB_CONNECTOR_USER=root
+TIDB_CONNECTOR_PASSWORD=
+TIDB_CONNECTOR_DATABASE=tidb_business_demo
+TIDB_CONNECTOR_SSL=false

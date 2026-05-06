@@ -1,0 +1,134 @@
+COMPOSE_PROJECT_NAME=demo
+PLATFORM=linux/amd64
+
+# Public ports. Demo uses non-default host ports so it can coexist with dev/test/prod.
+HOST_PORT=3001
+AI_SERVICE_FORWARD_PORT=5556
+POSTGRES_FORWARD_PORT=9433
+WREN_ENGINE_FORWARD_PORT=18080
+WREN_ENGINE_SQL_FORWARD_PORT=17432
+IBIS_SERVER_FORWARD_PORT=18000
+WREN_AI_SERVICE_PORT=5555
+TRINO_FORWARD_PORT=18081
+TRINO_CATALOG_MANAGEMENT=dynamic
+TRINO_CATALOG_HOST_DIR=./trino/demo-catalog
+
+# Internal service ports/URLs used by containers. Keep these at the image defaults;
+# only *_FORWARD_PORT should change to avoid host-port conflicts.
+WREN_ENGINE_INTERNAL_PORT=8080
+WREN_ENGINE_SQL_INTERNAL_PORT=7432
+IBIS_SERVER_INTERNAL_PORT=8000
+PG_URL=postgres://postgres:postgres@postgres:5432/wrenai
+PG_CONN_STR=postgresql://postgres:postgres@postgres:5432/wrenai
+
+# Database defaults. Demo can use the bundled PostgreSQL; replace with an external endpoint if needed.
+POSTGRES_DB=wrenai
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
+# Image versions.
+WREN_PRODUCT_VERSION=demo
+WREN_ENGINE_VERSION=local
+WREN_AI_SERVICE_VERSION=local
+WREN_UI_VERSION=local
+WREN_AI_SERVICE_IMAGE_REPO=wren-ai-service
+WREN_AI_SERVICE_IMAGE_TAG=demo
+WREN_UI_IMAGE_REPO=wren-ui
+WREN_UI_IMAGE_TAG=demo
+IBIS_SERVER_VERSION=local
+TRINO_VERSION=475
+WREN_ENGINE_IMAGE_REPO=wren-engine
+WREN_ENGINE_IMAGE_TAG=demo
+IBIS_SERVER_IMAGE_REPO=wren-engine-ibis
+IBIS_SERVER_IMAGE_TAG=demo
+IBIS_SERVER_BUILD_ENV=prod
+LOCAL_STORAGE=./data/demo
+
+# External LiteLLM proxy. Copy to demo.local and replace placeholders before real demos.
+# The LiteLLM service is managed outside this Compose stack.
+LITELLM_API_BASE=https://litellm.example.com/v1
+LITELLM_API_KEY=
+LITELLM_GENERATION_MODEL=wren-generation
+LITELLM_EMBEDDING_MODEL=wren-embedding
+
+# Temporary direct-OpenRouter smoke-test placeholders. Use these only to validate demo-up before external LiteLLM is ready.
+# For smoke test, set AI_CONFIG_FILE=./config/ai.config.openrouter-smoke.example.yaml in demo.local.
+OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+OPENROUTER_GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash
+OPENROUTER_EMBEDDING_MODEL=openai/qwen/qwen3-embedding-8b
+OPENROUTER_API_KEY=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+AZURE_OPENAI_API_KEY=
+GOOGLE_API_KEY=
+
+# AI service config/secrets. Default config talks to external LiteLLM; smoke config can talk directly to OpenRouter.
+AI_SERVICE_ENV_FILE=./env/demo.example
+AI_CONFIG_FILE=./config/ai.config.example.yaml
+LANGFUSE_SECRET_KEY=
+LANGFUSE_PUBLIC_KEY=
+EMBEDDING_MODEL_DIMENSION=4096
+GENERATION_MODEL=wren-generation
+
+# UI runtime / telemetry.
+USER_UUID=
+POSTHOG_API_KEY=
+POSTHOG_HOST=
+TELEMETRY_ENABLED=false
+EXPERIMENTAL_ENGINE_RUST_VERSION=false
+TRINO_RUNTIME_USER=wrenai
+TRINO_RUNTIME_PASSWORD=
+TRINO_RUNTIME_SSL=false
+BACKGROUND_TRACKER_WORKSPACE_ID=
+
+# Optional startup product initialization.
+# Demo can auto-create the first owner and seed system sample workspaces on container start.
+# Override these in docker/env/demo.local before exposing the environment.
+WREN_AUTO_BOOTSTRAP=true
+WREN_AUTO_BOOTSTRAP_REQUIRED=false
+WREN_BOOTSTRAP_EMAIL=demo@example.com
+WREN_BOOTSTRAP_PASSWORD=demo-password-change-me
+WREN_BOOTSTRAP_DISPLAY_NAME=Demo Owner
+WREN_BOOTSTRAP_LOCALE=zh-CN
+WREN_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=180
+
+# Optional local TiDB source for smoke tests. Real demo deployments should point
+# TIDB_CONNECTOR_* at an external TiDB and keep this disabled. On a developer
+# machine you can set TIDB_DEMO_ENABLED=true in demo.local to start tidb-demo
+# from compose.test-sources.yaml without colliding with test-env on port 4000.
+TIDB_DEMO_ENABLED=false
+TIDB_DEMO_PORT=4001
+TIDB_DEMO_STATUS_PORT=10081
+
+# Post-deploy TiDB business bootstrap.
+# TIDB_SEED_* is only for optional host-side schema/seed import.
+# TIDB_CONNECTOR_* is the product connector used by Wren/engine.
+TIDB_SEED_ENABLED=false
+TIDB_SEED_RESET_DATABASE=false
+TIDB_SEED_HOST=
+TIDB_SEED_PORT=4000
+TIDB_SEED_USER=
+TIDB_SEED_PASSWORD=
+TIDB_SEED_DATABASE=
+TIDB_CONNECTOR_HOST=
+TIDB_CONNECTOR_PORT=4000
+TIDB_CONNECTOR_USER=
+TIDB_CONNECTOR_PASSWORD=
+TIDB_CONNECTOR_DATABASE=
+TIDB_CONNECTOR_SSL=false
+
+# Local smoke example for demo.local:
+# TIDB_DEMO_ENABLED=true
+# TIDB_SEED_ENABLED=true
+# TIDB_SEED_RESET_DATABASE=true
+# TIDB_SEED_HOST=127.0.0.1
+# TIDB_SEED_PORT=4001
+# TIDB_SEED_USER=root
+# TIDB_SEED_PASSWORD=
+# TIDB_SEED_DATABASE=tidb_business_demo
+# TIDB_CONNECTOR_HOST=tidb-demo
+# TIDB_CONNECTOR_PORT=4000
+# TIDB_CONNECTOR_USER=root
+# TIDB_CONNECTOR_PASSWORD=
+# TIDB_CONNECTOR_DATABASE=tidb_business_demo
+# TIDB_CONNECTOR_SSL=false

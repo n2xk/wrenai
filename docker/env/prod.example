@@ -5,14 +5,19 @@ PLATFORM=linux/amd64
 HOST_PORT=3000
 AI_SERVICE_FORWARD_PORT=5555
 POSTGRES_FORWARD_PORT=9432
-WREN_ENGINE_PORT=8080
-WREN_ENGINE_SQL_PORT=7432
-IBIS_SERVER_PORT=8000
+WREN_ENGINE_FORWARD_PORT=8080
+WREN_ENGINE_SQL_FORWARD_PORT=7432
+IBIS_SERVER_FORWARD_PORT=8000
 WREN_AI_SERVICE_PORT=5555
 TRINO_FORWARD_PORT=8081
 TRINO_CATALOG_MANAGEMENT=dynamic
+TRINO_CATALOG_HOST_DIR=./trino/prod-catalog
 
-# Internal service URLs used by containers.
+# Internal service ports/URLs used by containers. Keep these at the image defaults;
+# only *_FORWARD_PORT should change to avoid host-port conflicts.
+WREN_ENGINE_INTERNAL_PORT=8080
+WREN_ENGINE_SQL_INTERNAL_PORT=7432
+IBIS_SERVER_INTERNAL_PORT=8000
 PG_URL=postgres://postgres:postgres@postgres:5432/wrenai
 PG_CONN_STR=postgresql://postgres:postgres@postgres:5432/wrenai
 
@@ -24,26 +29,45 @@ POSTGRES_PASSWORD=postgres
 # Image versions.
 WREN_PRODUCT_VERSION=local
 WREN_ENGINE_VERSION=local
-WREN_AI_SERVICE_VERSION=0.29.0
-WREN_UI_VERSION=0.32.2
+WREN_AI_SERVICE_VERSION=local
+WREN_UI_VERSION=local
+WREN_AI_SERVICE_IMAGE_REPO=wren-ai-service
+WREN_AI_SERVICE_IMAGE_TAG=prod
+WREN_UI_IMAGE_REPO=wren-ui
+WREN_UI_IMAGE_TAG=prod
 IBIS_SERVER_VERSION=local
 TRINO_VERSION=475
-WREN_ENGINE_IMAGE_REPO=engine
-WREN_ENGINE_IMAGE_TAG=local
-IBIS_SERVER_IMAGE_REPO=engine-ibis
-IBIS_SERVER_IMAGE_TAG=local
+WREN_ENGINE_IMAGE_REPO=wren-engine
+WREN_ENGINE_IMAGE_TAG=prod
+IBIS_SERVER_IMAGE_REPO=wren-engine-ibis
+IBIS_SERVER_IMAGE_TAG=prod
 IBIS_SERVER_BUILD_ENV=prod
 LOCAL_STORAGE=./data
 
-# AI service config/secrets.
+# External LiteLLM proxy. Copy to prod.local and replace placeholders before real deployments.
+# The LiteLLM service is managed outside this Compose stack.
+LITELLM_API_BASE=https://litellm.example.com/v1
+LITELLM_API_KEY=
+LITELLM_GENERATION_MODEL=wren-generation
+LITELLM_EMBEDDING_MODEL=wren-embedding
+
+# Temporary direct-OpenRouter smoke-test placeholders. Normally unused in prod.
+OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+OPENROUTER_GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash
+OPENROUTER_EMBEDDING_MODEL=openai/qwen/qwen3-embedding-8b
+OPENROUTER_API_KEY=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+AZURE_OPENAI_API_KEY=
+GOOGLE_API_KEY=
+
+# AI service config/secrets. Default config talks to external LiteLLM; smoke config can talk directly to OpenRouter.
 AI_SERVICE_ENV_FILE=./env/prod.example
 AI_CONFIG_FILE=./config/ai.config.example.yaml
-OPENAI_API_KEY=
-OPENROUTER_API_KEY=
 LANGFUSE_SECRET_KEY=
 LANGFUSE_PUBLIC_KEY=
 EMBEDDING_MODEL_DIMENSION=4096
-GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash
+GENERATION_MODEL=wren-generation
 
 # UI runtime / telemetry.
 USER_UUID=
@@ -55,3 +79,28 @@ TRINO_RUNTIME_USER=wrenai
 TRINO_RUNTIME_PASSWORD=
 TRINO_RUNTIME_SSL=false
 BACKGROUND_TRACKER_WORKSPACE_ID=
+
+# Optional startup product initialization.
+# Keep disabled in production unless a one-time bootstrap owner is intentionally provided.
+WREN_AUTO_BOOTSTRAP=false
+WREN_AUTO_BOOTSTRAP_REQUIRED=false
+WREN_BOOTSTRAP_EMAIL=
+WREN_BOOTSTRAP_PASSWORD=
+WREN_BOOTSTRAP_DISPLAY_NAME=
+WREN_BOOTSTRAP_LOCALE=zh-CN
+WREN_BOOTSTRAP_WAIT_TIMEOUT_SECONDS=180
+
+# Post-deploy TiDB business bootstrap. Fill these in prod.local before running the bootstrap runner.
+TIDB_SEED_ENABLED=false
+TIDB_SEED_RESET_DATABASE=false
+TIDB_SEED_HOST=
+TIDB_SEED_PORT=4000
+TIDB_SEED_USER=
+TIDB_SEED_PASSWORD=
+TIDB_SEED_DATABASE=
+TIDB_CONNECTOR_HOST=
+TIDB_CONNECTOR_PORT=4000
+TIDB_CONNECTOR_USER=
+TIDB_CONNECTOR_PASSWORD=
+TIDB_CONNECTOR_DATABASE=
+TIDB_CONNECTOR_SSL=false

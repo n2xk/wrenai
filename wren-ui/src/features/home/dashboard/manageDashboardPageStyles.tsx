@@ -63,10 +63,12 @@ export const DashboardRailCard = styled(Card)`
 `;
 
 export const DashboardRailSection = styled.section`
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
 `;
 
 export const DashboardRailSectionHeader = styled.div`
@@ -100,11 +102,20 @@ export const DashboardRailSectionCount = styled.span`
 `;
 
 export const DashboardRailList = styled.div`
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+
+  @media (max-width: 1080px) {
+    max-height: min(60vh, 420px);
+  }
 `;
 
 export const DashboardRailItem = styled.div.attrs({
@@ -112,12 +123,13 @@ export const DashboardRailItem = styled.div.attrs({
   tabIndex: 0,
 })<{ $active?: boolean }>`
   width: 100%;
+  min-height: 30px;
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 5px 6px 5px 8px;
+  padding: 5px 7px;
   border-radius: var(--nova-radius-control);
   border: 1px solid
     ${(props) => (props.$active ? 'rgba(141, 101, 225, 0.16)' : 'transparent')};
@@ -163,7 +175,7 @@ export const DashboardRailTitle = styled.span`
   gap: 6px;
   min-width: 0;
   font-size: 12px;
-  line-height: 1.25;
+  line-height: 1.3;
   font-weight: 500;
   color: #252b3a;
 

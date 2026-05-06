@@ -1,6 +1,9 @@
 services:
   ai-service:
-    image: ghcr.io/canner/wren-ai-service:${WREN_AI_SERVICE_VERSION:-0.29.0}
+    image: ${WREN_AI_SERVICE_IMAGE_REPO:-wren-ai-service}:${WREN_AI_SERVICE_IMAGE_TAG:-local}
+    build:
+      context: ../wren-ai-service
+      dockerfile: docker/Dockerfile
     restart: on-failure
     platform: ${PLATFORM:-linux/amd64}
     expose:
@@ -14,13 +17,13 @@ services:
       CONFIG_PATH: /app/config.yaml
       PG_CONN_STR: ${PG_CONN_STR:-postgresql://postgres:postgres@postgres:5432/wrenai}
       EMBEDDING_MODEL_DIMENSION: ${EMBEDDING_MODEL_DIMENSION:-3072}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
     volumes:
       - ${AI_CONFIG_FILE:-./config/ai.config.example.yaml}:/app/config.yaml:ro
-      - ./data:/app/data:ro
+      - ${LOCAL_STORAGE:-./data}:/app/data:ro
     networks:
       - app
     depends_on:
@@ -28,14 +31,17 @@ services:
       - ibis-server
 
   ui:
-    image: ghcr.io/canner/wren-ui:${WREN_UI_VERSION:-0.32.2}
+    image: ${WREN_UI_IMAGE_REPO:-wren-ui}:${WREN_UI_IMAGE_TAG:-local}
+    build:
+      context: ../wren-ui
+      dockerfile: Dockerfile
     restart: on-failure
     platform: ${PLATFORM:-linux/amd64}
     environment:
       PG_URL: ${PG_URL:-postgres://postgres:postgres@postgres:5432/wrenai}
-      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT:-8080}
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_INTERNAL_PORT:-8080}
       WREN_AI_ENDPOINT: http://ai-service:${WREN_AI_SERVICE_PORT:-5555}
-      IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_PORT:-8000}
+      IBIS_SERVER_ENDPOINT: http://ibis-server:${IBIS_SERVER_INTERNAL_PORT:-8000}
       TRINO_CATALOG_DIR: /app/trino/catalog
       TRINO_CATALOG_MANAGEMENT: ${TRINO_CATALOG_MANAGEMENT:-dynamic}
       TRINO_CATALOG_MANAGEMENT_HOST: trino
@@ -47,7 +53,7 @@ services:
       TRINO_RUNTIME_PASSWORD: ${TRINO_RUNTIME_PASSWORD:-}
       TRINO_RUNTIME_SSL: ${TRINO_RUNTIME_SSL:-false}
       GENERATION_MODEL: ${GENERATION_MODEL:-gpt-4o-mini}
-      WREN_ENGINE_PORT: ${WREN_ENGINE_PORT:-8080}
+      WREN_ENGINE_PORT: ${WREN_ENGINE_INTERNAL_PORT:-8080}
       WREN_AI_SERVICE_VERSION: ${WREN_AI_SERVICE_VERSION:-0.29.0}
       WREN_UI_VERSION: ${WREN_UI_VERSION:-0.32.2}
       WREN_ENGINE_VERSION: ${WREN_ENGINE_VERSION:-local}
@@ -62,11 +68,18 @@ services:
       EXPERIMENTAL_ENGINE_RUST_VERSION: ${EXPERIMENTAL_ENGINE_RUST_VERSION:-false}
       WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION:-local}
       BACKGROUND_TRACKER_WORKSPACE_ID: ${BACKGROUND_TRACKER_WORKSPACE_ID:-}
+      WREN_AUTO_BOOTSTRAP: ${WREN_AUTO_BOOTSTRAP:-false}
+      WREN_AUTO_BOOTSTRAP_REQUIRED: ${WREN_AUTO_BOOTSTRAP_REQUIRED:-false}
+      WREN_BOOTSTRAP_EMAIL: ${WREN_BOOTSTRAP_EMAIL:-}
+      WREN_BOOTSTRAP_PASSWORD: ${WREN_BOOTSTRAP_PASSWORD:-}
+      WREN_BOOTSTRAP_DISPLAY_NAME: ${WREN_BOOTSTRAP_DISPLAY_NAME:-}
+      WREN_BOOTSTRAP_LOCALE: ${WREN_BOOTSTRAP_LOCALE:-zh-CN}
+      WREN_BOOTSTRAP_WAIT_TIMEOUT_SECONDS: ${WREN_BOOTSTRAP_WAIT_TIMEOUT_SECONDS:-180}
     ports:
       - "${HOST_PORT:-3000}:3000"
     volumes:
       - data:/app/data
-      - ./trino/catalog:/app/trino/catalog
+      - ${TRINO_CATALOG_HOST_DIR:-./trino/catalog}:/app/trino/catalog
     networks:
       - app
     depends_on:

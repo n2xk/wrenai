@@ -12,6 +12,9 @@ type KnowledgeWorkbenchControllerMainStageArgs = Omit<
     | 'isSnapshotReadonlyKnowledgeBase'
     | 'isReadonlyKnowledgeBase'
     | 'isKnowledgeMutationDisabled'
+    | 'hasActiveKnowledgeBase'
+    | 'canCreateKnowledgeBase'
+    | 'createKnowledgeBaseBlockedReason'
     | 'knowledgeMutationHint'
     | 'knowledgeDescription'
   >;

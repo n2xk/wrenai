@@ -10,6 +10,9 @@ type KnowledgeWorkbenchMainStageOverviewArgs = Omit<
     | 'isSnapshotReadonlyKnowledgeBase'
     | 'isReadonlyKnowledgeBase'
     | 'isKnowledgeMutationDisabled'
+    | 'hasActiveKnowledgeBase'
+    | 'canCreateKnowledgeBase'
+    | 'createKnowledgeBaseBlockedReason'
     | 'knowledgeMutationHint'
     | 'knowledgeDescription'
   >;
@@ -32,6 +35,9 @@ export default function buildKnowledgeWorkbenchMainStageOverviewInput({
   | 'isSnapshotReadonlyKnowledgeBase'
   | 'isReadonlyKnowledgeBase'
   | 'isKnowledgeMutationDisabled'
+  | 'hasActiveKnowledgeBase'
+  | 'canCreateKnowledgeBase'
+  | 'createKnowledgeBaseBlockedReason'
   | 'knowledgeMutationHint'
   | 'knowledgeDescription'
   | 'showKnowledgeAssetsLoading'
@@ -43,6 +49,7 @@ export default function buildKnowledgeWorkbenchMainStageOverviewInput({
   | 'detailAssetFields'
   | 'onOpenAssetWizard'
   | 'onOpenKnowledgeEditor'
+  | 'onCreateKnowledgeBase'
   | 'onOpenAssetDetail'
   | 'onCloseAssetDetail'
   | 'onChangeDetailTab'
@@ -57,6 +64,10 @@ export default function buildKnowledgeWorkbenchMainStageOverviewInput({
       knowledgeState.isSnapshotReadonlyKnowledgeBase,
     isReadonlyKnowledgeBase: knowledgeState.isReadonlyKnowledgeBase,
     isKnowledgeMutationDisabled: knowledgeState.isKnowledgeMutationDisabled,
+    hasActiveKnowledgeBase: knowledgeState.hasActiveKnowledgeBase,
+    canCreateKnowledgeBase: knowledgeState.canCreateKnowledgeBase,
+    createKnowledgeBaseBlockedReason:
+      knowledgeState.createKnowledgeBaseBlockedReason,
     knowledgeMutationHint: knowledgeState.knowledgeMutationHint,
     knowledgeDescription: knowledgeState.knowledgeDescription,
     showKnowledgeAssetsLoading: viewState.showKnowledgeAssetsLoading,
@@ -68,6 +79,7 @@ export default function buildKnowledgeWorkbenchMainStageOverviewInput({
     detailAssetFields: viewState.detailAssetFields,
     onOpenAssetWizard: viewState.handleOpenAssetWizard,
     onOpenKnowledgeEditor: actions.openEditKnowledgeBaseModal,
+    onCreateKnowledgeBase: actions.openCreateKnowledgeBaseModal,
     onOpenAssetDetail: viewState.openAssetDetail,
     onCloseAssetDetail: viewState.handleCloseAssetDetail,
     onChangeDetailTab: localState.setDetailTab,

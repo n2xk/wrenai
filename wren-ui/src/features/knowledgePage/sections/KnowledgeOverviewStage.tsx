@@ -22,6 +22,7 @@ export type KnowledgeOverviewStageProps = {
   isKnowledgeMutationDisabled: boolean;
   isReadonlyKnowledgeBase: boolean;
   isSnapshotReadonlyKnowledgeBase: boolean;
+  knowledgeMutationHint?: string | null;
   modelingSummary?: KnowledgeWorkbenchModelingSummary;
   onChangeDetailTab: (tab: KnowledgeWorkbenchDetailTab) => void;
   onChangeFieldFilter: (filter: KnowledgeDetailFieldFilter) => void;
@@ -50,6 +51,7 @@ export default function KnowledgeOverviewStage({
   isKnowledgeMutationDisabled,
   isReadonlyKnowledgeBase,
   isSnapshotReadonlyKnowledgeBase,
+  knowledgeMutationHint,
   modelingSummary,
   onChangeDetailTab,
   onChangeFieldFilter,
@@ -94,6 +96,7 @@ export default function KnowledgeOverviewStage({
       isKnowledgeMutationDisabled={isKnowledgeMutationDisabled}
       isReadonlyKnowledgeBase={isReadonlyKnowledgeBase}
       isSnapshotReadonlyKnowledgeBase={isSnapshotReadonlyKnowledgeBase}
+      knowledgeMutationHint={knowledgeMutationHint}
       loadMoreSentinelRef={loadMoreSentinelRef}
       modelingSummary={modelingSummary}
       previewFieldCount={previewFieldCount}

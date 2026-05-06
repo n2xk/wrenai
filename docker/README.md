@@ -1,18 +1,19 @@
 # WrenAI Docker Runtime
 
-本目录只负责 **Docker 化运行层**，按用途拆成三类：
+本目录负责本地开发测试、生产 / 演示完整栈和外部数据源验证的运行层，按用途拆成四类：
 
-1. 本地开发依赖层：Docker 跑 PostgreSQL / Wren Engine / Ibis Server / Trino，UI 和 AI Service 在宿主机用源码启动。
-2. 单机生产 / 演示完整栈：UI、AI Service、Engine、Ibis、Trino、PostgreSQL 全部容器化。
-3. 外部数据源连接验证：按 profile 临时启动 Docker 测试数据源，同一时间最多保留 3 个。
+1. 本机标准开发测试环境：`test-env-up.sh` 启动 Docker 依赖层、TiDB demo，并用 PM2 管理源码 UI / AI Service。日常开发验证和问数全量回归默认使用这一套。
+2. 依赖层高级入口：`dev-up.sh` 只启动 PostgreSQL / Wren Engine / Ibis Server / Trino，不启动 TiDB、UI、AI Service；仅用于手动调试或诊断。
+3. 单机生产 / 演示完整栈：从本仓库本地源码构建 UI、AI Service、Engine、Ibis 镜像，并容器化运行 Trino、PostgreSQL；模型接入通过外部 LiteLLM proxy。
+4. 外部数据源连接验证：按 profile 临时启动 Docker 测试数据源，同一时间最多保留 3 个。
 
 ## 目录结构
 
 ```text
 docker/
   compose.yaml              # 公共依赖层：postgres / engine / ibis-server / trino
-  compose.dev.yaml          # 本地开发 override：不启动 UI / AI Service
-  compose.prod.yaml         # 单机完整栈 override：启动 UI / AI Service
+  compose.dev.yaml          # dependency-only override：不启动 TiDB / UI / AI Service
+  compose.prod.yaml         # 单机完整栈 override：本地构建并启动 UI / AI Service；模型走外部 LiteLLM
   compose.test-sources.yaml # 外部数据源测试 profile
   env/                      # 环境变量模板；*.local 为本地私有文件，不提交
   config/                   # AI Service 配置模板；*.local.yaml 不提交
@@ -22,76 +23,43 @@ docker/
   data/                     # 本地运行数据目录；内容不提交
 ```
 
-## 本地开发：只启动依赖层
+## 本机标准开发测试环境（默认）
 
-默认开发依赖层：
+当前本机主路径是 `test-env`：它会启动 Docker 依赖层、TiDB demo，并用 PM2 管理源码 UI / AI Service。日常开发验证、问数调试、严格 UI E2E 回归都优先使用这一套。
 
-```bash
-./docker/scripts/dev-up.sh
-```
-
-这会启动：
-
-- `postgres`
-- `engine`
-- `ibis-server`
-- `trino`
-
-不会启动：
-
-- `ui`
-- `ai-service`
-- `local-tidb-demo`
-
-如果要达到当前问数回归测试环境效果，先准备本地测试环境变量：
+首次准备本地私密环境变量：
 
 ```bash
 cp docker/env/test.example docker/env/test.local
 # 然后在 docker/env/test.local 填 OPENROUTER_API_KEY / OPENAI_API_KEY 等私密 key
 ```
 
-再启动：
+启动：
 
 ```bash
 ./docker/scripts/test-env-up.sh
 ```
 
-`test-env-up.sh` 会启动开发依赖层，确保 `local-tidb-demo` 存在并运行在 `127.0.0.1:4000`，同时用 PM2 管理 UI / AI Service 两个源码进程。PM2 会优先读取 `docker/env/test.local`，没有则退回 `docker/env/test.example`。
+`test-env-up.sh` 会启动：
 
-PM2 会启动：
+- Docker：`postgres`、`engine`、`ibis-server`、`trino`、`local-tidb-demo`
+- PM2：`test-ai-service`、`test-ui`
 
-- `test-ai-service`：`127.0.0.1:5555`
+默认端口：
+
 - `test-ui`：`127.0.0.1:3002`
+- `test-ai-service`：`127.0.0.1:5555`
+- `local-tidb-demo`：`127.0.0.1:4000`，status `127.0.0.1:10080`
+- PostgreSQL：`127.0.0.1:9432`
+- Engine：`127.0.0.1:8080`，SQL port `127.0.0.1:7432`
+- Ibis Server：`127.0.0.1:8000`
+- Trino：`127.0.0.1:8081`
 
-等价源码命令：
-
-```bash
-# UI：3002
-cd wren-ui
-PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn dev
-
-# AI Service：5555
-cd wren-ai-service
-PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run python -m src.__main__
-```
-
-停止本地依赖层：
-
-```bash
-./docker/scripts/dev-down.sh
-```
-
-停止 PM2 管理的测试应用进程：
-
-```bash
-./docker/scripts/test-apps-stop.sh
-```
-
-重启 PM2 管理的测试应用进程：
+重启 PM2 管理的源码应用：
 
 ```bash
 # 重启 UI + AI Service
-./docker/scripts/test-apps-restart.sh
+./docker/scripts/test-apps-restart.sh all
 
 # 只重启 UI
 ./docker/scripts/test-apps-restart.sh ui
@@ -102,7 +70,7 @@ PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run pyth
 
 如果目标 PM2 进程不存在，脚本会从 `docker/pm2.test.config.cjs` 自动启动对应进程。
 
-停止完整测试环境：
+停止完整开发测试环境：
 
 ```bash
 ./docker/scripts/test-env-down.sh
@@ -113,6 +81,33 @@ PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run pyth
 ```bash
 ./docker/scripts/ps.sh
 ./docker/scripts/logs.sh
+pm2 status test-ai-service test-ui
+```
+
+## 高级入口：只启动依赖层
+
+`dev-up.sh` 只启动 PostgreSQL、engine、ibis-server、Trino，不启动 TiDB，也不启动 UI / AI Service。它不是当前主开发入口，仅用于手动用 background terminal 启动源码应用、排查依赖层问题或做最小依赖验证。
+
+```bash
+./docker/scripts/dev-up.sh
+```
+
+停止依赖层：
+
+```bash
+./docker/scripts/dev-down.sh
+```
+
+如确实需要手动启动源码应用，等价命令是：
+
+```bash
+# UI：3002
+cd wren-ui
+PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn dev
+
+# AI Service：5555
+cd wren-ai-service
+PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run python -m src.__main__
 ```
 
 ## 修改 engine / ibis-server 后重建
@@ -129,7 +124,16 @@ PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run pyth
 ./docker/scripts/build-local-engine-images.sh
 ```
 
-## 单机完整栈 / 演示部署
+## 单机完整栈 / 生产部署
+
+生产完整栈复用 `compose.yaml + compose.prod.yaml`，会从当前仓库源码构建 UI / AI Service / engine / ibis 镜像，并使用独立镜像 tag 与 Trino catalog 目录，避免和本地 dev/test 互相覆盖。会启动：
+
+- `ui`
+- `ai-service`
+- `engine`
+- `ibis-server`
+- `trino`
+- `postgres`
 
 先复制并修改本地私有配置：
 
@@ -143,31 +147,139 @@ cp docker/config/ai.config.example.yaml docker/config/ai.config.local.yaml
 ```text
 AI_SERVICE_ENV_FILE=./env/prod.local
 AI_CONFIG_FILE=./config/ai.config.local.yaml
-OPENROUTER_API_KEY=...
-# 当前默认模型和 embedder 均通过 OpenRouter / LiteLLM 路由
+LITELLM_API_BASE=https://your-litellm.example.com/v1
+LITELLM_API_KEY=sk-...
+LITELLM_GENERATION_MODEL=wren-generation
+LITELLM_EMBEDDING_MODEL=wren-embedding
 ```
 
+生产默认隔离点：
 
-当前 `docker/config/ai.config.example.yaml` 与 `wren-ai-service/config.local.yaml` 对齐：
+- UI 镜像 tag：`wren-ui:prod`
+- AI Service 镜像 tag：`wren-ai-service:prod`
+- Engine 镜像 tag：`wren-engine:prod`
+- Ibis Server 镜像 tag：`wren-engine-ibis:prod`
+- Trino catalog 目录：`docker/trino/prod-catalog`
 
-- LLM：`openrouter/deepseek/deepseek-v4-flash`
-- Provider 顺序：`deepseek` → `siliconflow/fp8` → `novita`
-- Embedder：`openai/qwen/qwen3-embedding-8b`
+生产 / 演示环境的 LLM 统一通过外部 LiteLLM proxy：
+
+```text
+AI Service -> https://your-litellm.example.com/v1 -> OpenRouter / 其他上游 provider
+```
+
+默认占位模型：
+
+- LiteLLM generation alias：`wren-generation`
+- LiteLLM embedding alias：`wren-embedding`
 - Embedding dimension：`4096`
 
-启动完整栈：
+真实上游模型、provider 顺序、限流和 fallback 由外部 LiteLLM 服务管理，不由本 Compose 栈启动。
+
+启动生产完整栈：
 
 ```bash
 ./docker/scripts/prod-up.sh
 ```
 
-停止完整栈：
+停止生产完整栈：
 
 ```bash
 ./docker/scripts/prod-down.sh
 ```
 
 生产建议：正式环境优先使用外部 / 托管 PostgreSQL，并通过 `PG_URL`、`PG_CONN_STR` 指向外部数据库；Compose 内置 `postgres` 更适合本地演示、小规模验证。
+
+## 演示环境完整栈
+
+演示环境和生产环境使用同一套 Compose 服务形态，且 UI / AI Service 均从当前仓库本地源码构建；demo 使用独立 env、project name、端口、Docker volume namespace、本地文件存储和 Trino catalog 目录，默认可以和本地 dev/test 共存。
+
+默认隔离点：
+
+- UI 镜像 tag：`wren-ui:demo`
+- AI Service 镜像 tag：`wren-ai-service:demo`
+- Engine 镜像 tag：`wren-engine:demo`
+- Ibis Server 镜像 tag：`wren-engine-ibis:demo`
+- Engine/Ibis/AI Service 本地文件存储：`docker/data/demo`
+- Trino catalog 目录：`docker/trino/demo-catalog`
+
+先复制并修改本地私有配置：
+
+```bash
+cp docker/env/demo.example docker/env/demo.local
+cp docker/config/ai.config.example.yaml docker/config/ai.config.local.yaml
+```
+
+然后在 `docker/env/demo.local` 中设置：
+
+```text
+AI_SERVICE_ENV_FILE=./env/demo.local
+AI_CONFIG_FILE=./config/ai.config.local.yaml
+LITELLM_API_BASE=https://your-litellm.example.com/v1
+LITELLM_API_KEY=sk-...
+LITELLM_GENERATION_MODEL=wren-generation
+LITELLM_EMBEDDING_MODEL=wren-embedding
+```
+
+### 启动时产品初始化
+
+demo 环境默认开启启动初始化：
+
+```text
+WREN_AUTO_BOOTSTRAP=true
+WREN_BOOTSTRAP_EMAIL=demo@example.com
+WREN_BOOTSTRAP_PASSWORD=demo-password-change-me
+WREN_BOOTSTRAP_DISPLAY_NAME=Demo Owner
+```
+
+UI 容器启动流程会先执行 migration，再启动 Next.js standalone server；随后等待 UI、engine、ibis-server、AI Service 可达，并调用现有 `/api/auth/bootstrap` 创建首个 owner，同时创建默认 workspace、系统样例知识库、样例模型 / 关系 / 看板并部署到 AI Service。
+
+对外演示前必须在 `docker/env/demo.local` 修改 `WREN_BOOTSTRAP_EMAIL` / `WREN_BOOTSTRAP_PASSWORD`。生产环境默认关闭该能力；只有明确设置 `WREN_AUTO_BOOTSTRAP=true` 并提供邮箱 / 密码时才会执行。
+
+### 临时 OpenRouter smoke 测试
+
+如果外部 LiteLLM 暂时还没准备好，但需要验证 `demo-up.sh`、镜像构建、端口和服务编排是否正常，可以临时让 demo AI Service 直连 OpenRouter。只在 `docker/env/demo.local` 中覆盖：
+
+```text
+AI_CONFIG_FILE=./config/ai.config.openrouter-smoke.example.yaml
+OPENROUTER_API_KEY=sk-or-...
+GENERATION_MODEL=openrouter/deepseek/deepseek-v4-flash
+```
+
+此 smoke 配置不代表最终演示 / 生产模型接入方式；最终仍应切回 `AI_CONFIG_FILE=./config/ai.config.local.yaml` 并接外部 LiteLLM。
+
+启动演示完整栈：
+
+```bash
+./docker/scripts/demo-up.sh
+```
+
+停止演示完整栈：
+
+```bash
+./docker/scripts/demo-down.sh
+```
+
+默认演示端口：
+
+- UI：`127.0.0.1:3001`
+- AI Service：`127.0.0.1:5556`
+- PostgreSQL：`127.0.0.1:9433`
+- Engine：`127.0.0.1:18080`
+- Ibis Server：`127.0.0.1:18000`
+- Trino：`127.0.0.1:18081`
+- TiDB：默认不启动；本机 smoke 可在 `docker/env/demo.local` 设置 `TIDB_DEMO_ENABLED=true`，端口为 `127.0.0.1:4001`
+
+
+## 部署后 TiDB 业务初始化
+
+生产 / 演示 / 本机回归环境部署完成后，可以用同一套 post-deploy runner 自动创建 TiDB 业务 workspace / knowledge base、配置 TiDB 连接、导入业务知识资产、生成 suggested questions / 语义提示 / 关联关系，并执行核心问数 smoke 与 11 张降级数据表保存：
+
+```bash
+./docker/scripts/postdeploy-tidb-business-bootstrap.sh --profile demo --dry-run
+./docker/scripts/postdeploy-tidb-business-bootstrap.sh --profile demo
+```
+
+配置模板：`docker/config/tidb-business-bootstrap.example.json`。TiDB 连接分为脚本 seed 侧 `TIDB_SEED_*` 和 Wren 产品连接侧 `TIDB_CONNECTOR_*`：开发测试默认启动本地 Docker TiDB 并 seed；演示 / 生产默认不启动内置 TiDB、不 seed，必须通过 `TIDB_CONNECTOR_*` 指向真实或显式配置的 TiDB。详见 `docs/业务需求/部署后TiDB业务初始化说明.md`。
 
 ## 外部数据源连接验证
 
@@ -195,10 +307,17 @@ OPENROUTER_API_KEY=...
 
 ## Trino catalog
 
-运行时 catalog 写入：
+运行时 catalog 默认写入：
 
 ```text
 docker/trino/catalog/*.properties
+```
+
+可通过 `TRINO_CATALOG_HOST_DIR` 按环境隔离；prod/demo 默认分别写入：
+
+```text
+docker/trino/prod-catalog/*.properties
+docker/trino/demo-catalog/*.properties
 ```
 
 这些文件是本地运行产物，不提交。示例模板放在：
@@ -213,11 +332,15 @@ docker/trino/catalog-templates/
 
 - `docker/env/*.example`
 - `docker/config/ai.config.example.yaml`
+- `docker/config/ai.config.openrouter-smoke.example.yaml`
+- `docker/config/tidb-business-bootstrap.example.json`
 - `docker/trino/catalog-templates/*.properties`
 
 不提交：
 
 - `docker/env/*.local`，例如 `docker/env/test.local` 里的 LLM API key
 - `docker/config/*.local.yaml`
+- `docker/config/*.local.json`
 - `docker/trino/catalog/*.properties`
+- `docker/trino/*-catalog/*.properties`
 - `docker/data/*`

@@ -261,7 +261,7 @@ export const SidebarKnowledgeList = memo(function SidebarKnowledgeList({
       onScroll={handleViewportScroll}
       data-testid="knowledge-sidebar-list"
       style={{
-        flex: '0 1 auto',
+        flex: '1 1 auto',
         minWidth: 0,
         minHeight: 0,
         maxHeight: '100%',

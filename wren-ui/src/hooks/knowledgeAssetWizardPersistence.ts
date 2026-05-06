@@ -2,6 +2,7 @@ import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import type { DiagramModelRecommendation } from '@/types/modeling';
 import type { UpdateModelMetadataInput } from '@/types/modeling';
 import { buildRuntimeScopeUrl } from '@/runtime/client/runtimeScope';
+import { KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT } from '@/utils/knowledgeMutationGuard';
 import {
   createModel,
   deployCurrentRuntime,
@@ -107,6 +108,10 @@ export const persistConnectorAssetDrafts = async <
   connectorId?: string | null;
   selector: ClientRuntimeScopeSelector;
 }): Promise<PersistConnectorAssetDraftsResult<TAsset>> => {
+  if (!selector.knowledgeBaseId) {
+    throw new Error(KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT);
+  }
+
   const persistedAssets: PersistedConnectorAsset<TAsset>[] = [];
   let effectiveSelector = selector;
 

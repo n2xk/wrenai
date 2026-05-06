@@ -83,6 +83,7 @@ StopChecker = Callable[[], bool]
 @dataclass
 class AskExecutionState:
     user_query: str
+    original_user_query: Optional[str] = None
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Any = None
@@ -6934,8 +6935,25 @@ class BaseFixedOrderAskRuntime:
     def _build_initial_state(self, ask_request: AskRequestLike) -> AskExecutionState:
         return AskExecutionState(
             user_query=ask_request.query,
+            original_user_query=ask_request.query,
             slot_values=dict(getattr(ask_request, "slot_values", {}) or {}),
         )
+
+    def _build_external_builder_query(self, state: AskExecutionState) -> str:
+        """Preserve slot-bearing original text for deterministic external SQL.
+
+        Intent classification may rewrite ``state.user_query`` for better LLM
+        generation.  That rewrite can accidentally drop clarification context
+        such as tenant/channel/date slots.  The deterministic supplied-external
+        builders are safety paths and should extract parameters from the full
+        user-visible question context, not only the rewritten query.
+        """
+
+        queries = [
+            (state.original_user_query or "").strip(),
+            (state.user_query or "").strip(),
+        ]
+        return "\n".join(dict.fromkeys(query for query in queries if query))
 
     def _sync_semantic_plan_state(
         self,
@@ -8280,7 +8298,7 @@ class BaseFixedOrderAskRuntime:
             if is_stopped()
             or not supplied_external_builders_enabled
             else build_supplied_external_daily_report_sql(
-                state.user_query, state.slot_values
+                self._build_external_builder_query(state), state.slot_values
             )
         )
         if supplied_external_daily_report_sql:
@@ -8311,7 +8329,9 @@ class BaseFixedOrderAskRuntime:
             None
             if is_stopped()
             or not supplied_external_builders_enabled
-            else build_supplied_external_roi_sql(state.user_query, state.slot_values)
+            else build_supplied_external_roi_sql(
+                self._build_external_builder_query(state), state.slot_values
+            )
         )
         if supplied_external_roi_sql:
             state.sql_generation_reasoning = (

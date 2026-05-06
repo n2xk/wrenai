@@ -1,43 +1,30 @@
-# Docker AI Service config aligned with wren-ai-service/config.local.yaml.
-# - LLM and embedding both route through OpenRouter via LiteLLM.
+# Docker AI Service config for prod/demo deployments.
+# - Wren AI Service talks to an external LiteLLM proxy, not a Compose-local LiteLLM container.
+# - Set LITELLM_API_BASE / LITELLM_API_KEY / LITELLM_GENERATION_MODEL /
+#   LITELLM_EMBEDDING_MODEL in docker/env/prod.local or docker/env/demo.local.
 # - Container endpoints use compose service names: ui and ibis-server.
 
 type: llm
 provider: litellm_llm
 timeout: 120
 models:
-- model: openrouter/deepseek/deepseek-v4-flash
+- model: ${LITELLM_GENERATION_MODEL}
   alias: default
-  api_base: https://openrouter.ai/api/v1
-  api_key_name: OPENROUTER_API_KEY
+  api_base: ${LITELLM_API_BASE}
+  api_key_name: LITELLM_API_KEY
   timeout: 120
   context_window_size: 1048576
   kwargs:
     n: 1
     temperature: 0
-    # OpenRouter DeepSeek V4 Flash has fast providers that do not all support
-    # structured response_format=json_schema. Wren prompts already require JSON,
-    # so drop response_format to keep routing constrained to the three providers
-    # below instead of falling through to DeepInfra.
-    drop_params: true
-    additional_drop_params:
-      - response_format
-    reasoning:
-      exclude: true
-    provider:
-      order:
-      - deepseek
-      - siliconflow/fp8
-      - novita
-      allow_fallbacks: false
 ---
 type: embedder
 provider: litellm_embedder
 models:
-- model: openai/qwen/qwen3-embedding-8b
+- model: ${LITELLM_EMBEDDING_MODEL}
   alias: default
-  api_base: https://openrouter.ai/api/v1
-  api_key_name: OPENROUTER_API_KEY
+  api_base: ${LITELLM_API_BASE}
+  api_key_name: LITELLM_API_KEY
   timeout: 120
 ---
 type: engine

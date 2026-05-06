@@ -32,6 +32,7 @@ export function buildKnowledgeWorkbenchContentDataInputs<
     handleConnectorLoadError: knowledgeState.handleConnectorLoadError,
     hasRuntimeScope,
     initialKnowledgeSourceType: knowledgeState.initialKnowledgeSourceType,
+    isKnowledgeMutationDisabled: knowledgeState.isKnowledgeMutationDisabled,
     knowledgeOwner: knowledgeState.knowledgeOwner,
     knowledgeSourceOptions: knowledgeState.knowledgeSourceOptions,
     matchedDemoKnowledge: knowledgeState.matchedDemoKnowledge,

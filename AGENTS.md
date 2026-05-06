@@ -57,43 +57,9 @@ PostgreSQL / TiDB / 其他真实或测试数据源
 
 ## 本地启动约定
 
-当前约定：日常临时开发可用 background terminal 启动 UI / AI Service；测试环境 / 长时间回归用 PM2 管理 `test-ui` 和 `test-ai-service`。
+当前本机主路径：使用 `test-env` 作为统一的开发测试环境。它包含 Docker 依赖层、TiDB demo，以及 PM2 管理的源码 UI / AI Service。执行问数回归、日常问数验证、UI E2E 时都应优先使用这套环境。
 
-### 启动 UI（默认 3002）
-
-```bash
-cd wren-ui
-PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn dev
-```
-
-说明：
-
-- 端口固定优先用 `3002`，避免和旧容器 / 其他本地服务冲突。
-- `PG_URL` 指向本地 Docker PostgreSQL。
-- 其他 endpoint 优先使用 `wren-ui/.env*` 或当前环境变量中的配置。
-
-### 启动 AI Service（默认 5555）
-
-```bash
-cd wren-ai-service
-PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run python -m src.__main__
-```
-
-说明：
-
-- `src/config.py` 默认 `WREN_AI_SERVICE_HOST=127.0.0.1`、`WREN_AI_SERVICE_PORT=5555`。
-- 当前 pgvector document store 需要 `PG_CONN_STR`；缺失时 AI Service 可能启动失败。
-- 如果使用 `config.local.yaml` 或指定模型配置，显式传入 `CONFIG_PATH` / `GENERATION_MODEL` / provider API key。
-
-### Docker 依赖
-
-本地开发只用 Docker 启动依赖层，不默认启动 UI / AI Service：
-
-```bash
-./docker/scripts/dev-up.sh
-```
-
-如需当前问数回归测试环境，还需要 TiDB demo，并用 PM2 管理 UI / AI Service。PM2 会读取 `docker/env/test.local`（本地私密，不提交），没有则退回 `docker/env/test.example`：
+### 启动本机开发测试环境（默认）
 
 ```bash
 cp docker/env/test.example docker/env/test.local
@@ -101,12 +67,41 @@ cp docker/env/test.example docker/env/test.local
 ./docker/scripts/test-env-up.sh
 ```
 
-PM2 进程名：`test-ui`、`test-ai-service`。
+这会启动：
+
+- Docker：PostgreSQL、engine、ibis-server、Trino、TiDB demo
+- PM2：`test-ui`、`test-ai-service`
+
+默认端口：
+
+- UI：`127.0.0.1:3002`
+- AI Service：`127.0.0.1:5555`
+- TiDB demo：`127.0.0.1:4000`
+- PostgreSQL：`127.0.0.1:9432`
+- engine：`127.0.0.1:8080`
+- ibis-server：`127.0.0.1:8000`
 
 重启测试应用进程：`./docker/scripts/test-apps-restart.sh [ui|ai|all]`。
 
-PM2 测试 LLM 配置：`docker/env/test.local`（由 `docker/env/test.example` 复制，私密不提交）。当前默认与 `wren-ai-service/config.local.yaml` 对齐：DeepSeek V4 Flash via OpenRouter，provider 顺序 deepseek -> siliconflow/fp8 -> novita，embedding dimension 4096。
+PM2 开发测试 LLM 配置：`docker/env/test.local`（由 `docker/env/test.example` 复制，私密不提交）。当前默认与 `wren-ai-service/config.local.yaml` 对齐：DeepSeek V4 Flash via OpenRouter，provider 顺序 deepseek -> siliconflow/fp8 -> novita，embedding dimension 4096。
 
+### 高级入口：只启动依赖层
+
+`dev-up.sh` 仅保留为 dependency-only / 诊断入口：只启动 PostgreSQL、engine、ibis-server、Trino，不启动 TiDB，也不启动 UI / AI Service。除非明确需要手动用 background terminal 启动应用，否则不要作为主开发入口。
+
+```bash
+./docker/scripts/dev-up.sh
+```
+
+如手动启动源码应用，默认命令仍是：
+
+```bash
+cd wren-ui
+PORT=3002 PG_URL=postgres://postgres:postgres@127.0.0.1:9432/wrenai TZ=UTC yarn dev
+
+cd wren-ai-service
+PG_CONN_STR=postgresql://postgres:postgres@127.0.0.1:9432/wrenai poetry run python -m src.__main__
+```
 
 修改 `wren-engine/` 或 ibis-server 后重建：
 
@@ -114,12 +109,20 @@ PM2 测试 LLM 配置：`docker/env/test.local`（由 `docker/env/test.example` 
 ./docker/scripts/rebuild-engine.sh
 ```
 
-单机完整栈 / 演示部署：
+单机生产完整栈（Docker + 外部 LiteLLM proxy）：
 
 ```bash
 cp docker/env/prod.example docker/env/prod.local
 cp docker/config/ai.config.example.yaml docker/config/ai.config.local.yaml
 ./docker/scripts/prod-up.sh
+```
+
+演示完整栈（与生产同形，本地源码构建，独立 demo env / project / 端口，默认接外部 LiteLLM）：
+
+```bash
+cp docker/env/demo.example docker/env/demo.local
+cp docker/config/ai.config.example.yaml docker/config/ai.config.local.yaml
+./docker/scripts/demo-up.sh
 ```
 
 常用依赖端口：

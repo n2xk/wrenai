@@ -51,6 +51,7 @@ value_schema:
     type: number
     min: 0
     description: 访问 PV
+local_sample_table: marketing_external_metrics_daily
 join_contract:
   status: target_design
   join_keys:
@@ -64,7 +65,7 @@ join_contract:
 
 ## 缺失处理
 
-当前 TiDB 数据源不包含 `访问PV`，当问数问题或 SQL 模板依赖该指标时，runtime 应按 `missing_behavior = ask_user` 向用户索取对应粒度的数据，而不是编造结果。
+业务主数据不内生包含；本地 FULL 回归可用 marketing_external_metrics_daily 样例表，生产/普通运行时缺少用户补数时仍视为不包含 `访问PV`，当问数问题或 SQL 模板依赖该指标时，runtime 应按 `missing_behavior = ask_user` 向用户索取对应粒度的数据，而不是编造结果。
 
 ## 追问话术
 

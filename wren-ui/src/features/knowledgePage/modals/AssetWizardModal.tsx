@@ -80,6 +80,7 @@ type AssetWizardModalProps = {
   assetWizardStep: number;
   onChangeAssetWizardStep: (step: number) => void;
   activeKnowledgeBase?: KnowledgeBaseRecord | null;
+  isKnowledgeMutationDisabled: boolean;
   knowledgeBases: KnowledgeBaseRecord[];
   sourceOptions: SourceOption[];
   selectedSourceType: string;
@@ -162,6 +163,7 @@ function AssetWizardModal({
   assetWizardStep,
   onChangeAssetWizardStep,
   activeKnowledgeBase,
+  isKnowledgeMutationDisabled,
   knowledgeBases,
   sourceOptions,
   selectedSourceType,
@@ -203,9 +205,14 @@ function AssetWizardModal({
     ? persistedAssetDraftPreviews
     : assetConfigPreviewList;
   const isBatchSelection = !isDemoSource && assetConfigPreviewList.length > 1;
-  const canContinueSourceSelection = isDemoSource
-    ? Boolean(selectedDemoKnowledge)
-    : Boolean(selectedConnectorId);
+  const hasActiveKnowledgeBase = Boolean(
+    activeKnowledgeBase?.id && !isKnowledgeMutationDisabled,
+  );
+  const canContinueSourceSelection =
+    hasActiveKnowledgeBase &&
+    (isDemoSource
+      ? Boolean(selectedDemoKnowledge)
+      : Boolean(selectedConnectorId));
   const recommendationTargets = useMemo(
     () =>
       assetDraftPreviewList.filter(

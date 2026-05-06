@@ -16,6 +16,9 @@ export type KnowledgeMainStageProps = {
   isSnapshotReadonlyKnowledgeBase: boolean;
   isReadonlyKnowledgeBase: boolean;
   isKnowledgeMutationDisabled: boolean;
+  hasActiveKnowledgeBase: boolean;
+  canCreateKnowledgeBase: boolean;
+  createKnowledgeBaseBlockedReason?: string | null;
   knowledgeMutationHint?: string | null;
   knowledgeDescription?: string | null;
   showKnowledgeAssetsLoading: boolean;
@@ -27,6 +30,7 @@ export type KnowledgeMainStageProps = {
   detailAssetFields: KnowledgeAssetDetailField[];
   onOpenAssetWizard: () => void;
   onOpenKnowledgeEditor: () => void;
+  onCreateKnowledgeBase: () => void;
   onOpenAssetDetail: (asset: AssetView) => void;
   onCloseAssetDetail: () => void;
   onCreateRuleDraftFromAsset?: (asset: AssetView) => void;

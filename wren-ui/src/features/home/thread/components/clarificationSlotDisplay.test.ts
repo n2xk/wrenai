@@ -3,6 +3,7 @@ import {
   coerceClarificationSlotValuesFromText,
   formatClarificationSlotValues,
   mergeClarificationSlotValues,
+  resolveClarificationSlotPlaceholder,
 } from './clarificationSlotDisplay';
 
 describe('clarificationSlotDisplay', () => {
@@ -120,5 +121,15 @@ describe('clarificationSlotDisplay', () => {
       'external_dependency:ad_spend': csvText,
       'external_dependency:access_pv': csvText,
     });
+  });
+
+  it('uses current v1.3 regression examples in clarification placeholders', () => {
+    expect(resolveClarificationSlotPlaceholder('tenant_plat_id')).toContain(
+      '72',
+    );
+    expect(resolveClarificationSlotPlaceholder('channel_id')).toContain('1932');
+    expect(
+      resolveClarificationSlotPlaceholder('external_dependency:ad_spend'),
+    ).toContain('2026-04-10,1932');
   });
 });

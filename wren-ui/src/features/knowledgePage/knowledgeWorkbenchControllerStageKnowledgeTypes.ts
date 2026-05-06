@@ -7,6 +7,7 @@ export type KnowledgeStateInput = {
   canCreateKnowledgeBase: boolean;
   createKnowledgeBaseBlockedReason: string | null;
   displayKnowledgeName: string;
+  hasActiveKnowledgeBase: boolean;
   isKnowledgeMutationDisabled: boolean;
   isReadonlyKnowledgeBase: boolean;
   isSnapshotReadonlyKnowledgeBase: boolean;

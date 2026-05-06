@@ -56,7 +56,7 @@ export const shouldUseWorkspaceScopedDashboardCreate = (ctx: IContext) => {
 };
 
 export const getCurrentPersistedDashboardScopeIdentity = (ctx: IContext) =>
-  shouldUseWorkspaceScopedDashboardCreate(ctx)
+  ctx.runtimeScope?.workspace?.id || ctx.runtimeScope?.selector?.workspaceId
     ? getCurrentPersistedWorkspaceIdentity(ctx)
     : getCurrentPersistedRuntimeIdentity(ctx);
 

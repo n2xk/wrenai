@@ -31,14 +31,14 @@ services:
     restart: on-failure
     platform: ${PLATFORM:-linux/amd64}
     expose:
-      - "${WREN_ENGINE_PORT:-8080}"
-      - "${WREN_ENGINE_SQL_PORT:-7432}"
+      - "${WREN_ENGINE_INTERNAL_PORT:-8080}"
+      - "${WREN_ENGINE_SQL_INTERNAL_PORT:-7432}"
     ports:
-      - "${WREN_ENGINE_PORT:-8080}:${WREN_ENGINE_PORT:-8080}"
-      - "${WREN_ENGINE_SQL_PORT:-7432}:${WREN_ENGINE_SQL_PORT:-7432}"
+      - "${WREN_ENGINE_FORWARD_PORT:-8080}:${WREN_ENGINE_INTERNAL_PORT:-8080}"
+      - "${WREN_ENGINE_SQL_FORWARD_PORT:-7432}:${WREN_ENGINE_SQL_INTERNAL_PORT:-7432}"
     volumes:
       - data:/usr/src/app/etc
-      - ./data:/usr/src/app/data
+      - ${LOCAL_STORAGE:-./data}:/usr/src/app/data
     networks:
       - app
 
@@ -52,11 +52,11 @@ services:
     restart: on-failure
     platform: ${PLATFORM:-linux/amd64}
     expose:
-      - "${IBIS_SERVER_PORT:-8000}"
+      - "${IBIS_SERVER_INTERNAL_PORT:-8000}"
     ports:
-      - "${IBIS_SERVER_PORT:-8000}:${IBIS_SERVER_PORT:-8000}"
+      - "${IBIS_SERVER_FORWARD_PORT:-8000}:${IBIS_SERVER_INTERNAL_PORT:-8000}"
     environment:
-      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_PORT:-8080}
+      WREN_ENGINE_ENDPOINT: http://engine:${WREN_ENGINE_INTERNAL_PORT:-8080}
     volumes:
       - ${LOCAL_STORAGE:-./data}:/usr/src/app/data
     networks:
@@ -75,6 +75,6 @@ services:
     ports:
       - "${TRINO_FORWARD_PORT:-8081}:8080"
     volumes:
-      - ./trino/catalog:/etc/trino/catalog
+      - ${TRINO_CATALOG_HOST_DIR:-./trino/catalog}:/etc/trino/catalog
     networks:
       - app

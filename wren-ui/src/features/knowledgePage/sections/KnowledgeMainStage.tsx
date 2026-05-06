@@ -16,6 +16,7 @@ import KnowledgeBusinessTermsStage from '@/features/knowledgePage/sections/Knowl
 import KnowledgeExternalDependenciesStage from '@/features/knowledgePage/sections/KnowledgeExternalDependenciesStage';
 import KnowledgeInstructionsStage from '@/features/knowledgePage/sections/KnowledgeInstructionsStage';
 import KnowledgeModelingSection from '@/features/knowledgePage/sections/KnowledgeModelingSection';
+import KnowledgeNoKnowledgeBaseEmptyState from '@/features/knowledgePage/sections/KnowledgeNoKnowledgeBaseEmptyState';
 import KnowledgeOverviewStage from '@/features/knowledgePage/sections/KnowledgeOverviewStage';
 import KnowledgeSqlTemplatesStage from '@/features/knowledgePage/sections/KnowledgeSqlTemplatesStage';
 import type { KnowledgeMainStageProps } from '@/features/knowledgePage/sections/knowledgeMainStageTypes';
@@ -28,6 +29,9 @@ function KnowledgeMainStage({
   isSnapshotReadonlyKnowledgeBase,
   isReadonlyKnowledgeBase,
   isKnowledgeMutationDisabled,
+  hasActiveKnowledgeBase,
+  canCreateKnowledgeBase,
+  createKnowledgeBaseBlockedReason,
   knowledgeMutationHint,
   knowledgeDescription,
   showKnowledgeAssetsLoading,
@@ -39,6 +43,7 @@ function KnowledgeMainStage({
   detailAssetFields,
   onOpenAssetWizard,
   onOpenKnowledgeEditor,
+  onCreateKnowledgeBase,
   onOpenAssetDetail,
   onCloseAssetDetail,
   onCreateRuleDraftFromAsset,
@@ -100,6 +105,19 @@ function KnowledgeMainStage({
     handleCreateSqlTemplateFromAsset,
     handleWorkbenchSectionChange,
   } = editors;
+
+  if (!hasActiveKnowledgeBase) {
+    return (
+      <MainStage>
+        <KnowledgeNoKnowledgeBaseEmptyState
+          canCreateKnowledgeBase={canCreateKnowledgeBase}
+          createKnowledgeBaseBlockedReason={createKnowledgeBaseBlockedReason}
+          onCreateKnowledgeBase={onCreateKnowledgeBase}
+        />
+      </MainStage>
+    );
+  }
+
   return (
     <MainStage>
       <KnowledgeWorkbenchHeader
@@ -130,6 +148,7 @@ function KnowledgeMainStage({
             isKnowledgeMutationDisabled,
             isReadonlyKnowledgeBase,
             isSnapshotReadonlyKnowledgeBase,
+            knowledgeMutationHint,
             modelingSummary,
             onChangeDetailTab,
             onChangeFieldFilter,

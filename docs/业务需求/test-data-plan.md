@@ -6,19 +6,23 @@
 
 1. 校验 SQL 是否能正常跑通；
 2. 校验业务口径是否符合文档；
-3. 给后续知识库导入后的联调留一套固定回归样例。
+3. 给后续知识库导入后的联调留一套可复跑回归样例。
 
 ### 配套文件
 
-- 造数脚本：[`seed.sql`](./seed.sql)
+- 主造数来源：[`seed_data_local/`](./seed_data_local/)
+- 默认真实参考窗口 seed：[`seed_data_local/regression_reference_window.sql`](./seed_data_local/regression_reference_window.sql)
+- 全量参考 dump（离线诊断 / 大数据量专项）：`seed_data_local/saas_prod_v1_3.sql` + `seed_data_local/saas_warehouse_v1_3.sql`
+- 可选 legacy 固定对账夹具：[`seed_data_local/regression_fixture.sql`](./seed_data_local/regression_fixture.sql)
+- 本地 seed 生成脚本：[`generate_seed_data_local.py`](./generate_seed_data_local.py)
 - 预期结果：[`expected-results.md`](./expected-results.md)
 - 扩展种子结果：[`extended-seed-results.md`](./extended-seed-results.md)
 - 执行手册：[`test-runbook.md`](./test-runbook.md)
 
 说明：
 
-- 本文主要描述**最小可验证样例**应该怎么设计
-- 当前实际 `seed.sql` 已经不止最小样例，还额外包含：
+- 本文早期章节保留了**最小可验证样例**的设计思路；当前默认回归已经切到真实参考数据窗口：`tenant_plat_id=72`、`channel_id=1932`、`2026-04-10~2026-04-16`。
+- `seed_data_local/regression_fixture.sql` 仅作为 legacy/专项固定夹具保留，它已经不止最小样例，还额外包含：
   - `2026-04-08+` 的扩展渠道/扩展玩家/辅助事实层
   - `2026-04-15+` 的高频批量层
 - 如果要看扩展种子是否与当前 TiDB 数据一致，直接看 `extended-seed-results.md`
@@ -58,10 +62,12 @@
 
 ## 3. 推荐测试窗口
 
-建议先固定一套较短窗口，便于人工验算：
+当前默认固定一套来自真实参考数据的较短窗口，便于人工验算：
 
-- 综合统计区间：`2026-04-01 ~ 2026-04-07`
-- cohort 区间：`2026-04-01 ~ 2026-04-03`
+- 综合统计区间：`2026-04-10 ~ 2026-04-16`
+- cohort 区间：`2026-04-10 ~ 2026-04-16`
+- 主测试平台 / 渠道：`tenant_plat_id=72` / `channel_id=1932`
+- T02 费率专项：`tenant_plat_id=1`，配置渠道 `1867`，无配置对照渠道 `1760`
 - `top_n = 3`
 - `n_days = 7`
 - `period_days = 7`
@@ -88,15 +94,15 @@
 - `channel`：2 条渠道数据
   - 主测试渠道：`channel_id = 1001`
   - 对照渠道：`channel_id = 1002`
-- `report_channel_data_percent_config`
+- `dim_report_channel_data_percent_config`
   - 给 `1001` 配折扣，例如 `90%`
   - 不给 `1002` 配折扣，用来验证默认 `100%`
-- `game_type`：至少 3 个类型
+- `dim_game_type`：至少 3 个类型
   - 电子
   - 体育
   - 棋牌
-- `game_line_series`：至少 1 条
-- `game_line`：至少 3 条，对应 3 个游戏类型
+- `dim_game_line_series`：至少 1 条
+- `dim_game_line`：至少 3 条，对应 3 个游戏类型
 
 ---
 
@@ -279,8 +285,8 @@
 
 建议按下面顺序执行，最省事：
 
-1. 维表：`tenant_plat` / `channel` / `report_channel_data_percent_config`
-2. 游戏维表：`game_type` / `game_line_series` / `game_line`
+1. 维表：`tenant_plat` / `channel` / `dim_report_channel_data_percent_config`
+2. 游戏维表：`dim_game_type` / `dim_game_line_series` / `dim_game_line`
 3. 玩家：`dim_player`
 4. 行为主表：
    - `dwd_player_login_log`
@@ -337,10 +343,10 @@
 
 ## 10. 建议的下一步产出
 
-已补：[`./seed.sql`](./seed.sql)
+已补：真实参考 seed、legacy fixture、每个模板的预期结果样例表。
 
-如果要继续往下做，建议按这个顺序：
+当前默认执行顺序：
 
-1. 先执行 **`seed.sql` 样例脚本**；
-2. 再补一份 **每个模板的预期结果样例表**；
-3. 然后把 11 个 `draft_sql` 接到系统里做真实 datasource 校验。
+1. 默认先导入 `regression_reference_window.sql`；如需 legacy 旧对账，再叠加 `regression_fixture.sql`；
+2. 执行 `python3 docs/业务需求/verify_tidb_regression.py`，校验 T01/T02/T03/T04/T06/T08/T09/T10/T11/T12/T13；
+3. 如需复现旧 `990001/990011` 对账，再显式叠加导入 `regression_fixture.sql` 并运行 legacy 扩展检查。

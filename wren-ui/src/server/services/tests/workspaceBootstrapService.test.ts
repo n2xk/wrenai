@@ -151,6 +151,40 @@ describe('WorkspaceBootstrapService', () => {
       deployService.getLastDeploymentByRuntimeIdentity,
     ).not.toHaveBeenCalled();
     expect(projectService.createProject).not.toHaveBeenCalled();
+    expect(dashboardService.initDashboard).not.toHaveBeenCalled();
+  });
+
+  it('ensures a workspace-level dashboard for system samples outside transactions', async () => {
+    const workspace = {
+      id: 'workspace-default',
+      slug: 'system-samples',
+      name: '系统样例空间',
+      kind: 'default',
+      status: 'active',
+    };
+    workspaceRepository.findOneBy.mockResolvedValue(workspace);
+    knowledgeBaseRepository.findOneBy.mockImplementation(async (filter: any) =>
+      createKnowledgeBase({
+        id: `kb-${filter.slug || filter.sampleDataset}`,
+        slug: filter.slug || String(filter.sampleDataset).toLowerCase(),
+        name: filter.slug
+          ? String(filter.slug).toUpperCase()
+          : filter.sampleDataset,
+        sampleDataset:
+          filter.sampleDataset || String(filter.slug).toUpperCase(),
+      }),
+    );
+
+    await service.ensureDefaultWorkspaceWithSamples({
+      runtimeSeedMode: 'metadata_only',
+    });
+
+    expect(dashboardService.initDashboard).toHaveBeenCalledWith(null, {
+      workspaceId: workspace.id,
+    });
+    expect(
+      deployService.getLastDeploymentByRuntimeIdentity,
+    ).not.toHaveBeenCalled();
   });
 
   it('eagerly seeds only the primary sample runtime and warms the rest in background', async () => {
@@ -465,8 +499,6 @@ describe('WorkspaceBootstrapService', () => {
       ...knowledgeBase,
       defaultKbSnapshotId: snapshot.id,
     });
-    dashboardService.initDashboard.mockResolvedValue({ id: 1 });
-
     await (service as any).ensureSystemSampleRuntime(knowledgeBase);
 
     expect(kbSnapshotRepository.createOne).toHaveBeenCalledWith(
@@ -505,14 +537,7 @@ describe('WorkspaceBootstrapService', () => {
         deployHash: deployment.hash,
       }),
     );
-    expect(dashboardService.initDashboard).toHaveBeenCalledWith(
-      deployment.projectId,
-      expect.objectContaining({
-        knowledgeBaseId: knowledgeBase.id,
-        kbSnapshotId: snapshot.id,
-        deployHash: deployment.hash,
-      }),
-    );
+    expect(dashboardService.initDashboard).not.toHaveBeenCalled();
   });
 
   it('seeds a sample deployment when no runtime exists yet', async () => {

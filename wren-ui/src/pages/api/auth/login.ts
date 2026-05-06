@@ -31,6 +31,10 @@ const deriveDisplayName = (email: string, providedDisplayName?: string) => {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
+const isStaleWorkspaceMembershipError = (error: unknown) =>
+  error instanceof Error &&
+  error.message === 'Active workspace membership is required';
+
 const toRuntimeSelector = (
   workspaceId: string,
   knowledgeBase: KnowledgeBase | null,
@@ -92,11 +96,23 @@ export default async function handler(
     }
 
     try {
-      const authResult = await components.authService.login({
-        email,
-        password,
-        workspaceId,
-      });
+      let authResult;
+      try {
+        authResult = await components.authService.login({
+          email,
+          password,
+          workspaceId,
+        });
+      } catch (loginError) {
+        if (!workspaceId || !isStaleWorkspaceMembershipError(loginError)) {
+          throw loginError;
+        }
+        authResult = await components.authService.login({
+          email,
+          password,
+          workspaceId: undefined,
+        });
+      }
 
       res.setHeader(
         'Set-Cookie',

@@ -524,6 +524,45 @@ describe('DashboardService', () => {
       expect(result.map((dashboard) => dashboard.id)).toEqual([101, 102]);
     });
 
+    it('reuses an existing workspace-scoped dashboard when initializing workspace scope', async () => {
+      const workspaceDashboard = {
+        id: 105,
+        projectId: null,
+        workspaceId: 'ws-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
+        createdBy: null,
+        name: '默认看板',
+        isDefault: true,
+      };
+      mockDashboardRepository.findAllBy.mockResolvedValueOnce([
+        workspaceDashboard,
+        {
+          id: 106,
+          projectId: 27,
+          workspaceId: 'ws-1',
+          knowledgeBaseId: null,
+          name: '旧知识库看板',
+          isDefault: false,
+        },
+      ]);
+      mockDashboardRepository.findOneBy.mockResolvedValueOnce(
+        workspaceDashboard,
+      );
+
+      const result = await dashboardService.initDashboard(null, {
+        workspaceId: 'ws-1',
+      });
+
+      expect(mockDashboardRepository.findAllBy).toHaveBeenCalledWith({
+        workspaceId: 'ws-1',
+      });
+      expect(mockDashboardRepository.createOne).not.toHaveBeenCalled();
+      expect(mockDashboardRepository.updateOne).not.toHaveBeenCalled();
+      expect(result.id).toBe(105);
+    });
+
     it('creates workspace-scoped dashboards with workspace binding and non-default follow-ups', async () => {
       mockDashboardRepository.findAllBy
         .mockResolvedValueOnce([

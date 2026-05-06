@@ -1,6 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import useKnowledgeWorkbenchKnowledgeState from './useKnowledgeWorkbenchKnowledgeState';
+import useKnowledgeWorkbenchKnowledgeState, {
+  resolveInitialKnowledgeBaseList,
+} from './useKnowledgeWorkbenchKnowledgeState';
 
 const mockUseAuthSession = jest.fn();
 const mockUseRuntimeSelectorState = jest.fn();
@@ -171,5 +173,31 @@ describe('useKnowledgeWorkbenchKnowledgeState', () => {
     expect(mockUseKnowledgeBaseSelection).toHaveBeenCalled();
     expect(mockUseKnowledgeBaseMeta).toHaveBeenCalled();
     expect(mockUseKnowledgeRuntimeBindings).toHaveBeenCalled();
+  });
+
+  it('keeps the cached knowledge list when selector state is not newer', () => {
+    const cachedKnowledgeBaseList = [{ id: 'kb-1' }, { id: 'kb-2' }];
+    const selectorKnowledgeBaseList = [{ id: 'kb-1' }];
+
+    expect(
+      resolveInitialKnowledgeBaseList({
+        cachedKnowledgeBaseList,
+        selectorKnowledgeBaseList,
+        preferredKnowledgeBaseId: 'kb-1',
+      }),
+    ).toBe(cachedKnowledgeBaseList);
+  });
+
+  it('uses selector state when the current route knowledge base is missing from cache', () => {
+    const cachedKnowledgeBaseList = [{ id: 'kb-1' }];
+    const selectorKnowledgeBaseList = [{ id: 'kb-1' }, { id: 'kb-new' }];
+
+    expect(
+      resolveInitialKnowledgeBaseList({
+        cachedKnowledgeBaseList,
+        selectorKnowledgeBaseList,
+        preferredKnowledgeBaseId: 'kb-new',
+      }),
+    ).toBe(selectorKnowledgeBaseList);
   });
 });

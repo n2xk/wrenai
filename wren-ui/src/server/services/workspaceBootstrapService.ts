@@ -88,6 +88,10 @@ export class WorkspaceBootstrapService implements IWorkspaceBootstrapService {
       this.deps,
       { tx },
     );
+    if (!tx) {
+      await this.ensureSystemSampleWorkspaceDashboard(workspace.id);
+    }
+
     const effectiveSeedMode: SampleRuntimeSeedMode = tx
       ? 'metadata_only'
       : runtimeSeedMode || 'all';
@@ -208,12 +212,13 @@ export class WorkspaceBootstrapService implements IWorkspaceBootstrapService {
       deployment,
       this.deps,
     );
+  }
 
-    await this.deps.dashboardService.initDashboard(deployment.projectId, {
-      knowledgeBaseId: knowledgeBase.id,
-      kbSnapshotId: snapshot.id,
-      deployHash: deployment.hash,
-      createdBy: null,
+  private async ensureSystemSampleWorkspaceDashboard(
+    workspaceId: string,
+  ): Promise<void> {
+    await this.deps.dashboardService.initDashboard(null, {
+      workspaceId,
     });
   }
 

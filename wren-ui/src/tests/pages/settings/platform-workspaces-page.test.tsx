@@ -4,6 +4,7 @@ import ManagePlatformWorkspacesPage from '@/features/settings/platform-workspace
 
 const mockUseProtectedRuntimeScopePage = jest.fn();
 const mockUseRuntimeScopeNavigation = jest.fn();
+const mockUseRuntimeSelectorState = jest.fn();
 const mockUseAuthSession = jest.fn();
 
 jest.mock('@/hooks/useProtectedRuntimeScopePage', () => ({
@@ -16,9 +17,15 @@ jest.mock('@/hooks/useRuntimeScopeNavigation', () => ({
   default: () => mockUseRuntimeScopeNavigation(),
 }));
 
+jest.mock('@/hooks/useRuntimeSelectorState', () => ({
+  __esModule: true,
+  default: () => mockUseRuntimeSelectorState(),
+}));
+
 jest.mock('@/hooks/useAuthSession', () => ({
   __esModule: true,
   default: () => mockUseAuthSession(),
+  clearAuthSessionCache: jest.fn(),
 }));
 
 jest.mock('@/components/reference/ConsoleShellLayout', () => ({
@@ -42,9 +49,15 @@ describe('platform workspaces feature page', () => {
       pushWorkspace: jest.fn(),
       hasRuntimeScope: true,
     });
+    mockUseRuntimeSelectorState.mockReturnValue({
+      refetch: jest.fn(async () => ({
+        data: { runtimeSelectorState: null },
+      })),
+    });
     mockUseAuthSession.mockReturnValue({
       authenticated: true,
       loading: false,
+      refresh: jest.fn(async () => null),
       data: {
         authorization: {
           actor: {

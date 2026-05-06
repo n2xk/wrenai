@@ -119,4 +119,4 @@
 - 造数方案见：[`../test-data-plan.md`](../test-data-plan.md)
 - 推荐先按“1个平台 + 2渠道 + 7玩家 + 7天数据”做最小回归样例
 
-- 示例造数脚本：[`../seed.sql`](../seed.sql)
+- 示例造数入口：[`../seed_data_local/`](../seed_data_local/)

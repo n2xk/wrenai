@@ -111,6 +111,7 @@ export const isModelingSurfaceRoute = ({
 export type KnowledgeWorkbenchRouteKnowledgeBase = {
   id: string;
   workspaceId: string;
+  kind?: string | null;
   defaultKbSnapshot?: {
     id: string;
     deployHash: string;

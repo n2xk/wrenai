@@ -34,4 +34,4 @@ else
 fi
 
 "${SCRIPT_DIR}/test-apps-start.sh"
-printf 'Test environment is up. TiDB demo: %s on 127.0.0.1:%s; PM2 apps: test-ai-service, test-ui\n' "${TIDB_NAME}" "${TIDB_PORT}"
+printf 'Local dev-test environment is up. TiDB demo: %s on 127.0.0.1:%s; PM2 apps: test-ai-service, test-ui\n' "${TIDB_NAME}" "${TIDB_PORT}"

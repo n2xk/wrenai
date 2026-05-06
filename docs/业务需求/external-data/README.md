@@ -4,13 +4,13 @@
 
 ## 文件
 
-- `full_external_metrics_daily.csv`：按 `biz_date + tenant_plat_id + channel_id` 粒度提供投放金额、访问 PV、访问 UV、下载点击 UV。
+- `full_external_metrics_daily.csv`：按 `biz_date + tenant_plat_id + channel_id` 粒度提供投放金额、访问 PV、访问 UV、下载点击 UV；默认覆盖 `tenant_plat_id=72`、`channel_id=1932`、`2026-04-10~2026-04-16`。
 - `full_external_metrics_daily.sql`：把同一批样例写入本地 TiDB 表 `marketing_external_metrics_daily`。
 
 ## 使用顺序
 
 1. 先执行 `docs/业务需求/local_tidb_schema.sql`，确保 `marketing_external_metrics_daily` 已创建。
-2. 再执行 `docs/业务需求/seed.sql` 或单独执行 `full_external_metrics_daily.sql` 导入外部指标样例。
+2. 完整回归默认直接导入 `docs/业务需求/seed_data_local/external_metrics.sql`。如只排查 FULL 外部指标，也可单独执行本目录的 `full_external_metrics_daily.sql`。
 3. FULL 问数回归中，如果走“对话补充外部数据”能力，也可以把 CSV 表头和行直接粘贴到外部数据补充表单中。
 
 ## 约束

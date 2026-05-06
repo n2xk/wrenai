@@ -77,13 +77,27 @@ const buildMissingSqlErrorPayload = () => ({
 });
 
 const ANSWER_RESULT_RETRYABLE_ERROR_PATTERNS = [
+  /ECONNREFUSED/i,
   /(?:read\s+)?ECONNRESET/i,
+  /ECONNABORTED/i,
   /socket hang up/i,
   /Connection reset by peer/i,
+  /Can't connect to server/i,
+  /write EPIPE/i,
+  /ETIMEDOUT/i,
+  /timed?\s*out/i,
 ];
 
 const TRANSIENT_ANSWER_RESULT_MAX_RETRIES = 3;
 const TRANSIENT_ANSWER_RESULT_RETRY_DELAY_MS = 300;
+const TRANSIENT_SQL_DATA_MAX_RETRIES = 30;
+const TEXT_ANSWER_BACKGROUND_MAX_CONCURRENT_JOBS = Math.max(
+  1,
+  Number.parseInt(
+    process.env.TEXT_ANSWER_BACKGROUND_MAX_CONCURRENT_JOBS || '2',
+    10,
+  ) || 2,
+);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -93,6 +107,16 @@ const isRetryableAnswerResultError = (error: unknown) => {
   return ANSWER_RESULT_RETRYABLE_ERROR_PATTERNS.some((pattern) =>
     pattern.test(message),
   );
+};
+
+const getTransientSqlDataRetryCount = (
+  answerDetail?: ThreadResponse['answerDetail'],
+) => {
+  const error = answerDetail?.error as
+    | { retryCount?: unknown; retryable?: unknown }
+    | undefined;
+  const retryCount = Number(error?.retryCount);
+  return Number.isFinite(retryCount) ? retryCount : 0;
 };
 
 export class TextBasedAnswerBackgroundTracker {
@@ -147,7 +171,18 @@ export class TextBasedAnswerBackgroundTracker {
       return;
     }
     this.pollingIntervalId = setInterval(async () => {
-      const jobs = Object.values(this.tasks).map(
+      const availableSlots = Math.max(
+        0,
+        TEXT_ANSWER_BACKGROUND_MAX_CONCURRENT_JOBS - this.runningJobs.size,
+      );
+      if (availableSlots <= 0) {
+        return;
+      }
+
+      const jobs = Object.values(this.tasks)
+        .filter((threadResponse) => !this.runningJobs.has(threadResponse.id))
+        .slice(0, availableSlots)
+        .map(
         (threadResponse) => async () => {
           if (
             this.runningJobs.has(threadResponse.id) ||
@@ -239,6 +274,29 @@ export class TextBasedAnswerBackgroundTracker {
               })) as PreviewDataResponse;
             } catch (error) {
               logger.error(`Error when query sql data: ${error}`);
+              if (isRetryableAnswerResultError(error)) {
+                const retryCount =
+                  getTransientSqlDataRetryCount(threadResponse.answerDetail) +
+                  1;
+                if (retryCount <= TRANSIENT_SQL_DATA_MAX_RETRIES) {
+                  logger.warn(
+                    `Text answer response ${threadResponse.id} hit a transient SQL data fetch error; retrying (${retryCount}/${TRANSIENT_SQL_DATA_MAX_RETRIES}): ${
+                      error instanceof Error ? error.message : String(error)
+                    }`,
+                  );
+                  await this.persistAnswerDetail(threadResponse, {
+                    ...this.getTrackedThreadResponse(threadResponse)
+                      .answerDetail,
+                    status: ThreadResponseAnswerStatus.FETCHING_DATA,
+                    error: {
+                      ...resolveErrorPayload(error),
+                      retryable: true,
+                      retryCount,
+                    },
+                  });
+                  return;
+                }
+              }
               await this.failTask(threadResponse, error);
               return;
             }

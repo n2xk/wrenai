@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { appMessage as message } from '@/utils/antdAppBridge';
 import type { ClientRuntimeScopeSelector } from '@/runtime/client/runtimeScope';
 import { Path } from '@/utils/enum';
+import { KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT } from '@/utils/knowledgeMutationGuard';
 import {
   buildKnowledgeWorkbenchUrl,
   resolveKnowledgeWorkbenchRuntimeSelector,
@@ -101,13 +102,23 @@ export default function useKnowledgePageActions({
 
   const openAssetWizard = useCallback(
     (onAllowed?: () => void) => {
+      if (!activeKnowledgeBase?.id) {
+        message.warning(KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT);
+        return;
+      }
+
       if (isKnowledgeMutationDisabled) {
         if (isSnapshotReadonlyKnowledgeBase) {
           message.info(snapshotReadonlyHint);
           return;
         }
 
-        message.info('系统样例知识库不支持接入新资产');
+        if (activeKnowledgeBase?.kind === 'system_sample') {
+          message.info('系统样例知识库不支持接入新资产');
+          return;
+        }
+
+        message.warning(KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT);
         return;
       }
 
@@ -122,6 +133,8 @@ export default function useKnowledgePageActions({
       });
     },
     [
+      activeKnowledgeBase?.id,
+      activeKnowledgeBase?.kind,
       isKnowledgeMutationDisabled,
       isSnapshotReadonlyKnowledgeBase,
       openModalSafely,

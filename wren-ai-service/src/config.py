@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -126,7 +127,9 @@ class Settings(BaseSettings):
         for path in candidates:
             try:
                 with open(path, "r") as file:
-                    return list(yaml.load_all(file, Loader=yaml.SafeLoader))
+                    return self._expand_env_vars(
+                        list(yaml.load_all(file, Loader=yaml.SafeLoader))
+                    )
             except FileNotFoundError:
                 continue
             except yaml.YAMLError as e:
@@ -140,6 +143,15 @@ class Settings(BaseSettings):
         )
         logger.warning(message)
         return []
+
+    def _expand_env_vars(self, value):
+        if isinstance(value, str):
+            return os.path.expandvars(value)
+        if isinstance(value, list):
+            return [self._expand_env_vars(item) for item in value]
+        if isinstance(value, dict):
+            return {key: self._expand_env_vars(item) for key, item in value.items()}
+        return value
 
     def _resolve_config_candidates(self) -> list[Path]:
         configured = Path(self.config_path)

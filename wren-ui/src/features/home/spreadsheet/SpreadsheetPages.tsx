@@ -376,7 +376,7 @@ const CollapsedRailLabel = styled.div`
 `;
 
 const RailItem = styled(DashboardRailItem)`
-  padding: 7px 8px;
+  padding: 4px 8px;
   border-radius: var(--nova-radius-control);
   border-color: ${(props) =>
     props.$active ? 'rgba(111, 71, 255, 0.14)' : 'transparent'};

@@ -86,7 +86,7 @@ describe('DashboardController scope guards', () => {
       },
     }) as any;
 
-  it('lists dashboards with runtime binding after knowledge base read authorization and records access audit', async () => {
+  it('lists workspace dashboards even when a knowledge base selector is active and records access audit', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
     ctx.dashboardService.listDashboardsForScope.mockResolvedValue([
@@ -98,9 +98,10 @@ describe('DashboardController scope guards', () => {
     expect(ctx.dashboardService.listDashboardsForScope).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
         createdBy: 'user-1',
       }),
     );
@@ -952,7 +953,7 @@ describe('DashboardController scope guards', () => {
     expect(ctx.dashboardService.createDashboardItem).not.toHaveBeenCalled();
   });
 
-  it('resolves the current dashboard from runtime binding even when the current project bridge is null', async () => {
+  it('resolves the current dashboard from workspace binding even when the current project bridge is null', async () => {
     const resolver = new DashboardController();
     const ctx = createContext();
     ctx.runtimeScope.project = { id: null };
@@ -971,9 +972,10 @@ describe('DashboardController scope guards', () => {
     ).toHaveBeenCalledWith(
       null,
       expect.objectContaining({
-        knowledgeBaseId: 'kb-1',
-        kbSnapshotId: 'snapshot-1',
-        deployHash: 'deploy-1',
+        workspaceId: 'workspace-1',
+        knowledgeBaseId: null,
+        kbSnapshotId: null,
+        deployHash: null,
         createdBy: 'user-1',
       }),
     );

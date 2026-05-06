@@ -8,6 +8,7 @@ import {
   getCompactTableQualifiedName,
   getCompactTableScopedName,
 } from '@/utils/compactTable';
+import { KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT } from '@/utils/knowledgeMutationGuard';
 import { normalizeSelectedAssetTableValues } from './useKnowledgeAssetSource';
 import { persistConnectorAssetDrafts } from './knowledgeAssetWizardPersistence';
 
@@ -378,13 +379,17 @@ export default function useKnowledgeAssetWizard({
   const assetDraftPreview = assetDraftPreviews[0] || null;
 
   const requiresAssetName = selectedAssetSeeds.length <= 1;
+  const hasActiveKnowledgeBase = Boolean(
+    activeKnowledgeRuntimeSelector?.knowledgeBaseId,
+  );
   const canContinueAssetConfiguration = Boolean(
+    hasActiveKnowledgeBase &&
     assetDraft.description.trim() &&
     (!requiresAssetName || assetDraft.name.trim()),
   );
 
   const moveAssetWizardToConfig = useCallback(() => {
-    if (selectedAssetSeeds.length === 0) {
+    if (!hasActiveKnowledgeBase || selectedAssetSeeds.length === 0) {
       return;
     }
 
@@ -412,6 +417,7 @@ export default function useKnowledgeAssetWizard({
     setAssetWizardStep(2);
   }, [
     connectors,
+    hasActiveKnowledgeBase,
     selectedAssetSeeds,
     selectedConnectorId,
     setAssetDraft,
@@ -419,6 +425,10 @@ export default function useKnowledgeAssetWizard({
   ]);
 
   const saveAssetDraftToOverview = useCallback(async () => {
+    if (!activeKnowledgeRuntimeSelector?.knowledgeBaseId) {
+      throw new Error(KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT);
+    }
+
     if (assetDraftPreviews.length === 0) {
       return null;
     }

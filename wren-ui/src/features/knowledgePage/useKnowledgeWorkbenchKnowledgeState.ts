@@ -19,6 +19,45 @@ import useKnowledgeRuntimeBindings from './useKnowledgeRuntimeBindings';
 import type { ConnectorView, KnowledgeBaseRecord } from './types';
 import type { KnowledgeWorkbenchKnowledgeStateArgs } from './knowledgeWorkbenchKnowledgeStateTypes';
 
+type InitialKnowledgeBaseListInput<
+  TKnowledgeBase extends Pick<KnowledgeBaseRecord, 'id'>,
+> = {
+  cachedKnowledgeBaseList?: TKnowledgeBase[] | null;
+  selectorKnowledgeBaseList: TKnowledgeBase[];
+  preferredKnowledgeBaseId?: string | null;
+};
+
+export const resolveInitialKnowledgeBaseList = <
+  TKnowledgeBase extends Pick<KnowledgeBaseRecord, 'id'>,
+>({
+  cachedKnowledgeBaseList,
+  selectorKnowledgeBaseList,
+  preferredKnowledgeBaseId,
+}: InitialKnowledgeBaseListInput<TKnowledgeBase>) => {
+  if (!cachedKnowledgeBaseList || cachedKnowledgeBaseList.length === 0) {
+    return selectorKnowledgeBaseList;
+  }
+
+  const selectorHasPreferredKnowledgeBase = Boolean(
+    preferredKnowledgeBaseId &&
+    selectorKnowledgeBaseList.some(
+      (knowledgeBase) => knowledgeBase.id === preferredKnowledgeBaseId,
+    ),
+  );
+  const cachedHasPreferredKnowledgeBase = Boolean(
+    preferredKnowledgeBaseId &&
+    cachedKnowledgeBaseList.some(
+      (knowledgeBase) => knowledgeBase.id === preferredKnowledgeBaseId,
+    ),
+  );
+
+  if (selectorHasPreferredKnowledgeBase && !cachedHasPreferredKnowledgeBase) {
+    return selectorKnowledgeBaseList;
+  }
+
+  return cachedKnowledgeBaseList;
+};
+
 export function useKnowledgeWorkbenchKnowledgeState<
   TKnowledgeBase extends KnowledgeBaseRecord,
   TConnector extends ConnectorView,
@@ -68,12 +107,20 @@ export function useKnowledgeWorkbenchKnowledgeState<
     effectiveRuntimeSelector.workspaceId,
     runtimeSelectorState?.knowledgeBases,
   ]);
+  const preferredKnowledgeBaseId =
+    routeKnowledgeBaseId || currentKnowledgeBaseId || null;
   const initialKnowledgeBaseList = useMemo(
     () =>
-      cachedKnowledgeBaseList && cachedKnowledgeBaseList.length > 0
-        ? cachedKnowledgeBaseList
-        : selectorKnowledgeBaseList,
-    [cachedKnowledgeBaseList, selectorKnowledgeBaseList],
+      resolveInitialKnowledgeBaseList({
+        cachedKnowledgeBaseList,
+        selectorKnowledgeBaseList,
+        preferredKnowledgeBaseId,
+      }),
+    [
+      cachedKnowledgeBaseList,
+      preferredKnowledgeBaseId,
+      selectorKnowledgeBaseList,
+    ],
   );
 
   useEffect(() => {
@@ -81,11 +128,19 @@ export function useKnowledgeWorkbenchKnowledgeState<
       return;
     }
 
+    if (
+      cachedKnowledgeBaseList &&
+      cachedKnowledgeBaseList.length > 0 &&
+      initialKnowledgeBaseList === cachedKnowledgeBaseList
+    ) {
+      return;
+    }
+
     primeKnowledgeBaseList({
       url: knowledgeBasesUrl,
       payload: initialKnowledgeBaseList,
     });
-  }, [initialKnowledgeBaseList, knowledgeBasesUrl]);
+  }, [cachedKnowledgeBaseList, initialKnowledgeBaseList, knowledgeBasesUrl]);
 
   const selectorKnowledgeBaseFallback = useKnowledgeSelectorFallback(
     buildKnowledgeWorkbenchSelectorFallbackInputs(runtimeContext, {

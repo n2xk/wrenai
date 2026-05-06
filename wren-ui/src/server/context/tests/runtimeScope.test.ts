@@ -628,7 +628,7 @@ describe('RuntimeScopeResolver', () => {
     expect(result.selector.deployHash).toBeNull();
   });
 
-  it('prefers the referenced snapshot deployHash over a stale explicit deployHash', async () => {
+  it('preserves an explicit deployHash when opening a historical thread from a reused snapshot', async () => {
     kbSnapshotRepository.findOneBy.mockResolvedValueOnce({
       id: 'snap-1',
       knowledgeBaseId: 'kb-1',
@@ -651,7 +651,7 @@ describe('RuntimeScopeResolver', () => {
     deployService.getDeployment.mockResolvedValue({
       id: 1,
       projectId: 101,
-      hash: 'deploy-from-snapshot',
+      hash: 'deploy-from-request',
       manifest: {},
     });
 
@@ -667,16 +667,16 @@ describe('RuntimeScopeResolver', () => {
     ).resolves.toMatchObject({
       selector: expect.objectContaining({
         kbSnapshotId: 'snap-1',
-        deployHash: 'deploy-from-snapshot',
+        deployHash: 'deploy-from-request',
       }),
-      deployHash: 'deploy-from-snapshot',
+      deployHash: 'deploy-from-request',
     });
     expect(deployService.getDeploymentByRuntimeIdentity).toHaveBeenCalledWith({
       workspaceId: null,
       knowledgeBaseId: 'kb-1',
       kbSnapshotId: 'snap-1',
       projectId: null,
-      deployHash: 'deploy-from-snapshot',
+      deployHash: 'deploy-from-request',
     });
   });
 

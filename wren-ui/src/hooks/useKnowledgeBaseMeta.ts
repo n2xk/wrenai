@@ -4,6 +4,7 @@ import {
   getReferenceDisplayKnowledgeName,
   type ReferenceDemoKnowledge,
 } from '@/utils/referenceDemoKnowledge';
+import { KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT } from '@/utils/knowledgeMutationGuard';
 import { isHistoricalSnapshotReadonly } from '@/utils/runtimeSnapshot';
 import { canCreateKnowledgeBaseInWorkspace } from '@/utils/workspaceGovernance';
 
@@ -131,8 +132,14 @@ export default function useKnowledgeBaseMeta<
     currentKbSnapshotId,
     defaultKbSnapshotId: activeKnowledgeBase?.defaultKbSnapshotId,
   });
+  const hasActiveKnowledgeBase = Boolean(
+    activeKnowledgeBase?.id &&
+    knowledgeBases.some((kb) => kb.id === activeKnowledgeBase.id),
+  );
   const isKnowledgeMutationDisabled =
-    isReadonlyKnowledgeBase || isSnapshotReadonlyKnowledgeBase;
+    !hasActiveKnowledgeBase ||
+    isReadonlyKnowledgeBase ||
+    isSnapshotReadonlyKnowledgeBase;
   const canManageKnowledgeBaseLifecycle = canShowKnowledgeLifecycleAction({
     workspaceKind,
     knowledgeBaseKind: activeKnowledgeBase?.kind,
@@ -143,11 +150,13 @@ export default function useKnowledgeBaseMeta<
   const knowledgeLifecycleActionLabel = resolveLifecycleActionLabel(
     activeKnowledgeBase?.archivedAt,
   );
-  const knowledgeMutationHint = isReadonlyKnowledgeBase
-    ? '系统样例知识库仅供浏览体验，不支持编辑或接入业务资产。'
-    : isSnapshotReadonlyKnowledgeBase
-      ? snapshotReadonlyHint
-      : null;
+  const knowledgeMutationHint = !hasActiveKnowledgeBase
+    ? KNOWLEDGE_BASE_REQUIRED_MUTATION_HINT
+    : isReadonlyKnowledgeBase
+      ? '系统样例知识库仅供浏览体验，不支持编辑或接入业务资产。'
+      : isSnapshotReadonlyKnowledgeBase
+        ? snapshotReadonlyHint
+        : null;
   const matchedDemoKnowledge = useMemo<ReferenceDemoKnowledge | null>(
     () => getReferenceDemoKnowledgeByName(activeKnowledgeBase) || null,
     [activeKnowledgeBase],
@@ -193,6 +202,7 @@ export default function useKnowledgeBaseMeta<
     authorizationActions: resolvedAuthorizationActions,
     canCreateKnowledgeBase,
     createKnowledgeBaseBlockedReason,
+    hasActiveKnowledgeBase,
     isReadonlyKnowledgeBase,
     isSnapshotReadonlyKnowledgeBase,
     isKnowledgeMutationDisabled,

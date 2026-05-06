@@ -67,6 +67,13 @@ business_signature:
   negative_cues:
     - 续存
     - ROI
+    - TOP3
+    - 非TOP3
+    - TOPN
+    - 有效投注排名
+    - 投注次数
+    - 输赢
+    - 用户分层
   expected_grain: first_deposit_user
 source_tables:
   - dwd_order_deposit
